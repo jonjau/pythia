@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <script src="https://unpkg.com/htmx.org@1.9.11"
+    integrity="sha384-0gxUXCCR8yv9FM2b+U3FDbsKthCI66oH5IA9fHppQq9DDMHuMauqq1ZHBpJxQ0J0"
+    crossorigin="anonymous"></script>
+  <title>Pythia</title>
+</head>
+
+<body>
+  <main style="display: flex">
+    <div style="display: flex; flex-direction: column; border-right: 1px solid black;">
+      <h1>States</h1>
+      <fieldset>
+        <legend>Start state</legend>
+        <div id="start-state-inputs">
+          <input type="text" hidden name="_fact-type" value="{{fact_type}}" />
+          <table>
+          {% for field in state_fields %}
+            <tr>
+              <td>
+                <label for="start-{{field}}" style="text-align: right; margin-right: 10px;">{{field}}</label>
+              </td>
+              <td id="start-{{field}}-cell" style="display: flex;">
+                <form id="start-{{field}}" hx-post="/states/start/{{fact_type}}/{{field}}/specified" hx-swap="innerHTML" hx-target="#start-{{field}}-cell">
+                  <input type="text" name="start.{{field}}" disabled/>
+                </form>
+                <button type="submit" form="start-{{field}}">Specify</button>
+              </td>
+            </tr>
+          {% endfor %}
+        </table>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>End state</legend>
+        <div id="end-state-inputs">
+          <table>
+          {% for field in state_fields %}
+            <tr>
+              <td>
+                <label for="end-{{field}}" style="text-align: right; margin-right: 10px;">{{field}}</label>
+              </td>
+              <td id="end-{{field}}-cell" style="display: flex;">
+                <form id="end-{{field}}" hx-post="/states/end/{{fact_type}}/{{field}}/specified" hx-swap="innerHTML" hx-target="#end-{{field}}-cell">
+                  <input type="text" name="end.{{field}}" disabled/>
+                </form>
+                <button type="submit" form="end-{{field}}">Specify</button>
+              </td>
+            </tr>
+          {% endfor %}
+        </table>
+        </div>
+      </fieldset>
+
+      <form hx-get="/state-change-paths" hx-target="#state-change-paths" hx-include="#start-state-inputs :not([disabled]), #end-state-inputs :not([disabled])">
+        <label for="steps">Number of Steps:</label>
+        <input type="number" id="steps" name="num-steps" min="1" max="100" value="1">
+        <button type="submit">
+          Calculate N-step paths
+        </button>
+      </form>
+
+    </div>
+    <div style="padding: 0 2em">
+      <h1>State changes</h1>
+      <div id="content">{% block content %}{% endblock %}</div>
+      <hr />
+
+      <div id="state-change-paths">state changes</div>
+    </div>
+  </main>
+</body>
+
+</html>

@@ -1,0 +1,12 @@
+{% extends "layout.html" %} {% block content %}
+<table>
+  <tbody>
+    {% for fact in facts %}
+    <tr>
+      <td>{{ fact }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<p><a href="/facts/new">Add fact</a></p>
+{% endblock %}

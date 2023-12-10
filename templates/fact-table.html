@@ -1,0 +1,28 @@
+<table style="border: 1px solid black;">
+  <tbody>
+    {% for path in paths %}
+    <tr style="border: 1px solid black;">
+      <td style="border: 1px solid black;">
+        <ol>
+          {% for step in path.steps %}
+          <li>
+            {% for diff in step.diffs %}
+              <table style="display:inline-table; border: 1px solid black;">
+                <tr>
+                  <td style="border: 1px solid black;">
+                    {{ diff.field }}
+                  </td>
+                  <td style="border: 1px solid black;">
+                    {{diff.before}} → {{diff.after}}
+                  </td>
+                </tr>
+              </table>
+            {% endfor %}
+          </li>
+          {% endfor %}
+        </ol>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
