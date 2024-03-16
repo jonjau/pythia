@@ -49,4 +49,14 @@ impl ContactModel {
     pub fn find_all(&self) -> HashSet<Contact> {
         self.all_contacts.clone()
     }
+
+    pub fn add_fact(&mut self, fact: String) {
+        self.all_contacts.insert(Contact {
+            id: fact.to_owned(),
+            first: fact.to_owned(),
+            last: fact.to_owned(),
+            email: fact.to_owned(),
+            phone: fact.to_owned(),
+        });
+    }
 }

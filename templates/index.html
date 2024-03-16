@@ -1,5 +1,5 @@
 {% extends "layout.html" %} {% block content %}
-<form action="/contacts" method="get" class="tool-bar">
+<form action="/facts" method="get" class="tool-bar">
   <label for="search">Search Term</label>
   <input id="search" type="search" name="q" value="" />
   <input type="submit" value="Search" />
@@ -7,27 +7,21 @@
 <table>
   <thead>
     <tr>
-      <th>First</th>
-      <th>Last</th>
-      <th>Phone</th>
-      <th>Email</th>
+      <th>Run #</th>
       <th></th>
     </tr>
   </thead>
   <tbody>
-    {% for contact in contacts %}
+    {% for fact in facts %}
     <tr>
-      <td>{{ contact.first }}</td>
-      <td>{{ contact.last }}</td>
-      <td>{{ contact.phone }}</td>
-      <td>{{ contact.email }}</td>
+      <td>{{ fact }}</td>
       <td>
-        <a href="/contacts/{{ contact.id }}/edit">Edit</a>
-        <a href="/contacts/{{ contact.id }}">View</a>
+        <a href="/facts/{{ fact }}/edit">Edit</a>
+        <a href="/facts/{{ fact }}">View</a>
       </td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
-<p><a href="/contacts/new">Add Contact</a></p>
+<p><a href="/facts/new">Add fact</a></p>
 {% endblock %}
