@@ -2,39 +2,37 @@ use askama::Template;
 use axum::{
     extract::{Query, State},
     response::Redirect,
-    routing::get,
+    routing::{get, post},
     Router,
+    Json
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use std::collections::HashSet;
 
 mod models;
-use models::contact::{Contact, ContactModel};
-
-struct ContactController {
-    model: ContactModel,
-}
-
-impl ContactController {
-    fn new(model: ContactModel) -> Self {
-        ContactController { model }
-    }
-}
+use models::{fact::LogicMachine};
 
 #[derive(Clone)]
 struct AppState {
-    contact_model: ContactModel,
+    logic_machine: Arc<RwLock<LogicMachine>>,
 }
+
+type SharedState = Arc<RwLock<AppState>>;
 
 #[tokio::main]
 async fn main() {
     let state = AppState {
-        contact_model: ContactModel::new(),
+        logic_machine: Arc::new(RwLock::new(LogicMachine::new(String::from(r#"edge(3, 4)."#))))
     };
 
     let r = Router::new()
-        .route("/", get(|| async { Redirect::permanent("/contacts") }))
-        .route("/contacts", get(get_contacts).with_state(state));
+        // .route("/", get(|| async { Redirect::permanent("/contacts") }))
+        // .route("/contacts", get(get_facts))
+        // .route("/facts", post(create_fact))
+        // .with_state(state);
+        ;
 
     // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
@@ -43,8 +41,8 @@ async fn main() {
 
 #[derive(Template)]
 #[template(path = "index.html", ext = "html")]
-struct ContactsPage {
-    contacts: HashSet<Contact>,
+struct FactsPage {
+    facts: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -52,13 +50,25 @@ struct Params {
     q: Option<String>,
 }
 
-async fn get_contacts(query: Query<Params>, State(state): State<AppState>) -> ContactsPage {
-    match &query.q {
-        None => ContactsPage {
-            contacts: state.contact_model.find_all(),
-        },
-        Some(q) => ContactsPage {
-            contacts: state.contact_model.find(q.to_string()),
-        },
-    }
+// async fn get_facts(query: Query<Params>, State(state): State<AppState>) -> FactsPage {
+//     let state = state.read().await;
+//     match &query.q {
+//         None => FactsPage {
+//             facts: vec![],
+//         },
+//         Some(q) => FactsPage {
+//             facts: vec![],
+//         },
+//     }
+// }
+
+#[derive(Serialize, Deserialize)]
+struct CreateFact {
+    fact: String
 }
+
+// async fn create_fact(State(state): State<AppState>, Json(payload): Json<CreateFact>) -> Json<CreateFact> {
+//     let mut state = state.write().await;
+//     state.logic_machine.add_fact(payload.fact.clone());
+//     Json(payload)
+// }
