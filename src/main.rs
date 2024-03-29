@@ -3,36 +3,32 @@ use axum::{
     extract::{Query, State},
     response::Redirect,
     routing::{get, post},
-    Router,
-    Json
+    Json, Router,
 };
+
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use tokio::sync::RwLock;
-use std::collections::HashSet;
 
 mod models;
-use models::{fact::LogicMachine};
+mod services;
+
+use services::fact::FactService;
 
 #[derive(Clone)]
 struct AppState {
-    logic_machine: Arc<RwLock<LogicMachine>>,
+    lm: FactService,
 }
-
-type SharedState = Arc<RwLock<AppState>>;
 
 #[tokio::main]
 async fn main() {
     let state = AppState {
-        logic_machine: Arc::new(RwLock::new(LogicMachine::new(String::from(r#"edge(3, 4)."#))))
+        lm: FactService::new(),
     };
 
     let r = Router::new()
-        // .route("/", get(|| async { Redirect::permanent("/contacts") }))
-        // .route("/contacts", get(get_facts))
+        .route("/", get(|| async { Redirect::permanent("/contacts") }))
+        .route("/contacts", get(get_facts))
         // .route("/facts", post(create_fact))
-        // .with_state(state);
-        ;
+        .with_state(state);
 
     // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
@@ -50,25 +46,23 @@ struct Params {
     q: Option<String>,
 }
 
-// async fn get_facts(query: Query<Params>, State(state): State<AppState>) -> FactsPage {
-//     let state = state.read().await;
-//     match &query.q {
-//         None => FactsPage {
-//             facts: vec![],
-//         },
-//         Some(q) => FactsPage {
-//             facts: vec![],
-//         },
-//     }
-// }
+async fn get_facts(query: Query<Params>, State(state): State<AppState>) -> FactsPage {
+    let state = state.lm;
+    let result = state.test_query().await;
+
+    match &query.q {
+        None => FactsPage { facts: vec![] },
+        Some(q) => FactsPage { facts: vec![] },
+    }
+}
 
 #[derive(Serialize, Deserialize)]
 struct CreateFact {
-    fact: String
+    fact: String,
 }
 
-// async fn create_fact(State(state): State<AppState>, Json(payload): Json<CreateFact>) -> Json<CreateFact> {
-//     let mut state = state.write().await;
-//     state.logic_machine.add_fact(payload.fact.clone());
-//     Json(payload)
+// async fn create_fact(State(state): State<Arc<Mutex<AppState>>>, Json(payload): Json<CreateFact>) -> Json<CreateFact> {
+// // let mut state = state.write().await;
+// state.logic_machine.add_fact(payload.fact.clone());
+// Json(payload)
 // }
