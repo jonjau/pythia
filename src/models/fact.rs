@@ -3,23 +3,31 @@ use std::{
     clone::Clone,
     collections::{BTreeSet, HashMap},
     fmt::{self, Display},
-    hash::Hash,
 };
+
 
 #[derive(PartialEq, Debug)]
 pub enum RecordTypeError {
-    UnknownAttrs(Vec<String>),
+    UnknownAttrNames(Vec<String>),
     UngroundedAttrs(Vec<String>),
+    InvalidAttrNames(Vec<String>),
 }
 
 impl Display for RecordTypeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            RecordTypeError::UnknownAttrs(attrs) => {
-                write!(f, "unknown attributes: {}", attrs.join(", "))
+            RecordTypeError::UnknownAttrNames(attrs) => {
+                write!(f, "unknown attribute names: {}", attrs.join(", "))
             }
             RecordTypeError::UngroundedAttrs(attrs) => {
                 write!(f, "ungrounded attributes: {}", attrs.join(", "))
+            }
+            RecordTypeError::InvalidAttrNames(attrs) => {
+                write!(
+                    f,
+                    "attribute names not starting with uppercase ASCII: {}",
+                    attrs.join(", ")
+                )
             }
         }
     }
@@ -54,7 +62,7 @@ impl RecordType {
             .filter(|&a| !self.attr_names.contains(&a.to_owned()))
             .peekable();
         if unknown_attrs.peek().is_some() {
-            return Err(RecordTypeError::UnknownAttrs(
+            return Err(RecordTypeError::UnknownAttrNames(
                 unknown_attrs.into_iter().cloned().collect::<Vec<_>>(),
             ));
         }
@@ -66,7 +74,7 @@ impl RecordType {
                 attrs
                     .get(attr_name)
                     .cloned()
-                    .unwrap_or(format!(r#"V_{}"#, attr_name))
+                    .unwrap_or(attr_name.to_owned())
             })
             .collect();
 
@@ -74,19 +82,41 @@ impl RecordType {
     }
 
     pub fn to_fact(&self, attrs: &HashMap<&str, &str>) -> Result<Fact, RecordTypeError> {
+        // if attrs.get("").is_some() {
+        //     return Err(RecordTypeError::InvalidAttrNames(vec!["".to_string()]))
+        // }
+
+        struct UnknownAttrName(String);
+        struct InvalidAttrName(String);
+        let mut unknown = Vec::new();
+        let mut invalid = Vec::new();
+
         let attrs = attrs
             .iter()
             .map(|(&k, &v)| (k.to_owned(), v.to_owned()))
+            .map(|(k, v)| {
+                self.attr_names
+                    .contains(&k)
+                    .then_some((k.clone(), v))
+                    .ok_or(UnknownAttrName(k))
+            })
+            .filter_map(|r| r.map_err(|UnknownAttrName(e)| unknown.push(e)).ok())
+            .map(|(k, v)| {
+                k.chars()
+                    .next()
+                    .is_some_and(|c| c.is_ascii_uppercase())
+                    .then_some((k.clone(), v))
+                    .ok_or(InvalidAttrName(k))
+            })
+            .filter_map(|r| r.map_err(|InvalidAttrName(e)| invalid.push(e)).ok())
             .collect::<HashMap<_, _>>();
 
-        let mut unknown_attrs = attrs
-            .keys()
-            .filter(|&a| !self.attr_names.contains(&a.to_owned()))
-            .peekable();
-        if unknown_attrs.peek().is_some() {
-            return Err(RecordTypeError::UnknownAttrs(
-                unknown_attrs.into_iter().cloned().collect::<Vec<_>>(),
-            ));
+        if !unknown.is_empty() {
+            return Err(RecordTypeError::UnknownAttrNames(unknown));
+        }
+
+        if !invalid.is_empty() {
+            return Err(RecordTypeError::InvalidAttrNames(invalid));
         }
 
         struct UngroundedAttr(String);
@@ -154,7 +184,7 @@ impl<'a> Fact<'a> {
 
 pub struct LogicMachine {
     record_types: HashMap<String, RecordType>,
-    machine: Machine,
+    pub machine: Machine,
 }
 
 impl LogicMachine {
@@ -178,7 +208,8 @@ impl LogicMachine {
     }
 
     pub fn add_fact(&mut self, f: Fact) -> QueryResult {
-        self.machine.run_query(f.assertion_str())
+        // let m = self.machine;//.get_mut();
+        self.machine.run_query(format!(r#"assertz({})."#, f.assertion_str()))
     }
 
     pub fn fetch_all(&mut self, rt: RecordType) -> QueryResult {
@@ -189,20 +220,8 @@ impl LogicMachine {
     }
 
     pub fn fetch(&mut self, g: Goal) -> QueryResult {
+        // let m = self.machine;//.get_mut();
         self.machine.run_query(format!(r#"{}."#, g.query_str()))
-    }
-}
-
-impl Clone for LogicMachine {
-    fn clone(&self) -> Self {
-        let mut machine = Machine::new_lib();
-
-        // self.record_types.values().map(|&t| {
-        //     let facts = self.fetch_all(t);
-        //     // machine.add_facts(facts)
-        // });
-
-        todo!()
     }
 }
 
@@ -218,11 +237,11 @@ mod tests {
     fn it_works() {
         let mut lm = LogicMachine::new(String::from(r#"edge(3, 4)."#));
 
-        let res = lm.machine.run_query(String::from("edge(3, X)."));
-        println!("{:?}", res);
+        // let res = lm.machine.run_query(String::from("edge(3, X)."));
+        // println!("{:?}", res);
 
-        let res = lm.machine.run_query(String::from("edge(X, Y)."));
-        println!("{:?}", res);
+        // let res = lm.machine.run_query(String::from("edge(X, Y)."));
+        // println!("{:?}", res);
     }
 
     #[test]
@@ -239,6 +258,13 @@ mod tests {
 
     #[test]
     fn fact() {
+        let mut lm = LogicMachine::new(String::from(
+            r#"
+            :- dynamic(edge/2).
+            edge(0, 4).
+        "#,
+        ));
+
         // TODO: assert argument names start with uppercase ASCII letter
         let edge = RecordType::new("edge", &["X", "Y"]);
 
@@ -250,7 +276,15 @@ mod tests {
 
         assert_eq!(
             edge.to_fact(&HashMap::from([("XA", "0")])),
-            Err(RecordTypeError::UnknownAttrs(vec![String::from("XA")]))
+            Err(RecordTypeError::UnknownAttrNames(vec![String::from("XA")]))
         );
+
+        let _ = lm.add_fact(
+            edge.to_fact(&HashMap::from([("X", "1"), ("Y", "7")]))
+                .unwrap(),
+        );
+        let a = lm.fetch_all(edge);
+
+        println!("{:?}", a);
     }
 }
