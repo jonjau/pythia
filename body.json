@@ -1,3 +1,7 @@
 {
-    "fact": "hellossda"
+    "typename": "edge",
+    "attrs": [
+        3,
+        5
+    ]
 }

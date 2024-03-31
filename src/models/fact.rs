@@ -1,57 +1,58 @@
-use scryer_prolog::machine::{parsed_results::QueryResult, Machine};
+use scryer_prolog::machine::parsed_results::{
+    prolog_value_to_json_string, QueryMatch, QueryResolution, QueryResult,
+};
+use scryer_prolog::machine::Machine;
 use std::{
     clone::Clone,
     collections::{BTreeSet, HashMap},
-    fmt::{self, Display},
+    sync::Arc,
 };
 
-
-#[derive(PartialEq, Debug)]
+// #[derive(PartialEq, Debug)]
+#[derive(thiserror::Error, Debug, PartialEq)]
 pub enum RecordTypeError {
+    #[error("unknown attribute names: {}", .0.join(", "))]
     UnknownAttrNames(Vec<String>),
+    #[error("ungrounded attributes: {}", .0.join(", "))]
     UngroundedAttrs(Vec<String>),
+    #[error("attribute names not starting with uppercase ASCII: {}", .0.join(", "))]
     InvalidAttrNames(Vec<String>),
 }
 
-impl Display for RecordTypeError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            RecordTypeError::UnknownAttrNames(attrs) => {
-                write!(f, "unknown attribute names: {}", attrs.join(", "))
-            }
-            RecordTypeError::UngroundedAttrs(attrs) => {
-                write!(f, "ungrounded attributes: {}", attrs.join(", "))
-            }
-            RecordTypeError::InvalidAttrNames(attrs) => {
-                write!(
-                    f,
-                    "attribute names not starting with uppercase ASCII: {}",
-                    attrs.join(", ")
-                )
-            }
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct RecordType {
     name: String,
     attr_names: BTreeSet<String>,
 }
 
 impl RecordType {
-    pub fn new<T, U>(name: T, attr_names: &[U]) -> Self
-    where
-        T: Into<String>,
-        U: Clone + Into<String>,
-    {
-        RecordType {
-            name: name.into(),
-            attr_names: attr_names.iter().cloned().map(Into::into).collect(),
+    pub fn new(name: &str, attr_names: &[&str]) -> Result<Self, RecordTypeError> {
+        let mut invalid = Vec::new();
+        for &attr_name in attr_names {
+            if !attr_name
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_uppercase())
+            {
+                invalid.push(attr_name.to_owned());
+            }
+        }
+        if !invalid.is_empty() {
+            Err(RecordTypeError::InvalidAttrNames(invalid))
+        } else {
+            Ok(RecordType {
+                name: name.into(),
+                attr_names: attr_names.iter().cloned().map(Into::into).collect(),
+            })
         }
     }
 
-    pub fn to_goal(&self, attrs: &HashMap<&str, &str>) -> Result<Goal, RecordTypeError> {
+    pub fn to_most_general_goal(self: Arc<Self>) -> Goal {
+        let attrs = self.attr_names.iter().cloned().collect::<Vec<_>>();
+        Goal::new(self, attrs)
+    }
+
+    pub fn to_goal(self: Arc<Self>, attrs: &HashMap<&str, &str>) -> Result<Goal, RecordTypeError> {
         let attrs = attrs
             .iter()
             .map(|(&k, &v)| (k.to_owned(), v.to_owned()))
@@ -81,15 +82,9 @@ impl RecordType {
         Ok(Goal::new(self, complete_attrs))
     }
 
-    pub fn to_fact(&self, attrs: &HashMap<&str, &str>) -> Result<Fact, RecordTypeError> {
-        // if attrs.get("").is_some() {
-        //     return Err(RecordTypeError::InvalidAttrNames(vec!["".to_string()]))
-        // }
-
+    pub fn to_fact(self: Arc<Self>, attrs: &HashMap<&str, &str>) -> Result<Fact, RecordTypeError> {
         struct UnknownAttrName(String);
-        struct InvalidAttrName(String);
         let mut unknown = Vec::new();
-        let mut invalid = Vec::new();
 
         let attrs = attrs
             .iter()
@@ -101,22 +96,10 @@ impl RecordType {
                     .ok_or(UnknownAttrName(k))
             })
             .filter_map(|r| r.map_err(|UnknownAttrName(e)| unknown.push(e)).ok())
-            .map(|(k, v)| {
-                k.chars()
-                    .next()
-                    .is_some_and(|c| c.is_ascii_uppercase())
-                    .then_some((k.clone(), v))
-                    .ok_or(InvalidAttrName(k))
-            })
-            .filter_map(|r| r.map_err(|InvalidAttrName(e)| invalid.push(e)).ok())
             .collect::<HashMap<_, _>>();
 
         if !unknown.is_empty() {
             return Err(RecordTypeError::UnknownAttrNames(unknown));
-        }
-
-        if !invalid.is_empty() {
-            return Err(RecordTypeError::InvalidAttrNames(invalid));
         }
 
         struct UngroundedAttr(String);
@@ -143,14 +126,17 @@ impl RecordType {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Goal<'a> {
-    type_: &'a RecordType,
+pub struct Goal {
+    type_: Arc<RecordType>,
     attrs: Vec<String>,
 }
 
-impl<'a> Goal<'a> {
-    pub fn new(type_: &'a RecordType, attrs: Vec<String>) -> Self {
-        Goal { type_, attrs }
+impl Goal {
+    pub fn new(type_: Arc<RecordType>, attrs: Vec<String>) -> Self {
+        Goal {
+            type_: Arc::clone(&type_),
+            attrs,
+        }
     }
 
     pub fn query_str(&self) -> String {
@@ -163,14 +149,17 @@ impl<'a> Goal<'a> {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Fact<'a> {
-    type_: &'a RecordType,
+pub struct Fact {
+    type_: Arc<RecordType>,
     attrs: Vec<String>,
 }
 
-impl<'a> Fact<'a> {
-    pub fn new(type_: &'a RecordType, attrs: Vec<String>) -> Self {
-        Fact { type_, attrs }
+impl Fact {
+    pub fn new(type_: Arc<RecordType>, attrs: Vec<String>) -> Self {
+        Fact {
+            type_: Arc::clone(&type_),
+            attrs,
+        }
     }
 
     pub fn assertion_str(&self) -> String {
@@ -182,76 +171,99 @@ impl<'a> Fact<'a> {
     }
 }
 
+#[derive(thiserror::Error, Debug)]
+pub enum LogicMachineError {
+    #[error("unexpected query resolution")]
+    UnexpectedQueryResolution,
+    #[error("prolog error: {0}")]
+    PrologError(String),
+}
+
+pub type LogicMachineResult = Result<Vec<Fact>, LogicMachineError>;
+
 pub struct LogicMachine {
     record_types: HashMap<String, RecordType>,
-    pub machine: Machine,
+    machine: Machine,
 }
 
 impl LogicMachine {
     pub fn new<T: Into<String>>(program: T) -> LogicMachine {
         let mut machine = Machine::new_lib();
         machine.consult_module_string("module0", program.into());
+
         LogicMachine {
             record_types: HashMap::new(),
             machine,
         }
     }
 
-    pub fn predicate(&self, name: &str) -> Option<&RecordType> {
-        self.record_types.get(name)
+    fn parse_to_facts<'a>(
+        qr: QueryResolution,
+        rt: Arc<RecordType>,
+    ) -> Result<Vec<Fact>, LogicMachineError> {
+        match qr {
+            QueryResolution::Matches(m) => Ok(m
+                .iter()
+                .map(|QueryMatch { bindings: b }| {
+                    Fact::new(
+                        Arc::clone(&rt),
+                        b.values()
+                            .map(|v| prolog_value_to_json_string(v.clone()))
+                            .collect::<Vec<_>>(),
+                    )
+                })
+                .collect::<Vec<_>>()),
+            _ => Err(LogicMachineError::UnexpectedQueryResolution),
+        }
     }
 
-    pub fn define_types(&mut self, types: &mut Vec<RecordType>) {
-        // self.predicates.insert(k, v)
-
-        // TODO: assert predicates are loaded by fetching them
+    pub fn predicate(&self, name: &str) -> Option<Arc<RecordType>> {
+        self.record_types.get(name).map(|o| Arc::new(o.to_owned()))
     }
 
-    pub fn add_fact(&mut self, f: Fact) -> QueryResult {
-        // let m = self.machine;//.get_mut();
-        self.machine.run_query(format!(r#"assertz({})."#, f.assertion_str()))
+    pub fn define_types(&mut self, types: Vec<RecordType>) {
+        for t in types {
+            self.record_types.insert(t.name.clone(), t);
+        }
     }
 
-    pub fn fetch_all(&mut self, rt: RecordType) -> QueryResult {
-        self.fetch(
-            rt.to_goal(&HashMap::new())
-                .expect("No args must successfully return a goal"),
-        )
+    pub fn add_fact(&mut self, f: Fact) -> LogicMachineResult {
+        let qr = self
+            .machine
+            .run_query(format!(r#"assertz({})."#, f.assertion_str()))
+            .map_err(LogicMachineError::PrologError)?;
+
+        self.fetch_all(f.type_)
+    }
+
+    pub fn fetch_all(&mut self, rt: Arc<RecordType>) -> LogicMachineResult {
+        let qr = self
+            .fetch(Arc::clone(&rt).to_most_general_goal())
+            .map_err(LogicMachineError::PrologError)?;
+        Self::parse_to_facts(qr, Arc::clone(&rt))
     }
 
     pub fn fetch(&mut self, g: Goal) -> QueryResult {
-        // let m = self.machine;//.get_mut();
         self.machine.run_query(format!(r#"{}."#, g.query_str()))
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use scryer_prolog::machine::parsed_results::{
+        self, prolog_value_to_json_string, QueryMatch, QueryResolution,
+    };
     use std::collections::HashMap;
+    use std::sync::Arc;
 
-    use crate::models::fact::RecordTypeError;
+    use crate::models::fact::{Fact, RecordTypeError};
 
     use super::{LogicMachine, RecordType};
 
     #[test]
-    fn it_works() {
-        let mut lm = LogicMachine::new(String::from(r#"edge(3, 4)."#));
-
-        // let res = lm.machine.run_query(String::from("edge(3, X)."));
-        // println!("{:?}", res);
-
-        // let res = lm.machine.run_query(String::from("edge(X, Y)."));
-        // println!("{:?}", res);
-    }
-
-    #[test]
     fn query() {
         let mut lm = LogicMachine::new(String::from(r#"edge(0, 4)."#));
-
-        // TODO: assert argument names start with uppercase ASCII letter
-        let edge = RecordType::new("edge", &["X", "Y"]);
-
-        // TODO: accept more than just strings for argument values
+        let edge = Arc::new(RecordType::new("edge", &["X", "Y"]).unwrap());
         let res = lm.fetch(edge.to_goal(&HashMap::from([("X", "0")])).unwrap());
         println!("{:?}", res);
     }
@@ -266,25 +278,26 @@ mod tests {
         ));
 
         // TODO: assert argument names start with uppercase ASCII letter
-        let edge = RecordType::new("edge", &["X", "Y"]);
+        let edge = Arc::new(RecordType::new("edge", &["X", "Y"]).unwrap());
 
         // TODO: accept more than just strings for argument values
         assert_eq!(
-            edge.to_fact(&HashMap::from([("X", "0")])),
+            Arc::clone(&edge).to_fact(&HashMap::from([("X", "0")])),
             Err(RecordTypeError::UngroundedAttrs(vec![String::from("Y")]))
         );
 
         assert_eq!(
-            edge.to_fact(&HashMap::from([("XA", "0")])),
+            Arc::clone(&edge).to_fact(&HashMap::from([("XA", "0")])),
             Err(RecordTypeError::UnknownAttrNames(vec![String::from("XA")]))
         );
 
         let _ = lm.add_fact(
-            edge.to_fact(&HashMap::from([("X", "1"), ("Y", "7")]))
+            Arc::clone(&edge)
+                .to_fact(&HashMap::from([("X", "1"), ("Y", "7")]))
                 .unwrap(),
         );
-        let a = lm.fetch_all(edge);
+        let a = lm.fetch_all(Arc::clone(&edge));
 
-        println!("{:?}", a);
+        dbg!(&a);
     }
 }
