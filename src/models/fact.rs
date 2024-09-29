@@ -2,6 +2,7 @@ use scryer_prolog::machine::parsed_results::{
     prolog_value_to_json_string, QueryMatch, QueryResolution, QueryResult,
 };
 use scryer_prolog::machine::Machine;
+use std::fmt::{Display, Formatter};
 use std::{
     clone::Clone,
     collections::{BTreeSet, HashMap},
@@ -168,6 +169,12 @@ impl Fact {
         } else {
             format!(r#"{}"#, self.type_.name)
         }
+    }
+}
+
+impl Display for Fact {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}({})", self.type_.name, self.attrs.join(","))
     }
 }
 
