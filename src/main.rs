@@ -53,7 +53,7 @@ struct Params {
 }
 
 async fn get_facts(query: Query<Params>, State(state): State<AppState>) -> FactsPage {
-    let result = state.facts.get_facts("dimlink".to_string()).await.unwrap();
+    let result = state.facts.get_facts("edge".to_string()).await.unwrap();
     let fs = result.iter().map(|f| f.assertion_str()).collect::<Vec<_>>();
 
     match &query.q {
@@ -79,24 +79,34 @@ use models::fact::RecordType;
 
 // #[debug_handler]
 async fn create_fact(State(state): State<AppState>, Json(cf): Json<CreateFact>) -> String {
-    dbg!(cf);
+    dbg!(cf.clone());
 
-    let rt = Arc::new(RecordType::new("edge", &["X", "Y"]).unwrap());
-    let fact = rt
-        .to_fact(&HashMap::from([("X", "3"), ("Y", "5")]))
-        .unwrap();
+    // let rt = Arc::new(RecordType::new("edge", &["X", "Y"]).unwrap());
+    // let fact = rt
+    //     .to_fact(&HashMap::from([("X", "3"), ("Y", "5")]))
+    //     .unwrap();
 
-    // let ya = (0..cf.attrs.len()).map(|i| format!("X{}", i)).collect::<Vec<_>>();
-    // let attrnames = ya.iter().map(String::as_ref).collect::<Vec<_>>();
-    // let rt0 = Arc::new(RecordType::new(
-    //     &cf.typename,
-    //     &attrnames
-    // )).unwrap();
+    let ya = (0..cf.attrs.len())
+        .map(|i| format!("X{}", i))
+        .collect::<Vec<_>>();
+    let attrnames = ya.iter().map(String::as_ref).collect::<Vec<_>>();
+    let rt0 = Arc::new(RecordType::new(&cf.typename, &attrnames).unwrap());
 
-    // let it = attrnames.iter().zip(cf.attrs.iter());
+    let mapped_attrs = attrnames
+        .iter()
+        .zip(cf.attrs.iter())
+        .map(|(&attrname, attr)| (attrname, attr.as_str()))
+        .collect::<HashMap<_, _>>();
 
+    let fact = rt0.to_fact(&mapped_attrs).unwrap();
+
+    // let res = state.facts.add_fact(fact).await.unwrap();
+    // res.to_string()
 
     let res = state.facts.add_fact(fact).await.unwrap();
-    res.len().to_string()
+    res.len().to_string();
+
+    let result = state.facts.get_facts(cf.typename).await.unwrap();
+    result.iter().map(|f| f.to_string()).collect::<Vec<_>>().join(",\n")
     // String::new()
 }
