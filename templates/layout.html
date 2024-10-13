@@ -1,15 +1,46 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <script src="https://unpkg.com/htmx.org@1.9.11" integrity="sha384-0gxUXCCR8yv9FM2b+U3FDbsKthCI66oH5IA9fHppQq9DDMHuMauqq1ZHBpJxQ0J0" crossorigin="anonymous"></script>
+    <script
+      src="https://unpkg.com/htmx.org@1.9.11"
+      integrity="sha384-0gxUXCCR8yv9FM2b+U3FDbsKthCI66oH5IA9fHppQq9DDMHuMauqq1ZHBpJxQ0J0"
+      crossorigin="anonymous"
+    ></script>
+    <!-- <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css"
+    /> -->
     <title>Pythia</title>
   </head>
   <body>
-    <h1>
-        Facts
-    </h1>
-    <div id="content">
-      {% block content %}{% endblock %}
-    </div>
+    <main style="display: flex">
+      <div style="display: flex; flex-direction: column">
+        <h2>Start state</h2>
+        <form hx-put="/start-state" hx-swap="none">
+          {% for attr in start_state_attr_names %}
+          <div>
+            <label>{{attr}}</label>
+            <input type="text" name={{ attr }} placeholder="{{ attr }}" />
+          </div>
+          {% endfor %}
+          <button type="submit">Submit</button>
+        </form>
+      </div>
+      <div>
+        <h1>Facts</h1>
+        <div id="content">{% block content %}{% endblock %}</div>
+        <hr/>
+        <button hx-get="/facts2" hx-target="#calc-result">Calculate</button>
+        <div id="calc-result">calc result</div>
+      </div>
+      <div style="display: flex; flex-direction: column">
+        <h2>End state</h2>
+        <form>
+          {% for attr in start_state_attr_names %}
+          <input type="text" placeholder="{{ attr }}" />
+          {% endfor %}
+        </form>
+      </div>
+    </main>
   </body>
 </html>
