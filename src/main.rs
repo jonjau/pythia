@@ -2,23 +2,20 @@ use std::{collections::HashMap, sync::Arc};
 
 use askama::Template;
 use axum::{
-    extract::{Query, State},
-    response::Redirect,
-    routing::{get, post},
-    Json, Router,
+    extract::{Query, State}, response::Redirect, routing::{get, post, put}, Form, Json, Router
 };
 
-use axum_macros::debug_handler;
 use serde::{Deserialize, Serialize};
 
 mod models;
 mod services;
 
-use services::fact::FactService;
+use services::{fact::FactService, state::StateService};
 
 #[derive(Clone)]
 struct AppState {
     facts: FactService,
+    states: StateService
 }
 
 #[tokio::main]
@@ -28,12 +25,15 @@ async fn main() {
     // TODO: graceful shutdown of actor
     let state = AppState {
         facts: FactService::new(db),
+        states: StateService::new(),
     };
 
     let r = Router::new()
         .route("/", get(|| async { Redirect::permanent("/facts") }))
         .route("/facts", get(get_facts))
         .route("/facts", post(create_fact))
+        .route("/facts2", get(get_all_facts_of_type))
+        .route("/start-state", put(update_start_state))
         .with_state(state);
 
     // run our app with hyper, listening globally on port 3000
@@ -42,9 +42,34 @@ async fn main() {
 }
 
 #[derive(Template)]
+#[template(path = "update_start_state_result.html", ext = "html")]
+struct UpdateStartStateResult {
+
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct UpdateStartState {
+    #[serde(alias = "X")]
+    x: String,
+    #[serde(alias = "Y")]
+    y: String
+}
+
+async fn update_start_state(State(state): State<AppState>, Form(start_state): Form<UpdateStartState>) -> UpdateStartStateResult {
+    dbg!(start_state);
+
+    UpdateStartStateResult {}
+}
+
+struct StartState {
+    attr_names: Vec<String>
+}
+
+#[derive(Template)]
 #[template(path = "index.html", ext = "html")]
 struct FactsPage {
     facts: Vec<String>,
+    start_state_attr_names: Vec<String>
 }
 
 #[derive(Deserialize)]
@@ -57,10 +82,19 @@ async fn get_facts(query: Query<Params>, State(state): State<AppState>) -> Facts
     let fs = result.iter().map(|f| f.assertion_str()).collect::<Vec<_>>();
 
     match &query.q {
-        None => FactsPage { facts: fs },
-        Some(q) => FactsPage { facts: vec![] },
+        None => FactsPage { facts: fs, start_state_attr_names: result[0].attr_names() },
+        Some(q) => FactsPage { facts: vec![], start_state_attr_names: result[0].attr_names() },
     }
 }
+
+async fn get_all_facts_of_type(State(state): State<AppState>) -> FactsPage {
+    let result = state.facts.get_facts("arc".to_string()).await.unwrap();
+    let fs = result.iter().map(|f| f.assertion_str()).collect::<Vec<_>>();
+    // let fs = result.iter().map(|f| f.assertion_str()).collect::<Vec<_>>();
+
+    FactsPage { facts: fs, start_state_attr_names: result[0].attr_names() }
+}
+
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 struct CreateFact {
@@ -68,13 +102,6 @@ struct CreateFact {
     attrs: Vec<String>,
 }
 
-// async fn create_fact(State(state): State<AppState>>, Json(payload): Json<CreateFact>) -> Json<CreateFact> {
-// // let mut state = state.write().await;
-// state.logic_machine.add_fact(payload.fact.clone());
-// Json(payload)
-// }
-
-use models::fact::Fact;
 use models::fact::RecordType;
 
 // #[debug_handler]

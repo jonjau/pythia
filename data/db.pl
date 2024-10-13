@@ -19,3 +19,9 @@ record(Context, EditTime, SeqNum, RecStatus, Id, [DRef, IRef, BegPeriod, EndPeri
 
 :- dynamic(edge/2).
 edge(3, 4).
+edge(4, 10).
+
+
+arc(A, C) :-
+    edge(A, B),
+    edge(B, C).

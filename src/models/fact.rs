@@ -126,6 +126,8 @@ impl RecordType {
     // TODO: query() overload passing in vector of argument values in order
 }
 
+/// A Goal may not have all its attributes grounded, and it is meant to be
+/// run as the target of a query from the logic machine
 #[derive(Debug, PartialEq)]
 pub struct Goal {
     type_: Arc<RecordType>,
@@ -149,7 +151,9 @@ impl Goal {
     }
 }
 
-#[derive(Debug, PartialEq)]
+/// A Fact has all its attributes grounded, and it is meant to be asserted
+/// to the logic machine
+#[derive(Debug, Clone, PartialEq)]
 pub struct Fact {
     type_: Arc<RecordType>,
     attrs: Vec<String>,
@@ -169,6 +173,14 @@ impl Fact {
         } else {
             format!(r#"{}"#, self.type_.name)
         }
+    }
+
+    pub fn attr_names(&self) -> Vec<String> {
+        self.type_
+            .attr_names
+            .iter()
+            .map(|attr_name| attr_name.to_string())
+            .collect::<Vec<_>>()
     }
 }
 

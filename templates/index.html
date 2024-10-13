@@ -1,5 +1,5 @@
 {% extends "layout.html" %} {% block content %}
-<form action="/facts" method="get" class="tool-bar">
+<form hx-get="/facts" hx-swap="none" class="tool-bar">
   <label for="search">Search Term</label>
   <input id="search" type="search" name="q" value="" />
   <input type="submit" value="Search" />
@@ -24,5 +24,8 @@
   </tbody>
 </table>
 <p><a href="/facts/new">Add fact</a></p>
-<p><div hx-post="/facts">you</div></p>
+<hr>
+
+{% include "state.html" %}
+<p>Changes</p>
 {% endblock %}
