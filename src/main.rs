@@ -34,6 +34,7 @@ async fn main() {
         .route("/facts", post(create_fact))
         .route("/facts2", get(get_all_facts_of_type))
         .route("/start-state", put(update_start_state))
+
         .with_state(state);
 
     // run our app with hyper, listening globally on port 3000
@@ -74,17 +75,27 @@ struct FactsPage {
 
 #[derive(Deserialize)]
 struct Params {
-    q: Option<String>,
+    fact_type: Option<String>,
 }
 
 async fn get_facts(query: Query<Params>, State(state): State<AppState>) -> FactsPage {
-    let result = state.facts.get_facts("edge".to_string()).await.unwrap();
-    let fs = result.iter().map(|f| f.assertion_str()).collect::<Vec<_>>();
+    match &query.fact_type {
+        None => FactsPage { facts: vec![], start_state_attr_names: vec![] },
+        Some(ft) => {
+            let result = state.facts.get_facts(ft.to_string()).await.unwrap();
+            let fs = result.iter().map(|f| f.assertion_str()).collect::<Vec<_>>();
 
-    match &query.q {
-        None => FactsPage { facts: fs, start_state_attr_names: result[0].attr_names() },
-        Some(q) => FactsPage { facts: vec![], start_state_attr_names: result[0].attr_names() },
+            FactsPage { facts: fs, start_state_attr_names: result[0].attr_names() } 
+        }
     }
+
+    // let result = state.facts.get_facts(query.fact_type.to_string()).await.unwrap();
+    // let fs = result.iter().map(|f| f.assertion_str()).collect::<Vec<_>>();
+
+    // match &query.fact_type {
+    //     None => FactsPage { facts: fs, start_state_attr_names: result[0].attr_names() },
+    //     Some(q) => FactsPage { facts: vec![], start_state_attr_names: result[0].attr_names() },
+    // }
 }
 
 async fn get_all_facts_of_type(State(state): State<AppState>) -> FactsPage {
