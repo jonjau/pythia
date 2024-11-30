@@ -32,7 +32,7 @@ async fn main() {
         .route("/", get(|| async { Redirect::permanent("/facts") }))
         .route("/facts", get(get_facts))
         .route("/facts", post(create_fact))
-        .route("/facts2", get(get_all_facts_of_type))
+        .route("/state-changes", get(get_state_changes))
         .route("/start-state", put(update_start_state))
 
         .with_state(state);
@@ -88,24 +88,20 @@ async fn get_facts(query: Query<Params>, State(state): State<AppState>) -> Facts
             FactsPage { facts: fs, start_state_attr_names: result[0].attr_names() } 
         }
     }
-
-    // let result = state.facts.get_facts(query.fact_type.to_string()).await.unwrap();
-    // let fs = result.iter().map(|f| f.assertion_str()).collect::<Vec<_>>();
-
-    // match &query.fact_type {
-    //     None => FactsPage { facts: fs, start_state_attr_names: result[0].attr_names() },
-    //     Some(q) => FactsPage { facts: vec![], start_state_attr_names: result[0].attr_names() },
-    // }
 }
 
-async fn get_all_facts_of_type(State(state): State<AppState>) -> FactsPage {
-    let result = state.facts.get_facts("arc".to_string()).await.unwrap();
+#[derive(Template)]
+#[template(path = "fact-table.html", ext = "html")]
+struct FactsTable {
+    facts: Vec<String>
+}
+
+async fn get_state_changes(State(state): State<AppState>) -> FactsTable {
+    let result = state.facts.get_facts("step_change".to_string()).await.unwrap();
     let fs = result.iter().map(|f| f.assertion_str()).collect::<Vec<_>>();
-    // let fs = result.iter().map(|f| f.assertion_str()).collect::<Vec<_>>();
 
-    FactsPage { facts: fs, start_state_attr_names: result[0].attr_names() }
+    FactsTable { facts: fs }
 }
-
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 struct CreateFact {
