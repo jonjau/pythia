@@ -30,14 +30,20 @@
         <h1>Facts</h1>
         <div id="content">{% block content %}{% endblock %}</div>
         <hr/>
-        <button hx-get="/facts2" hx-target="#calc-result">Calculate</button>
+        <form hx-get="/facts2" hx-target="#calc-result">
+          <button type="submit">Calculate</button>
+          <input type="hidden" name="calc-goal-type" value="arc"/>
+        </form>
         <div id="calc-result">calc result</div>
       </div>
       <div style="display: flex; flex-direction: column">
         <h2>End state</h2>
-        <form>
+        <form hx-put="/start-state" hx-swap="none">
           {% for attr in start_state_attr_names %}
-          <input type="text" placeholder="{{ attr }}" />
+          <div>
+            <label>{{attr}}</label>
+            <input type="text" name={{ attr }} placeholder="{{ attr }}" />
+          </div>
           {% endfor %}
         </form>
       </div>
