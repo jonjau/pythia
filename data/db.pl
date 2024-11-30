@@ -1,3 +1,5 @@
+:- use_module(library(clpz)).
+
 :- dynamic(dimlink/9).
 
 dimlink("Test1", "M1", "ID1", "J1", "2023-02-08", "2023-02-10", "2024-02-18 08:16:11", "D", "0"). 
@@ -14,8 +16,19 @@ dimlink("Test1", "M5", "ID1", "J3", "2023-02-08", "2023-02-09", "2024-02-18 09:1
 
 table("dimlink", "MgrLinkRef", ["InvHeadRef", "DimIdRef", "BegPeriod", "EndPeriod"]).
 
+% TODO: use a templating language to create these glue predicates:
 record(Context, EditTime, SeqNum, RecStatus, Id, [DRef, IRef, BegPeriod, EndPeriod]) :-
     dimlink(Context, Id, DRef, IRef, BegPeriod, EndPeriod, EditTime, RecStatus, SeqNum).
+
+step_change(Ctx, Id, Vals1, Vals2) :-
+    record(Ctx, _, SeqNum1, _, Id, Vals1),
+    record(Ctx, _, SeqNum2, _, Id, Vals2),
+    SeqNum2 #= SeqNum1 + 1.
+
+leap_change(Ctx, Id, Vals1, Vals2) :-
+    record(Ctx, _, SeqNum1, _, Id, Vals1),
+    record(Ctx, _, SeqNum2, _, Id, Vals2),
+    SeqNum2 #> SeqNum1.
 
 :- dynamic(edge/2).
 edge(3, 4).

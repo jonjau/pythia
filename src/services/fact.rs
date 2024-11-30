@@ -58,6 +58,8 @@ impl Actor {
                 &["X1", "X2", "X3", "X4", "X5", "X6", "X7", "X8", "X9"],
             )
             .unwrap(),
+            RecordType::new("step_change", &["Ctx", "Id", "Vals1", "Vals2"]).unwrap(),
+            RecordType::new("leap_change", &["Ctx", "Id", "Vals1", "Vals2"]).unwrap(),
         ]);
 
         Actor { receiver, lm: lm }

@@ -23,18 +23,18 @@
             <input type="text" name={{ attr }} placeholder="{{ attr }}" />
           </div>
           {% endfor %}
-          <button type="submit">Submit</button>
+          <button type="submit">Update</button>
         </form>
       </div>
-      <div>
-        <h1>Facts</h1>
+      <div style="padding: 0 2em;">
+        <h1>State changes</h1>
         <div id="content">{% block content %}{% endblock %}</div>
         <hr/>
-        <form hx-get="/facts2" hx-target="#calc-result">
+        <form hx-get="/state-changes" hx-target="#state-changes">
           <button type="submit">Calculate</button>
           <input type="hidden" name="calc-goal-type" value="arc"/>
         </form>
-        <div id="calc-result">calc result</div>
+        <div id="state-changes">state changes</div>
       </div>
       <div style="display: flex; flex-direction: column">
         <h2>End state</h2>
@@ -42,7 +42,7 @@
           {% for attr in start_state_attr_names %}
           <div>
             <label>{{attr}}</label>
-            <input type="text" name={{ attr }} placeholder="{{ attr }}" />
+            <input type="text" name={{ attr }} placeholder="{{ attr }}" disabled />
           </div>
           {% endfor %}
         </form>
