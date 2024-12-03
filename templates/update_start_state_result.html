@@ -1,0 +1,20 @@
+<!-- <input type="hidden" name="start_state_fact_type" value="{{ fact_type }}"/>
+{% for attr in start_state_attr_names %}
+<div>
+  <label>{{attr}}</label>
+  <input type="text" name={{ attr }} placeholder="{{ attr }}" />
+</div>
+{% endfor %}
+<button type="submit">Update again!</button>
+<div>Just updated.</div> -->
+
+<form hx-put="/start-state" hx-vals='{"_fact_type": "{{fact_type}}"}' hx-swap="outerHTML">
+  {% for attr in start_state_attr_names %}
+  <div>
+    <label>{{attr}}</label>
+    <input type="text" name={{ attr }} placeholder="{{ attr }}" />
+  </div>
+  {% endfor %}
+  <button type="submit">Update again!</button>
+  <div>Just updated.</div>
+</form>

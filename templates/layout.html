@@ -16,7 +16,7 @@
     <main style="display: flex">
       <div style="display: flex; flex-direction: column">
         <h2>Start state</h2>
-        <form hx-put="/start-state" hx-swap="none">
+        <form hx-put="/start-state" hx-vals='{"_fact_type": "{{fact_type}}"}' hx-swap="outerHTML">
           {% for attr in start_state_attr_names %}
           <div>
             <label>{{attr}}</label>
@@ -30,8 +30,12 @@
         <h1>State changes</h1>
         <div id="content">{% block content %}{% endblock %}</div>
         <hr/>
+        <form hx-get="/all-state-changes" hx-target="#state-changes">
+          <button type="submit">Calculate all state-changes</button>
+          <input type="hidden" name="calc-goal-type" value="arc"/>
+        </form>
         <form hx-get="/state-changes" hx-target="#state-changes">
-          <button type="submit">Calculate</button>
+          <button type="submit">Calculate state-changes from start state</button>
           <input type="hidden" name="calc-goal-type" value="arc"/>
         </form>
         <div id="state-changes">state changes</div>
