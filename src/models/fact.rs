@@ -1,5 +1,5 @@
 use scryer_prolog::machine::parsed_results::{
-    prolog_value_to_json_string, QueryMatch, QueryResolution, QueryResult,
+    prolog_value_to_json_string, QueryMatch, QueryResolution,
 };
 use scryer_prolog::machine::Machine;
 use std::fmt::{Display, Formatter};
@@ -182,6 +182,10 @@ impl Fact {
             .map(|attr_name| attr_name.to_string())
             .collect::<Vec<_>>()
     }
+
+    pub fn type_name(&self) -> String {
+        self.type_.name.clone()
+    }
 }
 
 impl Display for Fact {
@@ -216,28 +220,38 @@ impl LogicMachine {
         }
     }
 
-    fn parse_to_facts<'a>(
-        qr: QueryResolution,
-        rt: Arc<RecordType>,
-    ) -> Result<Vec<Fact>, LogicMachineError> {
+    fn parse_to_facts<'a>(qr: QueryResolution, rt: Arc<RecordType>) -> LogicMachineResult {
         match qr {
             QueryResolution::Matches(m) => Ok(m
                 .iter()
-                .map(|QueryMatch { bindings: b }| {
-                    Fact::new(
-                        Arc::clone(&rt),
-                        b.values()
-                            .map(|v| prolog_value_to_json_string(v.clone()))
-                            .collect::<Vec<_>>(),
-                    )
-                })
+                    .map(|QueryMatch { bindings: b }| {
+                        Fact::new(
+                            Arc::clone(&rt),
+                            b.values()
+                                .map(|v| prolog_value_to_json_string(v.clone()))
+                                .collect::<Vec<_>>(),
+                        )
+                    })
                 .collect::<Vec<_>>()),
             _ => Err(LogicMachineError::UnexpectedQueryResolution),
         }
     }
 
-    pub fn predicate(&self, name: &str) -> Option<Arc<RecordType>> {
-        self.record_types.get(name).map(|o| Arc::new(o.to_owned()))
+    // Get predicate which has the given name
+    pub fn get_record_type(&self, name: &str) -> Option<Arc<RecordType>> {
+        self.record_types
+            .get(name)
+            .map(|record| Arc::new(record.clone()))
+    }
+
+    pub fn is_valid_record_type(&self, name: &str, attr_names: Vec<&str>) -> bool {
+        self.get_record_type(name)
+            .map(|record_type| {
+                let attr_names_set: BTreeSet<String> =
+                    attr_names.into_iter().map(String::from).collect();
+                record_type.attr_names == attr_names_set
+            })
+            .unwrap_or(false)
     }
 
     pub fn define_types(&mut self, types: Vec<RecordType>) {
@@ -256,14 +270,16 @@ impl LogicMachine {
     }
 
     pub fn fetch_all(&mut self, rt: Arc<RecordType>) -> LogicMachineResult {
-        let qr = self
-            .fetch(Arc::clone(&rt).to_most_general_goal())
-            .map_err(LogicMachineError::PrologError)?;
-        Self::parse_to_facts(qr, Arc::clone(&rt))
+        self.fetch(Arc::clone(&rt).to_most_general_goal())
     }
 
-    pub fn fetch(&mut self, g: Goal) -> QueryResult {
-        self.machine.run_query(format!(r#"{}."#, g.query_str()))
+    pub fn fetch(&mut self, g: Goal) -> LogicMachineResult {
+        let qr = self
+            .machine
+            .run_query(format!(r#"{}."#, g.query_str()))
+            .map_err(LogicMachineError::PrologError)?;
+
+        Self::parse_to_facts(qr, Arc::clone(&g.type_))
     }
 }
 
@@ -284,7 +300,7 @@ mod tests {
         let mut lm = LogicMachine::new(String::from(r#"edge(0, 4)."#));
         let edge = Arc::new(RecordType::new("edge", &["X", "Y"]).unwrap());
         let res = lm.fetch(edge.to_goal(&HashMap::from([("X", "0")])).unwrap());
-        println!("{:?}", res);
+        // println!("{:?}", res);
     }
 
     #[test]
@@ -317,6 +333,6 @@ mod tests {
         );
         let a = lm.fetch_all(Arc::clone(&edge));
 
-        dbg!(&a);
+        // dbg!(&a);
     }
 }
