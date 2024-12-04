@@ -203,6 +203,7 @@ pub enum LogicMachineError {
 }
 
 pub type LogicMachineResult = Result<Vec<Fact>, LogicMachineError>;
+pub type RecordTypeResult = Result<RecordType, String>;
 
 pub struct LogicMachine {
     record_types: HashMap<String, RecordType>,
@@ -238,10 +239,11 @@ impl LogicMachine {
     }
 
     // Get predicate which has the given name
-    pub fn get_record_type(&self, name: &str) -> Option<Arc<RecordType>> {
+    pub fn get_record_type(&self, name: &str) -> Result<RecordType, String> {
         self.record_types
             .get(name)
-            .map(|record| Arc::new(record.clone()))
+            .map(|record| record.clone())
+            .ok_or("RecordType not found".to_string())
     }
 
     pub fn is_valid_record_type(&self, name: &str, attr_names: Vec<&str>) -> bool {

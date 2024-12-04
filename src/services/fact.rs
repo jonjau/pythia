@@ -1,6 +1,6 @@
 use std::vec;
 
-use crate::models::fact::{Fact, Goal, LogicMachineResult, RecordType};
+use crate::models::fact::{Fact, Goal, LogicMachineResult, RecordType, RecordTypeResult};
 use crate::models::{self};
 use models::fact::LogicMachine;
 
@@ -19,50 +19,44 @@ impl FactService {
         }
     }
 
-    pub async fn is_valid_record_type(&self, fact_type: String, attr_names: Vec<String>) -> bool {
+    pub async fn get_record_type(&self, fact_type: String) -> RecordTypeResult {
         self.lm_actor
-            .send_query(RecordTypeQuery::IsValidRecordType {
-                fact_type,
-                attr_names,
-            })
+            .send_query(GetRecordTypeQuery { fact_type })
             .await
     }
 
     pub async fn get_all_facts(&self, fact_type: String) -> LogicMachineResult {
         self.lm_actor
-            .send_query(FactQuery::GetAllFacts { fact_type })
+            .send_query(GetAllFactsQuery { fact_type })
             .await
     }
 
     pub async fn get_facts(&self, fact_type: String, attrs: Vec<String>) -> LogicMachineResult {
         self.lm_actor
-            .send_query(FactQuery::GetFacts { fact_type, attrs })
+            .send_query(GetFactsQuery { fact_type, attrs })
             .await
     }
 
     pub async fn add_fact(&self, fact: Fact) -> LogicMachineResult {
-        self.lm_actor.send_query(FactQuery::AddFact { fact }).await
+        self.lm_actor.send_query(AddFactQuery { fact }).await
     }
 }
 
-pub enum FactQuery {
-    AddFact {
-        fact: Fact,
-    },
-    GetAllFacts {
-        fact_type: String,
-    },
-    GetFacts {
-        fact_type: String,
-        attrs: Vec<String>,
-    },
+struct AddFactQuery {
+    fact: Fact,
 }
 
-pub enum RecordTypeQuery {
-    IsValidRecordType {
-        fact_type: String,
-        attr_names: Vec<String>,
-    },
+struct GetAllFactsQuery {
+    fact_type: String,
+}
+
+struct GetFactsQuery {
+    fact_type: String,
+    attrs: Vec<String>,
+}
+
+struct GetRecordTypeQuery {
+    fact_type: String,
 }
 
 struct Message<Query, Response> {
@@ -70,30 +64,49 @@ struct Message<Query, Response> {
     respond_to: oneshot::Sender<Response>,
 }
 
-enum ActorMessage {
-    FactMessage(Message<FactQuery, LogicMachineResult>),
-    RecordTypeMessage(Message<RecordTypeQuery, bool>),
+enum ActorMessage2 {
+    AddFact(Message<AddFactQuery, LogicMachineResult>),
+    GetAllFacts(Message<GetAllFactsQuery, LogicMachineResult>),
+    GetFacts(Message<GetFactsQuery, LogicMachineResult>),
+    GetRecordType(Message<GetRecordTypeQuery, RecordTypeResult>),
 }
 
-impl From<Message<FactQuery, LogicMachineResult>> for ActorMessage {
-    fn from(msg: Message<FactQuery, LogicMachineResult>) -> Self {
-        ActorMessage::FactMessage(msg)
+type AddFactMessage = Message<AddFactQuery, LogicMachineResult>;
+type GetAllFactsMessage = Message<GetAllFactsQuery, LogicMachineResult>;
+type GetFactsMessage = Message<GetFactsQuery, LogicMachineResult>;
+type GetRecordTypeMessage = Message<GetRecordTypeQuery, RecordTypeResult>;
+
+impl From<AddFactMessage> for ActorMessage2 {
+    fn from(msg: AddFactMessage) -> Self {
+        ActorMessage2::AddFact(msg)
     }
 }
 
-impl From<Message<RecordTypeQuery, bool>> for ActorMessage {
-    fn from(msg: Message<RecordTypeQuery, bool>) -> Self {
-        ActorMessage::RecordTypeMessage(msg)
+impl From<GetAllFactsMessage> for ActorMessage2 {
+    fn from(msg: GetAllFactsMessage) -> Self {
+        ActorMessage2::GetAllFacts(msg)
+    }
+}
+
+impl From<GetFactsMessage> for ActorMessage2 {
+    fn from(msg: GetFactsMessage) -> Self {
+        ActorMessage2::GetFacts(msg)
+    }
+}
+
+impl From<GetRecordTypeMessage> for ActorMessage2 {
+    fn from(msg: GetRecordTypeMessage) -> Self {
+        ActorMessage2::GetRecordType(msg)
     }
 }
 
 struct Actor {
-    receiver: mpsc::Receiver<ActorMessage>,
+    receiver: mpsc::Receiver<ActorMessage2>,
     lm: LogicMachine,
 }
 
 impl Actor {
-    fn new(program: &str, receiver: mpsc::Receiver<ActorMessage>) -> Self {
+    fn new(program: &str, receiver: mpsc::Receiver<ActorMessage2>) -> Self {
         let mut lm = LogicMachine::new(program);
         lm.define_types(vec![
             RecordType::new("edge", &["X", "Y"]).unwrap(),
@@ -107,48 +120,38 @@ impl Actor {
             RecordType::new("leap_change", &["Ctx", "Id", "Vals1", "Vals2"]).unwrap(),
         ]);
 
-        Actor { receiver, lm: lm }
+        Actor { receiver, lm }
     }
-    fn handle_message(&mut self, msg: ActorMessage) {
+    fn handle_message(&mut self, msg: ActorMessage2) {
         match msg {
-            ActorMessage::RecordTypeMessage(Message { query, respond_to }) => match query {
-                RecordTypeQuery::IsValidRecordType {
-                    fact_type,
-                    attr_names,
-                } => {
-                    let r = self.lm.is_valid_record_type(
-                        &fact_type,
-                        attr_names.iter().map(String::as_str).collect(),
-                    );
-                    let _ = respond_to.send(r);
-                }
-            },
-            ActorMessage::FactMessage(Message { query, respond_to }) => match query {
-                FactQuery::AddFact { fact } => {
-                    let r = self.lm.add_fact(fact);
+            ActorMessage2::AddFact(Message { query, respond_to }) => {
+                let r = self.lm.add_fact(query.fact);
 
-                    // The `let _ =` ignores any errors when sending.
-                    // This can happen if the `select!` macro is
-                    // to cancel waiting for the response.
-                    let _ = respond_to.send(r);
-                }
-                FactQuery::GetAllFacts { fact_type } => {
-                    let r = self
-                        .lm
-                        .get_record_type(&fact_type)
-                        .map(|rt| self.lm.fetch_all(rt))
-                        .unwrap_or(Ok(Vec::new()));
-                    let _ = respond_to.send(r);
-                }
-                FactQuery::GetFacts { fact_type, attrs } => {
-                    let r = self
-                        .lm
-                        .get_record_type(&fact_type)
-                        .map(|rt| self.lm.fetch(Goal::new(rt, attrs)))
-                        .unwrap_or(Ok(Vec::new()));
-                    let _ = respond_to.send(r);
-                }
-            },
+                // The `let _ =` ignores any errors when sending.
+                // This can happen if the `select!` macro is
+                // to cancel waiting for the response.
+                let _ = respond_to.send(r);
+            }
+            ActorMessage2::GetAllFacts(Message { query, respond_to }) => {
+                let r = self
+                    .lm
+                    .get_record_type(&query.fact_type)
+                    .map(|rt| self.lm.fetch_all(rt.into()))
+                    .unwrap_or(Ok(Vec::new()));
+                let _ = respond_to.send(r);
+            }
+            ActorMessage2::GetFacts(Message { query, respond_to }) => {
+                let r = self
+                    .lm
+                    .get_record_type(&query.fact_type)
+                    .map(|rt| self.lm.fetch(Goal::new(rt.into(), query.attrs)))
+                    .unwrap_or(Ok(Vec::new()));
+                let _ = respond_to.send(r);
+            }
+            ActorMessage2::GetRecordType(Message { query, respond_to }) => {
+                let r = self.lm.get_record_type(&query.fact_type);
+                let _ = respond_to.send(r);
+            }
         }
     }
 }
@@ -161,7 +164,7 @@ async fn run_actor(mut actor: Actor) {
 
 #[derive(Clone)]
 struct ActorHandle {
-    sender: mpsc::Sender<ActorMessage>,
+    sender: mpsc::Sender<ActorMessage2>,
 }
 
 impl ActorHandle {
@@ -188,7 +191,7 @@ impl ActorHandle {
 
     async fn send_query<Q, R>(&self, q: Q) -> R
     where
-        ActorMessage: From<Message<Q, R>>,
+        ActorMessage2: From<Message<Q, R>>,
     {
         let (send, recv) = oneshot::channel();
 
@@ -200,7 +203,7 @@ impl ActorHandle {
         // Ignore send errors. If this send fails, so does the
         // recv.await below. There's no reason to check the
         // failure twice.
-        let _ = self.sender.send(ActorMessage::from(msg)).await;
+        let _ = self.sender.send(ActorMessage2::from(msg)).await;
         recv.await.expect("Actor task has been killed")
     }
 }
