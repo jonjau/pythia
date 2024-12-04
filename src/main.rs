@@ -59,8 +59,8 @@ async fn update_start_state(State(state): State<AppState>, Form(start_state): Fo
     let clean_keys = start_state.keys().filter(|&k| k != "_fact_type").cloned()
         .collect::<Vec<_>>();
 
-    let valid = state.facts.is_valid_record_type(ft.clone(), clean_keys.clone()).await;
-    dbg!(valid);
+    let rt = state.facts.get_record_type(ft.clone()).await;
+    dbg!(rt);
 
     // TOOD JCJ: pass in the fact_type string and HashMap of form values to the states service
     // the states service should then interface with the logicmachine (via the factservice or otherwise)
