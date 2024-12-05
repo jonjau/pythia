@@ -47,7 +47,7 @@ async fn main() {
 #[template(path = "update_start_state_result.html", ext = "html")]
 struct UpdateStartStateResult {
     fact_type: String,
-    start_state_attr_names: Vec<String>
+    start_state_fields: Vec<String>
 }
 
 
@@ -64,14 +64,14 @@ async fn update_start_state(State(state): State<AppState>, Form(start_state): Fo
 
     // TOOD JCJ: pass in the fact_type string and HashMap of form values to the states service
     // the states service should then interface with the logicmachine (via the factservice or otherwise)
-    // stateservice.set_start_state(fact_type, attrs);
+    // stateservice.set_start_state(fact_type, values);
     // which would do something like 
 
-    UpdateStartStateResult { fact_type: ft, start_state_attr_names: clean_keys }
+    UpdateStartStateResult { fact_type: ft, start_state_fields: clean_keys }
 }
 
 struct StartState {
-    attr_names: Vec<String>
+    fields: Vec<String>
 }
 
 #[derive(Template)]
@@ -79,7 +79,7 @@ struct StartState {
 struct FactsPage {
     fact_type: String,
     facts: Vec<String>,
-    start_state_attr_names: Vec<String>
+    start_state_fields: Vec<String>
 }
 
 #[derive(Deserialize)]
@@ -89,7 +89,7 @@ struct Params {
 
 async fn get_facts(query: Query<Params>, State(state): State<AppState>) -> FactsPage {
     match &query.fact_type {
-        None => FactsPage { fact_type: "".to_string(), facts: vec![], start_state_attr_names: vec![] },
+        None => FactsPage { fact_type: "".to_string(), facts: vec![], start_state_fields: vec![] },
         Some(ft) => {
             let result = state.facts.get_all_facts(ft.to_string()).await.unwrap();
             let fs = result.iter().map(|f| f.assertion_str()).collect::<Vec<_>>();
@@ -97,7 +97,7 @@ async fn get_facts(query: Query<Params>, State(state): State<AppState>) -> Facts
             FactsPage {
                 fact_type: result[0].type_name(),
                 facts: fs,
-                start_state_attr_names: result[0].attr_names()
+                start_state_fields: result[0].fields()
             } 
         }
     }
@@ -127,7 +127,7 @@ async fn get_state_changes(State(state): State<AppState>) -> FactsTable {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 struct CreateFact {
     typename: String,
-    attrs: Vec<String>,
+    values: Vec<String>,
 }
 
 use models::fact::RecordType;
@@ -141,19 +141,19 @@ async fn create_fact(State(state): State<AppState>, Json(cf): Json<CreateFact>) 
     //     .to_fact(&HashMap::from([("X", "3"), ("Y", "5")]))
     //     .unwrap();
 
-    let attrnames_temp = (0..cf.attrs.len())
+    let fields_temp = (0..cf.values.len())
         .map(|i| format!("X{}", i))
         .collect::<Vec<_>>();
-    let attrnames = attrnames_temp.iter().map(String::as_ref).collect::<Vec<_>>();
-    let rt0 = Arc::new(RecordType::new(&cf.typename, &attrnames).unwrap());
+    let fields = fields_temp.iter().map(String::as_ref).collect::<Vec<_>>();
+    let rt0 = Arc::new(RecordType::new(&cf.typename, &fields).unwrap());
 
-    let mapped_attrs = attrnames
+    let mapped_values = fields
         .iter()
-        .zip(cf.attrs.iter())
-        .map(|(&attrname, attr)| (attrname, attr.as_str()))
+        .zip(cf.values.iter())
+        .map(|(&field, value)| (field, value.as_str()))
         .collect::<HashMap<_, _>>();
 
-    let fact = rt0.to_fact(&mapped_attrs).unwrap();
+    let fact = rt0.to_fact(&mapped_values).unwrap();
 
     // let res = state.facts.add_fact(fact).await.unwrap();
     // res.to_string()
