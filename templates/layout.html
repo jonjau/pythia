@@ -17,10 +17,10 @@
       <div style="display: flex; flex-direction: column">
         <h2>Start state</h2>
         <form hx-put="/start-state" hx-vals='{"_fact_type": "{{fact_type}}"}' hx-swap="outerHTML">
-          {% for attr in start_state_attr_names %}
+          {% for field in start_state_fields %}
           <div>
-            <label>{{attr}}</label>
-            <input type="text" name={{ attr }} placeholder="{{ attr }}" />
+            <label>{{field}}</label>
+            <input type="text" name={{ field }} placeholder="{{ field }}" />
           </div>
           {% endfor %}
           <button type="submit">Update</button>
@@ -43,10 +43,10 @@
       <div style="display: flex; flex-direction: column">
         <h2>End state</h2>
         <form hx-put="/start-state" hx-swap="none">
-          {% for attr in start_state_attr_names %}
+          {% for field in start_state_fields %}
           <div>
-            <label>{{attr}}</label>
-            <input type="text" name={{ attr }} placeholder="{{ attr }}" disabled />
+            <label>{{field}}</label>
+            <input type="text" name={{ field }} placeholder="{{ field }}" disabled />
           </div>
           {% endfor %}
         </form>

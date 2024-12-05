@@ -65,10 +65,10 @@ struct Message<Query, Response> {
 }
 
 enum ActorMessage2 {
-    AddFact(Message<AddFactQuery, LogicMachineResult>),
-    GetAllFacts(Message<GetAllFactsQuery, LogicMachineResult>),
-    GetFacts(Message<GetFactsQuery, LogicMachineResult>),
-    GetRecordType(Message<GetRecordTypeQuery, RecordTypeResult>),
+    AddFact(AddFactMessage),
+    GetAllFacts(GetAllFactsMessage),
+    GetFacts(GetFactsMessage),
+    GetRecordType(GetRecordTypeMessage),
 }
 
 type AddFactMessage = Message<AddFactQuery, LogicMachineResult>;

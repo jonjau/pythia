@@ -12,174 +12,174 @@ use std::{
 // #[derive(PartialEq, Debug)]
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum RecordTypeError {
-    #[error("unknown attribute names: {}", .0.join(", "))]
-    UnknownAttrNames(Vec<String>),
-    #[error("ungrounded attributes: {}", .0.join(", "))]
-    UngroundedAttrs(Vec<String>),
-    #[error("attribute names not starting with uppercase ASCII: {}", .0.join(", "))]
-    InvalidAttrNames(Vec<String>),
+    #[error("unknown field names: {}", .0.join(", "))]
+    UnknownFieldNames(Vec<String>),
+    #[error("ungrounded values: {}", .0.join(", "))]
+    UngroundedValues(Vec<String>),
+    #[error("field names not starting with uppercase ASCII: {}", .0.join(", "))]
+    InvalidFieldNames(Vec<String>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct RecordType {
     name: String,
-    attr_names: BTreeSet<String>,
+    fields: BTreeSet<String>,
 }
 
 impl RecordType {
-    pub fn new(name: &str, attr_names: &[&str]) -> Result<Self, RecordTypeError> {
+    pub fn new(name: &str, fields: &[&str]) -> Result<Self, RecordTypeError> {
         let mut invalid = Vec::new();
-        for &attr_name in attr_names {
-            if !attr_name
+        for &field in fields {
+            if !field
                 .chars()
                 .next()
                 .is_some_and(|c| c.is_ascii_uppercase())
             {
-                invalid.push(attr_name.to_owned());
+                invalid.push(field.to_owned());
             }
         }
         if !invalid.is_empty() {
-            Err(RecordTypeError::InvalidAttrNames(invalid))
+            Err(RecordTypeError::InvalidFieldNames(invalid))
         } else {
             Ok(RecordType {
                 name: name.into(),
-                attr_names: attr_names.iter().cloned().map(Into::into).collect(),
+                fields: fields.iter().cloned().map(Into::into).collect(),
             })
         }
     }
 
     pub fn to_most_general_goal(self: Arc<Self>) -> Goal {
-        let attrs = self.attr_names.iter().cloned().collect::<Vec<_>>();
-        Goal::new(self, attrs)
+        let values = self.fields.iter().cloned().collect::<Vec<_>>();
+        Goal::new(self, values)
     }
 
-    pub fn to_goal(self: Arc<Self>, attrs: &HashMap<&str, &str>) -> Result<Goal, RecordTypeError> {
-        let attrs = attrs
+    pub fn to_goal(self: Arc<Self>, values: &HashMap<&str, &str>) -> Result<Goal, RecordTypeError> {
+        let values = values
             .iter()
             .map(|(&k, &v)| (k.to_owned(), v.to_owned()))
             .collect::<HashMap<_, _>>();
 
-        let mut unknown_attrs = attrs
+        let mut unknown_values = values
             .keys()
-            .filter(|&a| !self.attr_names.contains(&a.to_owned()))
+            .filter(|&a| !self.fields.contains(&a.to_owned()))
             .peekable();
-        if unknown_attrs.peek().is_some() {
-            return Err(RecordTypeError::UnknownAttrNames(
-                unknown_attrs.into_iter().cloned().collect::<Vec<_>>(),
+        if unknown_values.peek().is_some() {
+            return Err(RecordTypeError::UnknownFieldNames(
+                unknown_values.into_iter().cloned().collect::<Vec<_>>(),
             ));
         }
 
-        let complete_attrs: Vec<String> = self
-            .attr_names
+        let complete_values: Vec<String> = self
+            .fields
             .iter()
-            .map(|attr_name| {
-                attrs
-                    .get(attr_name)
+            .map(|field| {
+                values
+                    .get(field)
                     .cloned()
-                    .unwrap_or(attr_name.to_owned())
+                    .unwrap_or(field.to_owned())
             })
             .collect();
 
-        Ok(Goal::new(self, complete_attrs))
+        Ok(Goal::new(self, complete_values))
     }
 
-    pub fn to_fact(self: Arc<Self>, attrs: &HashMap<&str, &str>) -> Result<Fact, RecordTypeError> {
-        struct UnknownAttrName(String);
+    pub fn to_fact(self: Arc<Self>, values: &HashMap<&str, &str>) -> Result<Fact, RecordTypeError> {
+        struct UnknownFieldName(String);
         let mut unknown = Vec::new();
 
-        let attrs = attrs
+        let values = values
             .iter()
             .map(|(&k, &v)| (k.to_owned(), v.to_owned()))
             .map(|(k, v)| {
-                self.attr_names
+                self.fields
                     .contains(&k)
                     .then_some((k.clone(), v))
-                    .ok_or(UnknownAttrName(k))
+                    .ok_or(UnknownFieldName(k))
             })
-            .filter_map(|r| r.map_err(|UnknownAttrName(e)| unknown.push(e)).ok())
+            .filter_map(|r| r.map_err(|UnknownFieldName(e)| unknown.push(e)).ok())
             .collect::<HashMap<_, _>>();
 
         if !unknown.is_empty() {
-            return Err(RecordTypeError::UnknownAttrNames(unknown));
+            return Err(RecordTypeError::UnknownFieldNames(unknown));
         }
 
-        struct UngroundedAttr(String);
+        struct UngroundedValue(String);
         let mut ungrounded = Vec::new();
-        let complete_attrs = self
-            .attr_names
+        let complete_values = self
+            .fields
             .iter()
-            .map(|attr_name| {
-                attrs
-                    .get(attr_name)
+            .map(|field| {
+                values
+                    .get(field)
                     .cloned()
-                    .ok_or(UngroundedAttr(attr_name.to_string()))
+                    .ok_or(UngroundedValue(field.to_string()))
             })
-            .filter_map(|r| r.map_err(|UngroundedAttr(e)| ungrounded.push(e)).ok())
+            .filter_map(|r| r.map_err(|UngroundedValue(e)| ungrounded.push(e)).ok())
             .collect::<Vec<_>>();
 
         if !ungrounded.is_empty() {
-            return Err(RecordTypeError::UngroundedAttrs(ungrounded));
+            return Err(RecordTypeError::UngroundedValues(ungrounded));
         }
 
-        Ok(Fact::new(self, complete_attrs))
+        Ok(Fact::new(self, complete_values))
     }
     // TODO: query() overload passing in vector of argument values in order
 }
 
-/// A Goal may not have all its attributes grounded, and it is meant to be
-/// run as the target of a query from the logic machine
+/// A Goal is a compound term which may not have all its values grounded.
+/// It is meant to be run as a query to the logic machine.
 #[derive(Debug, PartialEq)]
 pub struct Goal {
     type_: Arc<RecordType>,
-    attrs: Vec<String>,
+    values: Vec<String>,
 }
 
 impl Goal {
-    pub fn new(type_: Arc<RecordType>, attrs: Vec<String>) -> Self {
+    pub fn new(type_: Arc<RecordType>, values: Vec<String>) -> Self {
         Goal {
             type_: Arc::clone(&type_),
-            attrs,
+            values,
         }
     }
 
     pub fn query_str(&self) -> String {
-        if !self.attrs.is_empty() {
-            format!(r#"{}({})"#, self.type_.name, self.attrs.join(", "))
+        if !self.values.is_empty() {
+            format!(r#"{}({})"#, self.type_.name, self.values.join(", "))
         } else {
             format!(r#"{}"#, self.type_.name)
         }
     }
 }
 
-/// A Fact has all its attributes grounded, and it is meant to be asserted
-/// to the logic machine
+/// A Fact is a compound term which has all its values grounded.
+/// It is meant to be asserted to the logic machine
 #[derive(Debug, Clone, PartialEq)]
 pub struct Fact {
     type_: Arc<RecordType>,
-    attrs: Vec<String>,
+    values: Vec<String>,
 }
 
 impl Fact {
-    pub fn new(type_: Arc<RecordType>, attrs: Vec<String>) -> Self {
+    pub fn new(type_: Arc<RecordType>, values: Vec<String>) -> Self {
         Fact {
             type_: Arc::clone(&type_),
-            attrs,
+            values,
         }
     }
 
     pub fn assertion_str(&self) -> String {
-        if !self.attrs.is_empty() {
-            format!(r#"{}({})"#, self.type_.name, self.attrs.join(", "))
+        if !self.values.is_empty() {
+            format!(r#"{}({})"#, self.type_.name, self.values.join(", "))
         } else {
             format!(r#"{}"#, self.type_.name)
         }
     }
 
-    pub fn attr_names(&self) -> Vec<String> {
+    pub fn fields(&self) -> Vec<String> {
         self.type_
-            .attr_names
+            .fields
             .iter()
-            .map(|attr_name| attr_name.to_string())
+            .map(|field| field.to_string())
             .collect::<Vec<_>>()
     }
 
@@ -190,7 +190,7 @@ impl Fact {
 
 impl Display for Fact {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}({})", self.type_.name, self.attrs.join(","))
+        write!(f, "{}({})", self.type_.name, self.values.join(","))
     }
 }
 
@@ -246,12 +246,12 @@ impl LogicMachine {
             .ok_or("RecordType not found".to_string())
     }
 
-    pub fn is_valid_record_type(&self, name: &str, attr_names: Vec<&str>) -> bool {
+    pub fn is_valid_record_type(&self, name: &str, fields: Vec<&str>) -> bool {
         self.get_record_type(name)
             .map(|record_type| {
-                let attr_names_set: BTreeSet<String> =
-                    attr_names.into_iter().map(String::from).collect();
-                record_type.attr_names == attr_names_set
+                let fields_set: BTreeSet<String> =
+                    fields.into_iter().map(String::from).collect();
+                record_type.fields == fields_set
             })
             .unwrap_or(false)
     }
@@ -320,12 +320,12 @@ mod tests {
         // TODO: accept more than just strings for argument values
         assert_eq!(
             Arc::clone(&edge).to_fact(&HashMap::from([("X", "0")])),
-            Err(RecordTypeError::UngroundedAttrs(vec![String::from("Y")]))
+            Err(RecordTypeError::UngroundedValues(vec![String::from("Y")]))
         );
 
         assert_eq!(
             Arc::clone(&edge).to_fact(&HashMap::from([("XA", "0")])),
-            Err(RecordTypeError::UnknownAttrNames(vec![String::from("XA")]))
+            Err(RecordTypeError::UnknownFieldNames(vec![String::from("XA")]))
         );
 
         let _ = lm.add_fact(
