@@ -2,7 +2,10 @@ use std::{collections::HashMap, sync::Arc};
 
 use askama::Template;
 use axum::{
-    extract::{Query, State}, response::Redirect, routing::{get, post, put}, Form, Json, Router
+    extract::{Query, State},
+    response::Redirect,
+    routing::{get, post, put},
+    Form, Json, Router,
 };
 
 use serde::{Deserialize, Serialize};
@@ -15,7 +18,7 @@ use services::{fact::FactService, state::StateService};
 #[derive(Clone)]
 struct AppState {
     facts: FactService,
-    states: StateService
+    states: StateService,
 }
 
 #[tokio::main]
@@ -35,7 +38,6 @@ async fn main() {
         .route("/all-state-changes", get(get_all_state_changes))
         .route("/state-changes", get(get_state_changes))
         .route("/start-state", put(update_start_state))
-
         .with_state(state);
 
     // run our app with hyper, listening globally on port 3000
@@ -47,31 +49,53 @@ async fn main() {
 #[template(path = "update_start_state_result.html", ext = "html")]
 struct UpdateStartStateResult {
     fact_type: String,
-    start_state_fields: Vec<String>
+    start_state_values: HashMap<String, String>,
 }
 
-
-async fn update_start_state(State(state): State<AppState>, Form(start_state): Form<HashMap<String, String>>) -> UpdateStartStateResult {
+async fn update_start_state(
+    State(mut state): State<AppState>,
+    Form(start_state): Form<HashMap<String, String>>,
+) -> UpdateStartStateResult {
     dbg!(&start_state);
 
-    let ft = start_state.get("_fact_type").cloned().unwrap_or("".to_string());
+    let ft = start_state
+        .get("_fact_type")
+        .cloned()
+        .unwrap_or("".to_string());
 
-    let clean_keys = start_state.keys().filter(|&k| k != "_fact_type").cloned()
+    let clean_keys = start_state
+        .keys()
+        .filter(|&k| k != "_fact_type")
+        .cloned()
         .collect::<Vec<_>>();
 
-    let rt = state.facts.get_record_type(ft.clone()).await;
-    dbg!(rt);
+    let rt = state.facts.get_record_type(ft.clone()).await.unwrap();
+    dbg!(&rt);
 
+    let values = start_state
+        .iter()
+        .filter(|&(k, _)| k.as_str() != "_fact_type")
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .collect();
+    
+    state.states.update_start_state(Arc::new(rt), values);
+
+    let g = &state.states.start_state.unwrap();
+
+    dbg!(g);
     // TOOD JCJ: pass in the fact_type string and HashMap of form values to the states service
     // the states service should then interface with the logicmachine (via the factservice or otherwise)
     // stateservice.set_start_state(fact_type, values);
-    // which would do something like 
+    // which would do something like
 
-    UpdateStartStateResult { fact_type: ft, start_state_fields: clean_keys }
+    UpdateStartStateResult {
+        fact_type: ft,
+        start_state_values: g.to_values(),
+    }
 }
 
 struct StartState {
-    fields: Vec<String>
+    fields: Vec<String>,
 }
 
 #[derive(Template)]
@@ -79,7 +103,7 @@ struct StartState {
 struct FactsPage {
     fact_type: String,
     facts: Vec<String>,
-    start_state_fields: Vec<String>
+    start_state_fields: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -89,7 +113,11 @@ struct Params {
 
 async fn get_facts(query: Query<Params>, State(state): State<AppState>) -> FactsPage {
     match &query.fact_type {
-        None => FactsPage { fact_type: "".to_string(), facts: vec![], start_state_fields: vec![] },
+        None => FactsPage {
+            fact_type: "".to_string(),
+            facts: vec![],
+            start_state_fields: vec![],
+        },
         Some(ft) => {
             let result = state.facts.get_all_facts(ft.to_string()).await.unwrap();
             let fs = result.iter().map(|f| f.assertion_str()).collect::<Vec<_>>();
@@ -97,8 +125,8 @@ async fn get_facts(query: Query<Params>, State(state): State<AppState>) -> Facts
             FactsPage {
                 fact_type: result[0].type_name(),
                 facts: fs,
-                start_state_fields: result[0].fields()
-            } 
+                start_state_fields: result[0].fields(),
+            }
         }
     }
 }
@@ -106,19 +134,34 @@ async fn get_facts(query: Query<Params>, State(state): State<AppState>) -> Facts
 #[derive(Template)]
 #[template(path = "fact-table.html", ext = "html")]
 struct FactsTable {
-    facts: Vec<String>
+    facts: Vec<String>,
 }
 
 async fn get_all_state_changes(State(state): State<AppState>) -> FactsTable {
-    let result = state.facts.get_all_facts("step_change".to_string()).await.unwrap();
+    let result = state
+        .facts
+        .get_all_facts("step_change".to_string())
+        .await
+        .unwrap();
     let fs = result.iter().map(|f| f.assertion_str()).collect::<Vec<_>>();
 
     FactsTable { facts: fs }
 }
 
 async fn get_state_changes(State(state): State<AppState>) -> FactsTable {
-    let result = state.facts.get_facts("step_change".to_string(),
-        vec!["Ctx".to_string(), "\"MR00000002\"".to_string(), "V1".to_string(), "V2".to_string()]).await.unwrap();
+    let result = state
+        .facts
+        .get_facts(
+            "step_change".to_string(),
+            vec![
+                "Ctx".to_string(),
+                "\"MR00000002\"".to_string(),
+                "V1".to_string(),
+                "V2".to_string(),
+            ],
+        )
+        .await
+        .unwrap();
     let fs = result.iter().map(|f| f.assertion_str()).collect::<Vec<_>>();
 
     FactsTable { facts: fs }
@@ -162,6 +205,10 @@ async fn create_fact(State(state): State<AppState>, Json(cf): Json<CreateFact>) 
     res.len().to_string();
 
     let result = state.facts.get_all_facts(cf.typename).await.unwrap();
-    result.iter().map(|f| f.to_string()).collect::<Vec<_>>().join(",\n")
+    result
+        .iter()
+        .map(|f| f.to_string())
+        .collect::<Vec<_>>()
+        .join(",\n")
     // String::new()
 }

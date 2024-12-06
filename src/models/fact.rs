@@ -30,11 +30,7 @@ impl RecordType {
     pub fn new(name: &str, fields: &[&str]) -> Result<Self, RecordTypeError> {
         let mut invalid = Vec::new();
         for &field in fields {
-            if !field
-                .chars()
-                .next()
-                .is_some_and(|c| c.is_ascii_uppercase())
-            {
+            if !field.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
                 invalid.push(field.to_owned());
             }
         }
@@ -72,12 +68,7 @@ impl RecordType {
         let complete_values: Vec<String> = self
             .fields
             .iter()
-            .map(|field| {
-                values
-                    .get(field)
-                    .cloned()
-                    .unwrap_or(field.to_owned())
-            })
+            .map(|field| values.get(field).cloned().unwrap_or(field.to_owned()))
             .collect();
 
         Ok(Goal::new(self, complete_values))
@@ -128,7 +119,7 @@ impl RecordType {
 
 /// A Goal is a compound term which may not have all its values grounded.
 /// It is meant to be run as a query to the logic machine.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Goal {
     type_: Arc<RecordType>,
     values: Vec<String>,
@@ -148,6 +139,15 @@ impl Goal {
         } else {
             format!(r#"{}"#, self.type_.name)
         }
+    }
+
+    pub fn to_values(&self) -> HashMap<String, String> {
+        self.type_
+            .fields
+            .iter()
+            .zip(self.values.iter())
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect::<HashMap<_, _>>()
     }
 }
 
@@ -225,14 +225,14 @@ impl LogicMachine {
         match qr {
             QueryResolution::Matches(m) => Ok(m
                 .iter()
-                    .map(|QueryMatch { bindings: b }| {
-                        Fact::new(
-                            Arc::clone(&rt),
-                            b.values()
-                                .map(|v| prolog_value_to_json_string(v.clone()))
-                                .collect::<Vec<_>>(),
-                        )
-                    })
+                .map(|QueryMatch { bindings: b }| {
+                    Fact::new(
+                        Arc::clone(&rt),
+                        b.values()
+                            .map(|v| prolog_value_to_json_string(v.clone()))
+                            .collect::<Vec<_>>(),
+                    )
+                })
                 .collect::<Vec<_>>()),
             _ => Err(LogicMachineError::UnexpectedQueryResolution),
         }
@@ -249,8 +249,7 @@ impl LogicMachine {
     pub fn is_valid_record_type(&self, name: &str, fields: Vec<&str>) -> bool {
         self.get_record_type(name)
             .map(|record_type| {
-                let fields_set: BTreeSet<String> =
-                    fields.into_iter().map(String::from).collect();
+                let fields_set: BTreeSet<String> = fields.into_iter().map(String::from).collect();
                 record_type.fields == fields_set
             })
             .unwrap_or(false)
