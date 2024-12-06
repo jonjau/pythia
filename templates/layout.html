@@ -20,7 +20,7 @@
           {% for field in start_state_fields %}
           <div>
             <label>{{field}}</label>
-            <input type="text" name={{ field }} placeholder="{{ field }}" />
+            <input type="text" name="{{ field }}" />
           </div>
           {% endfor %}
           <button type="submit">Update</button>
