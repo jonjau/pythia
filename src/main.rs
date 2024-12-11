@@ -1,4 +1,8 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    io::repeat,
+    sync::Arc,
+};
 
 use askama::Template;
 use axum::{
@@ -63,39 +67,23 @@ async fn update_start_state(
         .cloned()
         .unwrap_or("".to_string());
 
-    let clean_keys = start_state
-        .keys()
-        .filter(|&k| k != "_fact_type")
-        .cloned()
-        .collect::<Vec<_>>();
-
     let rt = state.facts.get_record_type(ft.clone()).await.unwrap();
     dbg!(&rt);
 
-    let values = start_state
-        .iter()
-        .filter(|&(k, _)| k.as_str() != "_fact_type")
-        .map(|(k, v)| (k.as_str(), v.as_str()))
-        .collect();
-    
-    state.states.update_start_state(Arc::new(rt), values);
+    // let values = start_state
+    //     .iter()
+    //     .filter(|&(k, _)| k.as_str() != "_fact_type")
+    //     .map(|(k, v)| (k.as_str(), v.as_str()))
+    //     .collect();
+
+    // state.states.update_start_state(rt, values);
 
     let g = &state.states.start_state.unwrap();
-
     dbg!(g);
-    // TOOD JCJ: pass in the fact_type string and HashMap of form values to the states service
-    // the states service should then interface with the logicmachine (via the factservice or otherwise)
-    // stateservice.set_start_state(fact_type, values);
-    // which would do something like
-
     UpdateStartStateResult {
         fact_type: ft,
         start_state_values: g.to_values(),
     }
-}
-
-struct StartState {
-    fields: Vec<String>,
 }
 
 #[derive(Template)]
@@ -125,7 +113,7 @@ async fn get_facts(query: Query<Params>, State(state): State<AppState>) -> Facts
             FactsPage {
                 fact_type: result[0].type_name(),
                 facts: fs,
-                start_state_fields: result[0].fields(),
+                start_state_fields: result[0].data_fields(),
             }
         }
     }
@@ -148,20 +136,86 @@ async fn get_all_state_changes(State(state): State<AppState>) -> FactsTable {
     FactsTable { facts: fs }
 }
 
-async fn get_state_changes(State(state): State<AppState>) -> FactsTable {
-    let result = state
+async fn get_state_changes(
+    State(app_state): State<AppState>,
+    Query(states): Query<BTreeMap<String, String>>,
+) -> FactsTable {
+    let named_values = states
+        .iter()
+        .filter_map(|(field, value)| {
+            if (field.starts_with("0.") || field.starts_with("1.")) && !value.is_empty() {
+                Some((field[2..].to_string(), value.to_string()))
+            } else {
+                None
+            }
+        })
+        .collect::<BTreeMap<_, _>>();
+    dbg!(&named_values);
+
+    let data_rt = app_state.facts.get_record_type("dimlink".to_string()).await.unwrap();
+
+    let rt = app_state
         .facts
-        .get_facts(
-            "step_change".to_string(),
-            vec![
-                "Ctx".to_string(),
-                "\"MR00000002\"".to_string(),
-                "V1".to_string(),
-                "V2".to_string(),
-            ],
-        )
+        .get_record_type("step_change".to_string())
         .await
         .unwrap();
+    dbg!(&rt);
+
+    let ys = data_rt
+        .data_fields
+        .iter()
+        .filter_map(|df| {
+            named_values
+                .get(df)
+                .and_then(|value| Some(format!("\"{}\"", value)))
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    dbg!(&ys);
+
+    let ys = format!("[{}]", ys);
+    dbg!(&ys);
+
+    // let y = format!(
+    //     "[{}]",
+    //     named_values
+    //         .values()
+    //         .map(|value| format!("\"{}\"", value))
+    //         .collect::<Vec<_>>()
+    //         .join(", ")
+    // );
+
+    let m = HashMap::from([("Vals1", ys.as_str())]);
+    let goal = rt.to_goal(&m).unwrap();
+
+    dbg!(&goal);
+
+    // let gg = rt.clone().to_most_general_goal().to_values();
+
+    // let map = vec!["Ctx", "\"MR00000002\"", "V1", "V2"]
+    //     .into_iter()
+    //     .map(|key| (key.to_string(), String::new()))
+    //     .collect::<HashMap<_, _>>();
+
+    let result = app_state
+        .facts
+        .get_facts("step_change".to_string(), goal.to_values())
+        .await
+        .unwrap();
+
+    // let result = app_state
+    //     .facts
+    //     .get_facts(
+    //         "step_change".to_string(),
+    //         vec![
+    //             "Ctx".to_string(),
+    //             "\"MR00000002\"".to_string(),
+    //             "V1".to_string(),
+    //             "V2".to_string(),
+    //         ],
+    //     )
+    //     .await
+    //     .unwrap();
     let fs = result.iter().map(|f| f.assertion_str()).collect::<Vec<_>>();
 
     FactsTable { facts: fs }
@@ -188,7 +242,7 @@ async fn create_fact(State(state): State<AppState>, Json(cf): Json<CreateFact>) 
         .map(|i| format!("X{}", i))
         .collect::<Vec<_>>();
     let fields = fields_temp.iter().map(String::as_ref).collect::<Vec<_>>();
-    let rt0 = Arc::new(RecordType::new(&cf.typename, &fields).unwrap());
+    let rt0 = Arc::new(RecordType::new_without_id_fields(&cf.typename, &fields).unwrap());
 
     let mapped_values = fields
         .iter()

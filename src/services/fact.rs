@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::sync::Arc;
 use std::vec;
 
 use crate::models::fact::{Fact, Goal, LogicMachineResult, RecordType, RecordTypeResult};
@@ -31,7 +33,12 @@ impl FactService {
             .await
     }
 
-    pub async fn get_facts(&self, fact_type: String, values: Vec<String>) -> LogicMachineResult {
+    pub async fn get_facts(
+        &self,
+        fact_type: String,
+        values: HashMap<String, String>,
+    ) -> LogicMachineResult {
+        dbg!(&values);
         self.lm_actor
             .send_query(GetFactsQuery { fact_type, values })
             .await
@@ -52,7 +59,7 @@ struct GetAllFactsQuery {
 
 struct GetFactsQuery {
     fact_type: String,
-    values: Vec<String>,
+    values: HashMap<String, String>,
 }
 
 struct GetRecordTypeQuery {
@@ -109,15 +116,17 @@ impl Actor {
     fn new(program: &str, receiver: mpsc::Receiver<ActorMessage>) -> Self {
         let mut lm = LogicMachine::new(program);
         lm.define_types(vec![
-            RecordType::new("edge", &["X", "Y"]).unwrap(),
-            RecordType::new("arc", &["X", "Y"]).unwrap(),
+            RecordType::new_without_id_fields("edge", &["X", "Y"]).unwrap(),
+            RecordType::new_without_id_fields("arc", &["X", "Y"]).unwrap(),
             RecordType::new(
                 "dimlink",
-                &["X1", "X2", "X3", "X4", "X5", "X6", "X7", "X8", "X9"],
+                &["Id"],
+                &["DimIdRef", "InvHeadRef", "BegPeriod", "EndPeriod"],
+                &["Context", "SysVersion", "RecType", "SeqNum"]
             )
             .unwrap(),
-            RecordType::new("step_change", &["Ctx", "Id", "Vals1", "Vals2"]).unwrap(),
-            RecordType::new("leap_change", &["Ctx", "Id", "Vals1", "Vals2"]).unwrap(),
+            RecordType::new_without_id_fields("step_change", &["Ctx", "Id", "Vals1", "Vals2"]).unwrap(),
+            RecordType::new_without_id_fields("leap_change", &["Ctx", "Id", "Vals1", "Vals2"]).unwrap(),
         ]);
 
         Actor { receiver, lm }
@@ -141,12 +150,41 @@ impl Actor {
                 let _ = respond_to.send(r);
             }
             ActorMessage::GetFacts(Message { query, respond_to }) => {
-                let r = self
-                    .lm
-                    .get_record_type(&query.fact_type)
-                    .map(|rt| self.lm.fetch(Goal::new(rt.into(), query.values)))
-                    .unwrap_or(Ok(Vec::new()));
-                let _ = respond_to.send(r);
+                // let rt = self.lm.get_record_type(&query.fact_type);
+                println!("queryvalues: {:?}", &query.values);
+                if let Ok(rt) = self.lm.get_record_type(&query.fact_type) {
+                    let mapped_values = query
+                        .values
+                        .iter()
+                        .map(|(field, value)| (field.as_str(), value.as_str()))
+                        .collect::<HashMap<_, _>>();
+                    if let Ok(g) = rt.to_goal(&mapped_values) {
+                        let _ = respond_to.send(self.lm.fetch(g)); 
+                    } else {
+                        let _ = respond_to.send(Ok(Vec::new()));
+                    }
+                } else {
+                    let _ = respond_to.send(Ok(Vec::new()));
+                }
+                // let r = self
+                //     .lm
+                //     .get_record_type(&query.fact_type)
+                //     .map(|rt| {
+                //         let a = rt.to_goal(
+                //             &query
+                //                 .values
+                //                 .iter()
+                //                 .map(|(field, value)| (field.as_str(), value.as_str()))
+                //                 .collect::<HashMap<_, _>>(),
+                //         );
+                //         let b = a.map(|g| self.lm.fetch(g));
+                //         dbg!(&b);
+                //         let c = b.unwrap_or(Ok(Vec::new()));
+                //         dbg!(&c);
+                //         c
+                //     })
+                //     .unwrap_or(Ok(Vec::new()));
+                // let _ = respond_to.send(Ok(Vec::new()));
             }
             ActorMessage::GetRecordType(Message { query, respond_to }) => {
                 let r = self.lm.get_record_type(&query.fact_type);
@@ -191,7 +229,7 @@ impl ActorHandle {
 
     async fn send_query<Q, R>(&self, q: Q) -> R
     where
-        ActorMessage: From<Message<Q, R>>,
+        ActorMessage: From<Message<Q, R>>
     {
         let (send, recv) = oneshot::channel();
 

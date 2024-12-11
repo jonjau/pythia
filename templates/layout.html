@@ -16,11 +16,11 @@
     <main style="display: flex">
       <div style="display: flex; flex-direction: column">
         <h2>Start state</h2>
-        <form hx-put="/start-state" hx-vals='{"_fact_type": "{{fact_type}}"}' hx-swap="outerHTML">
+        <form id="start-state" hx-put="/start-state" hx-vals='{"_fact_type": "{{fact_type}}"}' hx-swap="outerHTML">
           {% for field in start_state_fields %}
           <div>
             <label>{{field}}</label>
-            <input type="text" name="{{ field }}" />
+            <input type="text" name="0.{{field}}" />
           </div>
           {% endfor %}
           <button type="submit">Update</button>
@@ -34,9 +34,8 @@
           <button type="submit">Calculate all state-changes</button>
           <input type="hidden" name="calc-goal-type" value="arc"/>
         </form>
-        <form hx-get="/state-changes" hx-target="#state-changes">
+        <form hx-get="/state-changes" hx-target="#state-changes" hx-include="#start-state">
           <button type="submit">Calculate state-changes from start state</button>
-          <input type="hidden" name="calc-goal-type" value="arc"/>
         </form>
         <div id="state-changes">state changes</div>
       </div>
