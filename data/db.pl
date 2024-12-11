@@ -14,7 +14,7 @@ dimlink("Test1", "M4", "ID1", "J2", "2023-02-08", "2023-02-09", "2024-02-18 09:1
 dimlink("Test1", "M5", "ID1", "J3", "2023-02-08", "2023-02-09", "2024-02-18 09:17:11", "D", "0").
 dimlink("Test1", "M5", "ID1", "J3", "2023-02-08", "2023-02-09", "2024-02-18 09:17:11", "V", "1").
 
-table("dimlink", "MgrLinkRef", ["InvHeadRef", "DimIdRef", "BegPeriod", "EndPeriod"]).
+table("dimlink", "MgrLinkRef", ["DimIdRef", "InvHeadRef", "BegPeriod", "EndPeriod"]).
 
 % TODO: use a templating language to create these glue predicates:
 record(Context, EditTime, SeqNum, RecStatus, Id, [DRef, IRef, BegPeriod, EndPeriod]) :-
@@ -23,12 +23,16 @@ record(Context, EditTime, SeqNum, RecStatus, Id, [DRef, IRef, BegPeriod, EndPeri
 step_change(Ctx, Id, Vals1, Vals2) :-
     record(Ctx, _, SeqNum1, _, Id, Vals1),
     record(Ctx, _, SeqNum2, _, Id, Vals2),
-    SeqNum2 #= SeqNum1 + 1.
+    number_chars(Num1, SeqNum1),
+    number_chars(Num2, SeqNum2),
+    Num2 #= Num1 + 1.
 
 leap_change(Ctx, Id, Vals1, Vals2) :-
     record(Ctx, _, SeqNum1, _, Id, Vals1),
     record(Ctx, _, SeqNum2, _, Id, Vals2),
-    SeqNum2 #> SeqNum1.
+    number_chars(Num1, SeqNum1),
+    number_chars(Num2, SeqNum2),
+    Num2 #> Num1.
 
 :- dynamic(edge/2).
 edge(3, 4).

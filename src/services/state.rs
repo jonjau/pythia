@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use crate::models::fact::{Goal, RecordType};
 
@@ -16,18 +16,7 @@ impl StateService {
         }
     }
 
-    pub fn update_start_state(&mut self, rt: Arc<RecordType>, values: HashMap<&str, &str>) {
-        // self.states = States {
-        //     start_state: rt.to_goal(&values).ok(),
-        //     end_state: None,
-        // }
-        self.start_state = rt.to_goal(&values).ok();
-
-        // self.states.
-
-        // let updated_states = States {
-        //     start_state: rt.to_goal(&values).ok(),
-        //     end_state: self.states.end_state.clone(), // Preserve other fields
-        // };
-    }
+    // pub fn update_start_state(&mut self, rt: RecordType, values: HashMap<&str, &str>) {
+    //     self.start_state = rt.to_goal(&values).ok();
+    // }
 }
