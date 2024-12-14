@@ -1,8 +1,7 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::vec;
 
-use crate::models::fact::{Fact, Goal, LogicMachineResult, RecordType, RecordTypeResult};
+use crate::models::fact::{Fact, LogicMachineResult, RecordType, RecordTypeResult};
 use crate::models::{self};
 use models::fact::LogicMachine;
 
@@ -122,11 +121,13 @@ impl Actor {
                 "dimlink",
                 &["Id"],
                 &["DimIdRef", "InvHeadRef", "BegPeriod", "EndPeriod"],
-                &["Context", "SysVersion", "RecType", "SeqNum"]
+                &["Context", "SysVersion", "RecType", "SeqNum"],
             )
             .unwrap(),
-            RecordType::new_without_id_fields("step_change", &["Ctx", "Id", "Vals1", "Vals2"]).unwrap(),
-            RecordType::new_without_id_fields("leap_change", &["Ctx", "Id", "Vals1", "Vals2"]).unwrap(),
+            RecordType::new_without_id_fields("step_change", &["Ctx", "Id", "Vals1", "Vals2"])
+                .unwrap(),
+            RecordType::new_without_id_fields("leap_change", &["Ctx", "Id", "Vals1", "Vals2"])
+                .unwrap(),
         ]);
 
         Actor { receiver, lm }
@@ -159,7 +160,7 @@ impl Actor {
                         .map(|(field, value)| (field.as_str(), value.as_str()))
                         .collect::<HashMap<_, _>>();
                     if let Ok(g) = rt.to_goal(&mapped_values) {
-                        let _ = respond_to.send(self.lm.fetch(g)); 
+                        let _ = respond_to.send(self.lm.fetch(g));
                     } else {
                         let _ = respond_to.send(Ok(Vec::new()));
                     }
@@ -229,7 +230,7 @@ impl ActorHandle {
 
     async fn send_query<Q, R>(&self, q: Q) -> R
     where
-        ActorMessage: From<Message<Q, R>>
+        ActorMessage: From<Message<Q, R>>,
     {
         let (send, recv) = oneshot::channel();
 
