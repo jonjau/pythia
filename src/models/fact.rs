@@ -5,7 +5,7 @@ use scryer_prolog::machine::Machine;
 use std::fmt::{Display, Formatter};
 use std::{
     clone::Clone,
-    collections::{BTreeSet, HashMap},
+    collections::HashMap,
     sync::Arc,
 };
 
@@ -266,15 +266,6 @@ impl LogicMachine {
             .ok_or("RecordType not found".to_string())
     }
 
-    pub fn is_valid_record_type(&self, name: &str, fields: Vec<&str>) -> bool {
-        self.get_record_type(name)
-            .map(|record_type| {
-                let fields2: Vec<String> = fields.into_iter().map(String::from).collect();
-                record_type.all_fields() == fields2
-            })
-            .unwrap_or(false)
-    }
-
     pub fn define_types(&mut self, types: Vec<RecordType>) {
         for t in types {
             self.record_types.insert(t.name.clone(), t);
@@ -282,7 +273,7 @@ impl LogicMachine {
     }
 
     pub fn add_fact(&mut self, f: Fact) -> LogicMachineResult {
-        let qr = self
+        self
             .machine
             .run_query(format!(r#"assertz({})."#, f.assertion_str()))
             .map_err(LogicMachineError::PrologError)?;

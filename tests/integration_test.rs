@@ -1,6 +1,5 @@
-use std::collections::BTreeMap;
 use scryer_prolog::machine::Machine;
-use scryer_prolog::machine::parsed_results::{QueryResult, QueryMatch, QueryResolution, Value};
+use scryer_prolog::machine::parsed_results::QueryResult;
 
 #[test]
 fn prolog_module_works() {

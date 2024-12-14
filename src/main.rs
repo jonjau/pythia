@@ -1,6 +1,5 @@
 use std::{
     collections::{BTreeMap, HashMap},
-    io::repeat,
     sync::Arc,
 };
 
@@ -8,8 +7,8 @@ use askama::Template;
 use axum::{
     extract::{Query, State},
     response::Redirect,
-    routing::{get, post, put},
-    Form, Json, Router,
+    routing::{get, post},
+    Json, Router,
 };
 
 use serde::{Deserialize, Serialize};
@@ -17,12 +16,11 @@ use serde::{Deserialize, Serialize};
 mod models;
 mod services;
 
-use services::{fact::FactService, state::StateService};
+use services::fact::FactService;
 
 #[derive(Clone)]
 struct AppState {
-    facts: FactService,
-    states: StateService,
+    facts: FactService
 }
 
 #[tokio::main]
@@ -31,8 +29,7 @@ async fn main() {
 
     // TODO: graceful shutdown of actor
     let state = AppState {
-        facts: FactService::new(db),
-        states: StateService::new(),
+        facts: FactService::new(db)
     };
 
     let r = Router::new()
@@ -41,49 +38,11 @@ async fn main() {
         .route("/facts", post(create_fact))
         .route("/all-state-changes", get(get_all_state_changes))
         .route("/state-changes", get(get_state_changes))
-        .route("/start-state", put(update_start_state))
         .with_state(state);
 
     // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     axum::serve(listener, r).await.unwrap();
-}
-
-#[derive(Template)]
-#[template(path = "update_start_state_result.html", ext = "html")]
-struct UpdateStartStateResult {
-    fact_type: String,
-    start_state_values: HashMap<String, String>,
-}
-
-async fn update_start_state(
-    State(mut state): State<AppState>,
-    Form(start_state): Form<HashMap<String, String>>,
-) -> UpdateStartStateResult {
-    dbg!(&start_state);
-
-    let ft = start_state
-        .get("_fact_type")
-        .cloned()
-        .unwrap_or("".to_string());
-
-    let rt = state.facts.get_record_type(ft.clone()).await.unwrap();
-    dbg!(&rt);
-
-    // let values = start_state
-    //     .iter()
-    //     .filter(|&(k, _)| k.as_str() != "_fact_type")
-    //     .map(|(k, v)| (k.as_str(), v.as_str()))
-    //     .collect();
-
-    // state.states.update_start_state(rt, values);
-
-    let g = &state.states.start_state.unwrap();
-    dbg!(g);
-    UpdateStartStateResult {
-        fact_type: ft,
-        start_state_values: g.to_values(),
-    }
 }
 
 #[derive(Template)]
