@@ -2,12 +2,8 @@ use scryer_prolog::machine::parsed_results::{
     prolog_value_to_json_string, QueryMatch, QueryResolution,
 };
 use scryer_prolog::machine::Machine;
-use std::fmt::{Display, Formatter};
-use std::{
-    clone::Clone,
-    collections::HashMap,
-    sync::Arc,
-};
+use std::fmt::{format, Display, Formatter};
+use std::{clone::Clone, collections::HashMap, sync::Arc};
 
 // #[derive(PartialEq, Debug)]
 #[derive(thiserror::Error, Debug, PartialEq)]
@@ -26,11 +22,16 @@ pub struct RecordType {
     pub name: String,
     pub id_fields: Vec<String>,
     pub data_fields: Vec<String>,
-    pub metadata_fields: Vec<String>
+    pub metadata_fields: Vec<String>,
 }
 
 impl RecordType {
-    pub fn new(name: &str, id_fields: &[&str], data_fields: &[&str], metadata_fields: &[&str]) -> Result<Self, RecordTypeError> {
+    pub fn new(
+        name: &str,
+        id_fields: &[&str],
+        data_fields: &[&str],
+        metadata_fields: &[&str],
+    ) -> Result<Self, RecordTypeError> {
         let invalid = id_fields
             .iter()
             .chain(data_fields.iter())
@@ -46,31 +47,47 @@ impl RecordType {
                 name: name.into(),
                 id_fields: id_fields.iter().cloned().map(Into::into).collect(),
                 data_fields: data_fields.iter().cloned().map(Into::into).collect(),
-                metadata_fields: metadata_fields.iter().cloned().map(Into::into).collect()
+                metadata_fields: metadata_fields.iter().cloned().map(Into::into).collect(),
             })
         }
     }
 
-    pub fn new_without_id_fields(name: &str, data_fields: &[&str]) -> Result<Self, RecordTypeError> {
+    pub fn new_without_id_fields(
+        name: &str,
+        data_fields: &[&str],
+    ) -> Result<Self, RecordTypeError> {
         Self::new(name, &[], data_fields, &[])
     }
 
     pub fn all_fields(self: Arc<Self>) -> Vec<String> {
-        self.id_fields.iter().chain(self.data_fields.iter()).chain(self.metadata_fields.iter()).cloned().collect()
+        self.id_fields
+            .iter()
+            .chain(self.data_fields.iter())
+            .chain(self.metadata_fields.iter())
+            .cloned()
+            .collect()
     }
 
     pub fn to_most_general_goal(self: Arc<Self>) -> Goal {
-        let values = self.clone().all_fields().iter().cloned().collect::<Vec<_>>();
+        let values = self
+            .clone()
+            .all_fields()
+            .iter()
+            .map(|_| None)
+            .collect::<Vec<_>>();
         Goal::new(self, values)
     }
 
-    pub fn to_goal(self: Arc<Self>, values: &HashMap<&str, &str>) -> Result<Goal, RecordTypeError> {
-        let values = values
+    pub fn to_goal(
+        self: Arc<Self>,
+        values: &HashMap<&str, Option<&str>>,
+    ) -> Result<Goal, RecordTypeError> {
+        let mapped_values = values
             .iter()
             .map(|(&k, &v)| (k.to_owned(), v.to_owned()))
             .collect::<HashMap<_, _>>();
 
-        let mut unknown_values = values
+        let mut unknown_values = mapped_values
             .keys()
             .filter(|&a| !self.data_fields.contains(&a.to_owned()))
             .peekable();
@@ -80,16 +97,22 @@ impl RecordType {
             ));
         }
 
-        let complete_values: Vec<String> = self
+        let complete_values: Vec<Option<String>> = self
             .data_fields
             .iter()
-            .map(|field| values.get(field).cloned().unwrap_or(field.to_owned()))
+            .map(|field| {
+                mapped_values
+                    .get(field)
+                    .and_then(|v| v.map(|v| v.to_string()))
+                // .and_then(|f| Some(format!("\"{}\"", f)))
+                // .unwrap_or(field.to_owned())
+            })
             .collect();
         dbg!(&complete_values);
 
         let g = Goal::new(self, complete_values);
 
-        dbg!(g.query_str());
+        dbg!(g.to_unescaped_query());
 
         Ok(g)
     }
@@ -142,26 +165,56 @@ impl RecordType {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Goal {
     pub type_: Arc<RecordType>,
-    pub values: Vec<String>,
+    pub values: Vec<Option<String>>,
 }
 
 impl Goal {
-    pub fn new(type_: Arc<RecordType>, values: Vec<String>) -> Self {
+    pub fn new(type_: Arc<RecordType>, values: Vec<Option<String>>) -> Self {
         Goal {
             type_: Arc::clone(&type_),
             values,
         }
     }
 
-    pub fn query_str(&self) -> String {
+    pub fn to_unescaped_query(&self) -> String {
+        let values = self
+            .type_
+            .clone()
+            .all_fields()
+            .iter()
+            .zip(self.values.iter())
+            .map(|(&ref field_name, value)| {
+                value
+                    .clone()
+                    .and_then(|v| Some(format!("\"{}\"", v)))
+                    .unwrap_or(field_name.to_string())
+            })
+            .collect::<Vec<_>>();
+
         if !self.values.is_empty() {
-            format!(r#"{}({})"#, self.type_.name, self.values.join(", "))
+            format!(r#"{}({})"#, self.type_.name, values.join(", "))
         } else {
             format!(r#"{}"#, self.type_.name)
         }
     }
 
-    pub fn to_values(&self) -> HashMap<String, String> {
+    // pub fn to_query(&self) -> String {
+    //     if !self.values.is_empty() {
+    //         format!(
+    //             r#"{}({})"#,
+    //             self.type_.name,
+    //             self.values
+    //                 .iter()
+    //                 .map(|v| format!("\"{}\"", v))
+    //                 .collect::<Vec<_>>()
+    //                 .join(", ")
+    //         )
+    //     } else {
+    //         format!(r#"{}"#, self.type_.name)
+    //     }
+    // }
+
+    pub fn to_values(&self) -> HashMap<String, Option<String>> {
         self.type_
             .data_fields
             .iter()
@@ -273,8 +326,7 @@ impl LogicMachine {
     }
 
     pub fn add_fact(&mut self, f: Fact) -> LogicMachineResult {
-        self
-            .machine
+        self.machine
             .run_query(format!(r#"assertz({})."#, f.assertion_str()))
             .map_err(LogicMachineError::PrologError)?;
 
@@ -288,7 +340,7 @@ impl LogicMachine {
     pub fn fetch(&mut self, g: Goal) -> LogicMachineResult {
         let qr = self
             .machine
-            .run_query(format!(r#"{}."#, g.query_str()))
+            .run_query(format!(r#"{}."#, g.to_unescaped_query()))
             .map_err(LogicMachineError::PrologError)?;
 
         Self::parse_to_facts(qr, Arc::clone(&g.type_))

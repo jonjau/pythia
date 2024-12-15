@@ -5,10 +5,7 @@ use std::{
 
 use askama::Template;
 use axum::{
-    extract::{Query, State},
-    response::Redirect,
-    routing::{get, post},
-    Json, Router,
+    extract::{Path, Query, State}, response::Redirect, routing::{delete, get, post}, Form, Json, Router
 };
 
 use serde::{Deserialize, Serialize};
@@ -38,6 +35,8 @@ async fn main() {
         .route("/facts", post(create_fact))
         .route("/all-state-changes", get(get_all_state_changes))
         .route("/state-changes", get(get_state_changes))
+        .route("/start-state/:fact_type/:field_name/specified", post(set_to_specified))
+        .route("/start-state/:fact_type/:field_name/specified", delete(set_to_unspecified))
         .with_state(state);
 
     // run our app with hyper, listening globally on port 3000
@@ -97,64 +96,36 @@ async fn get_all_state_changes(State(state): State<AppState>) -> FactsTable {
 
 async fn get_state_changes(
     State(app_state): State<AppState>,
-    Query(states): Query<BTreeMap<String, String>>,
+    Query(states): Query<HashMap<String, String>>,
 ) -> FactsTable {
+    let fact_type = states.get("_fact_type").unwrap();
+    let subgoal_rt = app_state.facts.get_record_type(fact_type.to_string()).await.unwrap();
+
     let named_values = states
         .iter()
         .filter_map(|(field, value)| {
-            if (field.starts_with("0.") || field.starts_with("1.")) && !value.is_empty() {
-                Some((field[2..].to_string(), value.to_string()))
+            if field.starts_with("0.") || field.starts_with("1.") {
+                Some((field[2..].to_string(), Some(value.to_string())))
             } else {
                 None
             }
         })
-        .collect::<BTreeMap<_, _>>();
+        .collect::<HashMap<_, _>>();
     dbg!(&named_values);
 
-    let data_rt = app_state.facts.get_record_type("dimlink".to_string()).await.unwrap();
+    let subgoal = format!("[{}]", subgoal_rt.to_goal(&named_values.iter().map(|(k, v)| (k.as_str(), v.as_deref())).collect()).unwrap().to_unescaped_query());
+    dbg!(&subgoal);
 
     let rt = app_state
         .facts
         .get_record_type("step_change".to_string())
         .await
         .unwrap();
-    dbg!(&rt);
 
-    let ys = data_rt
-        .data_fields
-        .iter()
-        .filter_map(|df| {
-            named_values
-                .get(df)
-                .and_then(|value| Some(format!("\"{}\"", value)))
-        })
-        .collect::<Vec<_>>()
-        .join(", ");
-    dbg!(&ys);
-
-    let ys = format!("[{}]", ys);
-    dbg!(&ys);
-
-    // let y = format!(
-    //     "[{}]",
-    //     named_values
-    //         .values()
-    //         .map(|value| format!("\"{}\"", value))
-    //         .collect::<Vec<_>>()
-    //         .join(", ")
-    // );
-
-    let m = HashMap::from([("Vals1", ys.as_str())]);
+    let m = HashMap::from([("Vals1", Some(subgoal.as_str()))]);
     let goal = rt.to_goal(&m).unwrap();
 
     dbg!(&goal);
-
-    // let gg = rt.clone().to_most_general_goal().to_values();
-
-    // let map = vec!["Ctx", "\"MR00000002\"", "V1", "V2"]
-    //     .into_iter()
-    //     .map(|key| (key.to_string(), String::new()))
-    //     .collect::<HashMap<_, _>>();
 
     let result = app_state
         .facts
@@ -162,19 +133,6 @@ async fn get_state_changes(
         .await
         .unwrap();
 
-    // let result = app_state
-    //     .facts
-    //     .get_facts(
-    //         "step_change".to_string(),
-    //         vec![
-    //             "Ctx".to_string(),
-    //             "\"MR00000002\"".to_string(),
-    //             "V1".to_string(),
-    //             "V2".to_string(),
-    //         ],
-    //     )
-    //     .await
-    //     .unwrap();
     let fs = result.iter().map(|f| f.assertion_str()).collect::<Vec<_>>();
 
     FactsTable { facts: fs }
@@ -224,4 +182,35 @@ async fn create_fact(State(state): State<AppState>, Json(cf): Json<CreateFact>) 
         .collect::<Vec<_>>()
         .join(",\n")
     // String::new()
+}
+
+
+
+
+#[derive(Template)]
+#[template(path = "set-field-to-specified.html", ext = "html")]
+struct SetFieldToSpecifiedTemplate {
+    fact_type: String,
+    field: String
+}
+
+async fn set_to_specified(Path((fact_type, field_name)): Path<(String, String)>) -> SetFieldToSpecifiedTemplate {
+    SetFieldToSpecifiedTemplate {
+        fact_type,
+        field: field_name
+    }
+}
+
+#[derive(Template)]
+#[template(path = "set-field-to-unspecified.html", ext = "html")]
+struct SetFieldToUnspecifiedTemplate {
+    fact_type: String,
+    field: String
+}
+
+async fn set_to_unspecified(Path((fact_type, field_name)): Path<(String, String)>) -> SetFieldToUnspecifiedTemplate {
+    SetFieldToUnspecifiedTemplate {
+        fact_type,
+        field: field_name
+    }
 }
