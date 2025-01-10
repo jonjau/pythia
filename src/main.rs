@@ -110,8 +110,7 @@ async fn get_state_changes(
         .facts
         .get_record_type(fact_type.to_string())
         .await
-        .unwrap()
-        .to_data_record_type();
+        .unwrap();
 
     let named_values = states
         .iter()
@@ -119,7 +118,7 @@ async fn get_state_changes(
             if field.starts_with("0.") || field.starts_with("1.") {
                 Some((
                     field[2..].to_string(),
-                    Some(Term::String(value.to_string())),
+                    Term::String(value.to_string()),
                 ))
             } else {
                 None
@@ -128,35 +127,23 @@ async fn get_state_changes(
         .collect::<HashMap<_, _>>();
     dbg!(&named_values);
 
-    // let subgoal = format!("[{}]", subgoal_rt.to_goal(&named_values).unwrap().to_unescaped_query());
-    // dbg!(&subgoal);
-
-    // let list_rt = Arc::new(RecordType::new(".", &[], &["Head", "Tail"], &[]).unwrap());
-    // let subgoal = list_rt.to_goal(&HashMap::from([(
-    //     "Head".to_string(),
-    //     Some(Term::String(named_values[""])),
-    // ), ("Tail".to_string(), Some(Term::String("[]".to_string())))])).unwrap();
-
     let rt = app_state
         .facts
         .get_record_type("step_change".to_string())
         .await
         .unwrap();
 
-    let m = HashMap::from([("Vals1".to_string(), Some(Term::SubGoal(subgoal_rt.to_goal(&named_values).unwrap())))]);
+    let m = HashMap::from([(
+        "Vals1".to_string(),
+        subgoal_rt.to_goal(&named_values).unwrap().to_value_list()
+    )]);
     let goal = rt.to_goal(&m).unwrap();
 
     dbg!(&goal);
 
-    // let result = app_state
-    //     .facts
-    //     .get_facts("step_change".to_string(), goal.to_values())
-    //     .await
-    //     .unwrap();
-
     let result = app_state
         .facts
-        .get_all_facts("record".to_string())
+        .get_facts("step_change".to_string(), goal.to_values())
         .await
         .unwrap();
 
