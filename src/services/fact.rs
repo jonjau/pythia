@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::vec;
 
-use crate::models::fact::{Fact, LogicMachineResult, RecordType, RecordTypeResult};
+use crate::models::fact::{Fact, LogicMachineResult, RecordType, RecordTypeResult, Term};
 use crate::models::{self};
 use models::fact::LogicMachine;
 
@@ -35,7 +35,7 @@ impl FactService {
     pub async fn get_facts(
         &self,
         fact_type: String,
-        values: HashMap<String, Option<String>>,
+        values: HashMap<String, Option<Term>>,
     ) -> LogicMachineResult {
         dbg!(&values);
         self.lm_actor
@@ -58,7 +58,7 @@ struct GetAllFactsQuery {
 
 struct GetFactsQuery {
     fact_type: String,
-    values: HashMap<String, Option<String>>,
+    values: HashMap<String, Option<Term>>,
 }
 
 struct GetRecordTypeQuery {
@@ -154,12 +154,7 @@ impl Actor {
                 // let rt = self.lm.get_record_type(&query.fact_type);
                 println!("queryvalues: {:?}", &query.values);
                 if let Ok(rt) = self.lm.get_record_type(&query.fact_type) {
-                    let mapped_values = query
-                        .values
-                        .iter()
-                        .map(|(field, value)| (field.as_str(), value.as_deref()))
-                        .collect::<HashMap<_, _>>();
-                    if let Ok(g) = rt.to_goal(&mapped_values) {
+                    if let Ok(g) = rt.to_goal(&query.values) {
                         let _ = respond_to.send(self.lm.fetch(g));
                     } else {
                         let _ = respond_to.send(Ok(Vec::new()));

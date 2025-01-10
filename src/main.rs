@@ -1,11 +1,11 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use askama::Template;
 use axum::{
-    extract::{Path, Query, State}, response::Redirect, routing::{delete, get, post}, Form, Json, Router
+    extract::{Path, Query, State},
+    response::Redirect,
+    routing::{delete, get, post},
+    Json, Router,
 };
 
 use serde::{Deserialize, Serialize};
@@ -13,11 +13,12 @@ use serde::{Deserialize, Serialize};
 mod models;
 mod services;
 
+use models::fact::Term;
 use services::fact::FactService;
 
 #[derive(Clone)]
 struct AppState {
-    facts: FactService
+    facts: FactService,
 }
 
 #[tokio::main]
@@ -26,7 +27,7 @@ async fn main() {
 
     // TODO: graceful shutdown of actor
     let state = AppState {
-        facts: FactService::new(db)
+        facts: FactService::new(db),
     };
 
     let r = Router::new()
@@ -35,8 +36,14 @@ async fn main() {
         .route("/facts", post(create_fact))
         .route("/all-state-changes", get(get_all_state_changes))
         .route("/state-changes", get(get_state_changes))
-        .route("/start-state/:fact_type/:field_name/specified", post(set_to_specified))
-        .route("/start-state/:fact_type/:field_name/specified", delete(set_to_unspecified))
+        .route(
+            "/start-state/:fact_type/:field_name/specified",
+            post(set_to_specified),
+        )
+        .route(
+            "/start-state/:fact_type/:field_name/specified",
+            delete(set_to_unspecified),
+        )
         .with_state(state);
 
     // run our app with hyper, listening globally on port 3000
@@ -99,13 +106,21 @@ async fn get_state_changes(
     Query(states): Query<HashMap<String, String>>,
 ) -> FactsTable {
     let fact_type = states.get("_fact_type").unwrap();
-    let subgoal_rt = app_state.facts.get_record_type(fact_type.to_string()).await.unwrap();
+    let subgoal_rt = app_state
+        .facts
+        .get_record_type(fact_type.to_string())
+        .await
+        .unwrap()
+        .to_data_record_type();
 
     let named_values = states
         .iter()
         .filter_map(|(field, value)| {
             if field.starts_with("0.") || field.starts_with("1.") {
-                Some((field[2..].to_string(), Some(value.to_string())))
+                Some((
+                    field[2..].to_string(),
+                    Some(Term::String(value.to_string())),
+                ))
             } else {
                 None
             }
@@ -113,8 +128,14 @@ async fn get_state_changes(
         .collect::<HashMap<_, _>>();
     dbg!(&named_values);
 
-    let subgoal = format!("[{}]", subgoal_rt.to_goal(&named_values.iter().map(|(k, v)| (k.as_str(), v.as_deref())).collect()).unwrap().to_unescaped_query());
-    dbg!(&subgoal);
+    // let subgoal = format!("[{}]", subgoal_rt.to_goal(&named_values).unwrap().to_unescaped_query());
+    // dbg!(&subgoal);
+
+    // let list_rt = Arc::new(RecordType::new(".", &[], &["Head", "Tail"], &[]).unwrap());
+    // let subgoal = list_rt.to_goal(&HashMap::from([(
+    //     "Head".to_string(),
+    //     Some(Term::String(named_values[""])),
+    // ), ("Tail".to_string(), Some(Term::String("[]".to_string())))])).unwrap();
 
     let rt = app_state
         .facts
@@ -122,14 +143,20 @@ async fn get_state_changes(
         .await
         .unwrap();
 
-    let m = HashMap::from([("Vals1", Some(subgoal.as_str()))]);
+    let m = HashMap::from([("Vals1".to_string(), Some(Term::SubGoal(subgoal_rt.to_goal(&named_values).unwrap())))]);
     let goal = rt.to_goal(&m).unwrap();
 
     dbg!(&goal);
 
+    // let result = app_state
+    //     .facts
+    //     .get_facts("step_change".to_string(), goal.to_values())
+    //     .await
+    //     .unwrap();
+
     let result = app_state
         .facts
-        .get_facts("step_change".to_string(), goal.to_values())
+        .get_all_facts("record".to_string())
         .await
         .unwrap();
 
@@ -184,20 +211,19 @@ async fn create_fact(State(state): State<AppState>, Json(cf): Json<CreateFact>) 
     // String::new()
 }
 
-
-
-
 #[derive(Template)]
 #[template(path = "set-field-to-specified.html", ext = "html")]
 struct SetFieldToSpecifiedTemplate {
     fact_type: String,
-    field: String
+    field: String,
 }
 
-async fn set_to_specified(Path((fact_type, field_name)): Path<(String, String)>) -> SetFieldToSpecifiedTemplate {
+async fn set_to_specified(
+    Path((fact_type, field_name)): Path<(String, String)>,
+) -> SetFieldToSpecifiedTemplate {
     SetFieldToSpecifiedTemplate {
         fact_type,
-        field: field_name
+        field: field_name,
     }
 }
 
@@ -205,12 +231,14 @@ async fn set_to_specified(Path((fact_type, field_name)): Path<(String, String)>)
 #[template(path = "set-field-to-unspecified.html", ext = "html")]
 struct SetFieldToUnspecifiedTemplate {
     fact_type: String,
-    field: String
+    field: String,
 }
 
-async fn set_to_unspecified(Path((fact_type, field_name)): Path<(String, String)>) -> SetFieldToUnspecifiedTemplate {
+async fn set_to_unspecified(
+    Path((fact_type, field_name)): Path<(String, String)>,
+) -> SetFieldToUnspecifiedTemplate {
     SetFieldToUnspecifiedTemplate {
         fact_type,
-        field: field_name
+        field: field_name,
     }
 }

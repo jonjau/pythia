@@ -1,3 +1,4 @@
+use core::fmt;
 use scryer_prolog::machine::parsed_results::{
     prolog_value_to_json_string, QueryMatch, QueryResolution,
 };
@@ -68,6 +69,22 @@ impl RecordType {
             .collect()
     }
 
+    pub fn to_data_record_type(self: Arc<Self>) -> Arc<RecordType> {
+        Arc::new(
+            RecordType::new(
+                "values",
+                &[],
+                &self
+                    .data_fields
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>(),
+                &[],
+            )
+            .unwrap(),
+        )
+    }
+
     pub fn to_most_general_goal(self: Arc<Self>) -> Goal {
         let values = self
             .clone()
@@ -80,14 +97,14 @@ impl RecordType {
 
     pub fn to_goal(
         self: Arc<Self>,
-        values: &HashMap<&str, Option<&str>>,
+        data_values: &HashMap<String, Option<Term>>,
     ) -> Result<Goal, RecordTypeError> {
-        let mapped_values = values
-            .iter()
-            .map(|(&k, &v)| (k.to_owned(), v.to_owned()))
-            .collect::<HashMap<_, _>>();
+        // let mapped_values = values
+        //     .iter()
+        //     .map(|(&k, &v)| (k.to_owned(), v.to_owned()))
+        //     .collect::<HashMap<_, _>>();
 
-        let mut unknown_values = mapped_values
+        let mut unknown_values = data_values
             .keys()
             .filter(|&a| !self.data_fields.contains(&a.to_owned()))
             .peekable();
@@ -97,16 +114,11 @@ impl RecordType {
             ));
         }
 
-        let complete_values: Vec<Option<String>> = self
+        // TODO: populate id and metadata fields with Option::None because that is the correct thing to do
+        let complete_values: Vec<Option<Term>> = self
             .data_fields
             .iter()
-            .map(|field| {
-                mapped_values
-                    .get(field)
-                    .and_then(|v| v.map(|v| v.to_string()))
-                // .and_then(|f| Some(format!("\"{}\"", f)))
-                // .unwrap_or(field.to_owned())
-            })
+            .map(|field| data_values.get(field).and_then(|v| v.clone()))
             .collect();
         dbg!(&complete_values);
 
@@ -162,14 +174,23 @@ impl RecordType {
 
 /// A Goal is a compound term which may not have all its values grounded.
 /// It is meant to be run as a query to the logic machine.
+/// Values that are not grounded are to be left as Option::None.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Goal {
     pub type_: Arc<RecordType>,
-    pub values: Vec<Option<String>>,
+    pub values: Vec<Option<Term>>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Term {
+    String(String),
+    Variable(String),
+    List(Vec<Term>),
+    SubGoal(Goal),
 }
 
 impl Goal {
-    pub fn new(type_: Arc<RecordType>, values: Vec<Option<String>>) -> Self {
+    pub fn new(type_: Arc<RecordType>, values: Vec<Option<Term>>) -> Self {
         Goal {
             type_: Arc::clone(&type_),
             values,
@@ -186,41 +207,53 @@ impl Goal {
             .map(|(&ref field_name, value)| {
                 value
                     .clone()
-                    .and_then(|v| Some(format!("\"{}\"", v)))
+                    .and_then(|v| Some(v.to_string()))
                     .unwrap_or(field_name.to_string())
             })
             .collect::<Vec<_>>();
 
         if !self.values.is_empty() {
-            format!(r#"{}({})"#, self.type_.name, values.join(", "))
+            format!("{}({})", self.type_.name, values.join(", "))
         } else {
-            format!(r#"{}"#, self.type_.name)
+            format!("{}", self.type_.name)
         }
     }
 
-    // pub fn to_query(&self) -> String {
-    //     if !self.values.is_empty() {
-    //         format!(
-    //             r#"{}({})"#,
-    //             self.type_.name,
-    //             self.values
-    //                 .iter()
-    //                 .map(|v| format!("\"{}\"", v))
-    //                 .collect::<Vec<_>>()
-    //                 .join(", ")
-    //         )
-    //     } else {
-    //         format!(r#"{}"#, self.type_.name)
-    //     }
-    // }
-
-    pub fn to_values(&self) -> HashMap<String, Option<String>> {
+    pub fn to_values(&self) -> HashMap<String, Option<Term>> {
         self.type_
             .data_fields
             .iter()
             .zip(self.values.iter())
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect::<HashMap<_, _>>()
+    }
+
+    // TODO: TermList is like "[X, 4, 5]"
+    // pub fn to_value_list(&self) -> Term {
+    //     let vs = self.type_
+    //         .data_fields
+    //         .iter()
+    //         .zip(self.values.iter())
+    //         .map(|(_, v)| v.clone())
+    //         .collect::<Vec<_>>();
+    // }
+}
+
+impl fmt::Display for Term {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Term::String(s) => write!(f, "\"{}\"", s),
+            Term::Variable(s) => write!(f, "{}", s),
+            Term::List(ss) => write!(
+                f,
+                "[{}]",
+                ss.iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Term::SubGoal(g) => write!(f, "{}", g.to_unescaped_query()),
+        }
     }
 }
 
@@ -342,6 +375,7 @@ impl LogicMachine {
             .machine
             .run_query(format!(r#"{}."#, g.to_unescaped_query()))
             .map_err(LogicMachineError::PrologError)?;
+        // TODO JCJ: crashes on run_query above
 
         Self::parse_to_facts(qr, Arc::clone(&g.type_))
     }
@@ -349,15 +383,10 @@ impl LogicMachine {
 
 #[cfg(test)]
 mod tests {
-    // use scryer_prolog::machine::parsed_results::{
-    //     self, prolog_value_to_json_string, QueryMatch, QueryResolution,
-    // };
-    // use std::collections::HashMap;
-    // use std::sync::Arc;
-
-    // use crate::models::fact::{Fact, RecordTypeError};
-
-    // use super::{LogicMachine, RecordType};
+    use super::{LogicMachine, RecordType};
+    use crate::models::fact::Term;
+    use std::collections::HashMap;
+    use std::sync::Arc;
 
     #[test]
     fn query() {
@@ -398,5 +427,80 @@ mod tests {
         // let a = lm.fetch_all(Arc::clone(&edge));
 
         // dbg!(&a);
+    }
+
+    #[test]
+    fn term_list() {
+        let mut lm = LogicMachine::new(String::from(
+            r#"
+                :- use_module(library(clpz)).
+                :- dynamic(dimlink/9).
+
+                dimlink("Test1", "MR00000001", "ID00000001", "JH00000001", "2023-02-08", "2023-02-10", "2024-02-18 08:16:11", "D", "0"). 
+                dimlink("Test1", "MR00000001", "ID00000001", "JH00000001", "2023-02-09", "2023-02-10", "2024-02-18 08:17:11", "E", "1"). 
+                dimlink("Test1", "MR00000002", "ID00000002", "JH00000001", "2023-02-08", "2023-02-11", "2024-02-18 08:20:11", "D", "0").
+                dimlink("Test1", "MR00000002", "ID00000002", "JH00000001", "2023-02-08", "2023-02-11", "2024-02-18 08:20:12", "D", "1"). 
+                dimlink("Test1", "MR00000002", "ID00000002", "JH00000001", "2023-02-08", "2023-02-11", "2024-02-18 08:20:13", "E", "2"). 
+                dimlink("Test1", "MR00000003", "ID00000002", "JH00000002", "2023-02-08", "2023-02-09", "2024-02-18 08:20:14", "O", "0"). 
+                dimlink("Test1", "MR00000004", "ID00000001", "JH00000002", "2023-02-08", "2023-02-09", "2024-02-18 09:17:11", "O", "0").
+                dimlink("Test1", "MR00000005", "ID00000001", "JH00000003", "2023-02-08", "2023-02-09", "2024-02-18 09:17:11", "D", "0").
+                dimlink("Test1", "MR00000005", "ID00000001", "JH00000003", "2023-02-08", "2023-02-09", "2024-02-18 09:17:11", "V", "1").
+            
+                table("dimlink", "MgrLinkRef", ["DimIdRef", "InvHeadRef", "BegPeriod", "EndPeriod"]).
+                
+                record(Context, SysVersion, SeqNum, RecType, Id, [DimIdRef, InvHeadRef, BegPeriod, EndPeriod]) :-
+                    dimlink(Context, Id, DimIdRef, InvHeadRef, BegPeriod, EndPeriod, SysVersion, RecType, SeqNum).
+
+                step_change(Ctx, Id, Vals1, Vals2) :-
+                    record(Ctx, _, SeqNum1, _, Id, Vals1),
+                    record(Ctx, _, SeqNum2, _, Id, Vals2),
+                    number_chars(Num1, SeqNum1),
+                    number_chars(Num2, SeqNum2),
+                    Num2 #= Num1 + 1.
+        "#,
+        ));
+
+        let dimlink = Arc::new(
+            RecordType::new(
+                "dimlink",
+                &["Id"],
+                &["DimIdRef", "InvHeadRef", "BegPeriod", "EndPeriod"],
+                &["Context", "SysVersion", "RecType", "SeqNum"],
+            )
+            .unwrap(),
+        );
+
+        let step_change = Arc::new(
+            RecordType::new_without_id_fields("step_change", &["Ctx", "Id", "Vals1", "Vals2"])
+                .unwrap(),
+        );
+
+        let g = step_change
+            .to_goal(&HashMap::from([(
+                "Vals1".to_string(),
+                Some(Term::List(vec![
+                    Term::Variable("DimIdRef".to_string()),
+                    Term::String("JH00000001".to_string()),
+                    Term::Variable("BegPeriod".to_string()),
+                    Term::Variable("EndPeriod".to_string()),
+                ])),
+            )]))
+            .unwrap();
+
+        let s = g.to_unescaped_query();
+        dbg!(&s);
+
+        let res = lm.machine.run_query(format!("{}.", g.to_unescaped_query()));
+        // let res = lm.machine.run_query(
+        //     "step_change(Ctx, Id, [DimIdRef, \"JH00000001\", BegPeriod, EndPeriod], Vals2)."
+        //         .to_string(),
+        // );
+        dbg!(&res);
+
+        dbg!("hellooo");
+
+        // let res = lm.fetch(g);
+
+        // dbg!(&res);
     }
 }
