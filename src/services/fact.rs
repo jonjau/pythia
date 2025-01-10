@@ -35,7 +35,7 @@ impl FactService {
     pub async fn get_facts(
         &self,
         fact_type: String,
-        values: HashMap<String, Option<Term>>,
+        values: HashMap<String, Term>,
     ) -> LogicMachineResult {
         dbg!(&values);
         self.lm_actor
@@ -58,7 +58,7 @@ struct GetAllFactsQuery {
 
 struct GetFactsQuery {
     fact_type: String,
-    values: HashMap<String, Option<Term>>,
+    values: HashMap<String, Term>,
 }
 
 struct GetRecordTypeQuery {

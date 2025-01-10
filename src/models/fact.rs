@@ -90,20 +90,15 @@ impl RecordType {
             .clone()
             .all_fields()
             .iter()
-            .map(|_| None)
+            .map(|f| Term::Variable(f.to_string()))
             .collect::<Vec<_>>();
         Goal::new(self, values)
     }
 
     pub fn to_goal(
         self: Arc<Self>,
-        data_values: &HashMap<String, Option<Term>>,
+        data_values: &HashMap<String, Term>,
     ) -> Result<Goal, RecordTypeError> {
-        // let mapped_values = values
-        //     .iter()
-        //     .map(|(&k, &v)| (k.to_owned(), v.to_owned()))
-        //     .collect::<HashMap<_, _>>();
-
         let mut unknown_values = data_values
             .keys()
             .filter(|&a| !self.data_fields.contains(&a.to_owned()))
@@ -115,10 +110,10 @@ impl RecordType {
         }
 
         // TODO: populate id and metadata fields with Option::None because that is the correct thing to do
-        let complete_values: Vec<Option<Term>> = self
+        let complete_values: Vec<Term> = self
             .data_fields
             .iter()
-            .map(|field| data_values.get(field).and_then(|v| v.clone()))
+            .map(|field| data_values.get(field).cloned().unwrap_or(Term::Variable(field.to_string())))
             .collect();
         dbg!(&complete_values);
 
@@ -174,11 +169,11 @@ impl RecordType {
 
 /// A Goal is a compound term which may not have all its values grounded.
 /// It is meant to be run as a query to the logic machine.
-/// Values that are not grounded are to be left as Option::None.
+/// Values that are not grounded are to be left as a Term::Variable.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Goal {
     pub type_: Arc<RecordType>,
-    pub values: Vec<Option<Term>>,
+    pub values: Vec<Term>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -190,7 +185,7 @@ pub enum Term {
 }
 
 impl Goal {
-    pub fn new(type_: Arc<RecordType>, values: Vec<Option<Term>>) -> Self {
+    pub fn new(type_: Arc<RecordType>, values: Vec<Term>) -> Self {
         Goal {
             type_: Arc::clone(&type_),
             values,
@@ -204,12 +199,7 @@ impl Goal {
             .all_fields()
             .iter()
             .zip(self.values.iter())
-            .map(|(&ref field_name, value)| {
-                value
-                    .clone()
-                    .and_then(|v| Some(v.to_string()))
-                    .unwrap_or(field_name.to_string())
-            })
+            .map(|(_, value)| value.to_string())
             .collect::<Vec<_>>();
 
         if !self.values.is_empty() {
@@ -219,7 +209,7 @@ impl Goal {
         }
     }
 
-    pub fn to_values(&self) -> HashMap<String, Option<Term>> {
+    pub fn to_values(&self) -> HashMap<String, Term> {
         self.type_
             .data_fields
             .iter()
@@ -229,14 +219,17 @@ impl Goal {
     }
 
     // TODO: TermList is like "[X, 4, 5]"
-    // pub fn to_value_list(&self) -> Term {
-    //     let vs = self.type_
-    //         .data_fields
-    //         .iter()
-    //         .zip(self.values.iter())
-    //         .map(|(_, v)| v.clone())
-    //         .collect::<Vec<_>>();
-    // }
+    pub fn to_value_list(&self) -> Term {
+        let vs = self
+            .type_
+            .data_fields
+            .iter()
+            .zip(self.values.iter())
+            .map(|(_, v)| v.clone())
+            .collect::<Vec<_>>();
+
+        Term::List(vs)
+    }
 }
 
 impl fmt::Display for Term {
@@ -328,10 +321,12 @@ impl LogicMachine {
     }
 
     fn parse_to_facts<'a>(qr: QueryResolution, rt: Arc<RecordType>) -> LogicMachineResult {
+        dbg!(&qr);
         match qr {
             QueryResolution::Matches(m) => Ok(m
                 .iter()
                 .map(|QueryMatch { bindings: b }| {
+                    dbg!(&b.values());
                     Fact::new(
                         Arc::clone(&rt),
                         b.values()
@@ -375,7 +370,6 @@ impl LogicMachine {
             .machine
             .run_query(format!(r#"{}."#, g.to_unescaped_query()))
             .map_err(LogicMachineError::PrologError)?;
-        // TODO JCJ: crashes on run_query above
 
         Self::parse_to_facts(qr, Arc::clone(&g.type_))
     }
@@ -460,6 +454,18 @@ mod tests {
         "#,
         ));
 
+
+        let dimlink = Arc::new(
+            RecordType::new(
+                "dimlink",
+                &["Id"],
+                &["DimIdRef", "InvHeadRef", "BegPeriod", "EndPeriod"],
+                &["Context", "SysVersion", "RecType", "SeqNum"],
+            )
+            .unwrap(),
+        );
+
+        
         let dimlink = Arc::new(
             RecordType::new(
                 "dimlink",
@@ -478,12 +484,12 @@ mod tests {
         let g = step_change
             .to_goal(&HashMap::from([(
                 "Vals1".to_string(),
-                Some(Term::List(vec![
+                Term::List(vec![
                     Term::Variable("DimIdRef".to_string()),
                     Term::String("JH00000001".to_string()),
                     Term::Variable("BegPeriod".to_string()),
                     Term::Variable("EndPeriod".to_string()),
-                ])),
+                ]),
             )]))
             .unwrap();
 
