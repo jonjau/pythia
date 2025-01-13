@@ -69,22 +69,6 @@ impl RecordType {
             .collect()
     }
 
-    pub fn to_data_record_type(self: Arc<Self>) -> Arc<RecordType> {
-        Arc::new(
-            RecordType::new(
-                "values",
-                &[],
-                &self
-                    .data_fields
-                    .iter()
-                    .map(|s| s.as_str())
-                    .collect::<Vec<_>>(),
-                &[],
-            )
-            .unwrap(),
-        )
-    }
-
     pub fn to_most_general_goal(self: Arc<Self>) -> Goal {
         let values = self
             .clone()
@@ -109,18 +93,29 @@ impl RecordType {
             ));
         }
 
-        // TODO: populate id and metadata fields with Option::None because that is the correct thing to do
-        let complete_values: Vec<Term> = self
-            .data_fields
+        let id_values = self
+            .id_fields
             .iter()
-            .map(|field| data_values.get(field).cloned().unwrap_or(Term::Variable(field.to_string())))
-            .collect();
-        dbg!(&complete_values);
+            .map(|field| Term::Variable(field.to_string()));
 
-        let g = Goal::new(self, complete_values);
+        let complete_data_values = self.data_fields.iter().map(|field| {
+            data_values
+                .get(field)
+                .cloned()
+                .unwrap_or(Term::Variable(field.to_string()))
+        });
 
-        dbg!(g.to_unescaped_query());
+        let metadata_values = self
+            .id_fields
+            .iter()
+            .map(|field| Term::Variable(field.to_string()));
 
+        let all_values = id_values
+            .chain(complete_data_values)
+            .chain(metadata_values)
+            .collect::<Vec<_>>();
+
+        let g = Goal::new(self, all_values);
         Ok(g)
     }
 
@@ -203,7 +198,7 @@ impl Goal {
             .collect::<Vec<_>>();
 
         if !self.values.is_empty() {
-            format!("{}({})", self.type_.name, values.join(", "))
+            format!("'{}'({})", self.type_.name, values.join(", "))
         } else {
             format!("{}", self.type_.name)
         }
@@ -218,17 +213,27 @@ impl Goal {
             .collect::<HashMap<_, _>>()
     }
 
-    // TODO: TermList is like "[X, 4, 5]"
     pub fn to_value_list(&self) -> Term {
-        let vs = self
-            .type_
-            .data_fields
-            .iter()
-            .zip(self.values.iter())
-            .map(|(_, v)| v.clone())
-            .collect::<Vec<_>>();
+        Term::List(
+            self.values
+                .iter()
+                .skip(self.type_.id_fields.len())
+                .take(self.type_.data_fields.len())
+                .cloned()
+                .collect::<Vec<_>>(),
+        )
+    }
 
-        Term::List(vs)
+    pub fn and(&self, goal2: Goal) -> Goal {
+        let conjunction =
+            Arc::new(RecordType::new_without_id_fields(",", &["Term1", "Term2"]).unwrap());
+
+        conjunction
+            .to_goal(&HashMap::from([
+                ("Term1".to_string(), Term::SubGoal(self.clone())),
+                ("Term2".to_string(), Term::SubGoal(goal2)),
+            ]))
+            .unwrap()
     }
 }
 
@@ -321,12 +326,10 @@ impl LogicMachine {
     }
 
     fn parse_to_facts<'a>(qr: QueryResolution, rt: Arc<RecordType>) -> LogicMachineResult {
-        dbg!(&qr);
         match qr {
             QueryResolution::Matches(m) => Ok(m
                 .iter()
                 .map(|QueryMatch { bindings: b }| {
-                    dbg!(&b.values());
                     Fact::new(
                         Arc::clone(&rt),
                         b.values()
@@ -366,6 +369,7 @@ impl LogicMachine {
     }
 
     pub fn fetch(&mut self, g: Goal) -> LogicMachineResult {
+        dbg!(g.to_unescaped_query());
         let qr = self
             .machine
             .run_query(format!(r#"{}."#, g.to_unescaped_query()))
@@ -454,7 +458,6 @@ mod tests {
         "#,
         ));
 
-
         let dimlink = Arc::new(
             RecordType::new(
                 "dimlink",
@@ -465,7 +468,6 @@ mod tests {
             .unwrap(),
         );
 
-        
         let dimlink = Arc::new(
             RecordType::new(
                 "dimlink",

@@ -116,10 +116,7 @@ async fn get_state_changes(
         .iter()
         .filter_map(|(field, value)| {
             if field.starts_with("0.") || field.starts_with("1.") {
-                Some((
-                    field[2..].to_string(),
-                    Term::String(value.to_string()),
-                ))
+                Some((field[2..].to_string(), Term::String(value.to_string())))
             } else {
                 None
             }
@@ -135,17 +132,21 @@ async fn get_state_changes(
 
     let m = HashMap::from([(
         "Vals1".to_string(),
-        subgoal_rt.to_goal(&named_values).unwrap().to_value_list()
+        // subgoal_rt.to_goal(&named_values).unwrap().to_value_list(),
+        Term::Variable("Vals1".to_string())
     )]);
-    let goal = rt.to_goal(&m).unwrap();
+    let step_change_goal = rt.to_goal(&m).unwrap();
+    dbg!(&step_change_goal);
 
-    dbg!(&goal);
+    let binding_goal_rt =
+        Arc::new(RecordType::new_without_id_fields("=", &["Term3", "Term4"]).unwrap());
+    let binding_goal = binding_goal_rt.to_goal(&HashMap::from([
+        ("Term3".to_string(), Term::Variable("Vals1".to_string())),
+        ("Term4".to_string(), subgoal_rt.to_goal(&named_values).unwrap().to_value_list())
+    ]
+    )).unwrap();
 
-    let result = app_state
-        .facts
-        .get_facts("step_change".to_string(), goal.to_values())
-        .await
-        .unwrap();
+    let result = app_state.facts.get_facts(step_change_goal.and(binding_goal)).await.unwrap();
 
     let fs = result.iter().map(|f| f.assertion_str()).collect::<Vec<_>>();
 

@@ -1,7 +1,6 @@
-use std::collections::HashMap;
 use std::vec;
 
-use crate::models::fact::{Fact, LogicMachineResult, RecordType, RecordTypeResult, Term};
+use crate::models::fact::{Fact, Goal, LogicMachineResult, RecordType, RecordTypeResult, Term};
 use crate::models::{self};
 use models::fact::LogicMachine;
 
@@ -34,12 +33,10 @@ impl FactService {
 
     pub async fn get_facts(
         &self,
-        fact_type: String,
-        values: HashMap<String, Term>,
+        goal: Goal,
     ) -> LogicMachineResult {
-        dbg!(&values);
         self.lm_actor
-            .send_query(GetFactsQuery { fact_type, values })
+            .send_query(GetFactsQuery { goal })
             .await
     }
 
@@ -57,8 +54,7 @@ struct GetAllFactsQuery {
 }
 
 struct GetFactsQuery {
-    fact_type: String,
-    values: HashMap<String, Term>,
+    goal: Goal,
 }
 
 struct GetRecordTypeQuery {
@@ -151,36 +147,8 @@ impl Actor {
                 let _ = respond_to.send(r);
             }
             ActorMessage::GetFacts(Message { query, respond_to }) => {
-                // let rt = self.lm.get_record_type(&query.fact_type);
-                println!("queryvalues: {:?}", &query.values);
-                if let Ok(rt) = self.lm.get_record_type(&query.fact_type) {
-                    if let Ok(g) = rt.to_goal(&query.values) {
-                        let _ = respond_to.send(self.lm.fetch(g));
-                    } else {
-                        let _ = respond_to.send(Ok(Vec::new()));
-                    }
-                } else {
-                    let _ = respond_to.send(Ok(Vec::new()));
-                }
-                // let r = self
-                //     .lm
-                //     .get_record_type(&query.fact_type)
-                //     .map(|rt| {
-                //         let a = rt.to_goal(
-                //             &query
-                //                 .values
-                //                 .iter()
-                //                 .map(|(field, value)| (field.as_str(), value.as_str()))
-                //                 .collect::<HashMap<_, _>>(),
-                //         );
-                //         let b = a.map(|g| self.lm.fetch(g));
-                //         dbg!(&b);
-                //         let c = b.unwrap_or(Ok(Vec::new()));
-                //         dbg!(&c);
-                //         c
-                //     })
-                //     .unwrap_or(Ok(Vec::new()));
-                // let _ = respond_to.send(Ok(Vec::new()));
+                dbg!(&query.goal);
+                let _ = respond_to.send(self.lm.fetch(query.goal));
             }
             ActorMessage::GetRecordType(Message { query, respond_to }) => {
                 let r = self.lm.get_record_type(&query.fact_type);
