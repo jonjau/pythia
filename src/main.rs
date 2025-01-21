@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 mod models;
 mod services;
 
-use models::fact::Term;
+use models::fact::GoalTerm;
 use services::fact::FactService;
 
 #[derive(Clone)]
@@ -73,7 +73,7 @@ async fn get_facts(query: Query<Params>, State(state): State<AppState>) -> Facts
         },
         Some(ft) => {
             let result = state.facts.get_all_facts(ft.to_string()).await.unwrap();
-            let fs = result.iter().map(|f| f.assertion_str()).collect::<Vec<_>>();
+            let fs = result.iter().map(|f| f.to_string()).collect::<Vec<_>>();
 
             FactsPage {
                 fact_type: result[0].type_name(),
@@ -96,7 +96,7 @@ async fn get_all_state_changes(State(state): State<AppState>) -> FactsTable {
         .get_all_facts("step_change".to_string())
         .await
         .unwrap();
-    let fs = result.iter().map(|f| f.assertion_str()).collect::<Vec<_>>();
+    let fs = result.iter().map(|f| f.to_string()).collect::<Vec<_>>();
 
     FactsTable { facts: fs }
 }
@@ -116,7 +116,7 @@ async fn get_state_changes(
         .iter()
         .filter_map(|(field, value)| {
             if field.starts_with("0.") || field.starts_with("1.") {
-                Some((field[2..].to_string(), Term::String(value.to_string())))
+                Some((field[2..].to_string(), GoalTerm::String(value.to_string())))
             } else {
                 None
             }
@@ -133,22 +133,33 @@ async fn get_state_changes(
     let m = HashMap::from([(
         "Vals1".to_string(),
         // subgoal_rt.to_goal(&named_values).unwrap().to_value_list(),
-        Term::Variable("Vals1".to_string())
+        GoalTerm::Variable("Vals1".to_string()),
     )]);
     let step_change_goal = rt.to_goal(&m).unwrap();
     dbg!(&step_change_goal);
 
     let binding_goal_rt =
         Arc::new(RecordType::new_without_id_fields("=", &["Term3", "Term4"]).unwrap());
-    let binding_goal = binding_goal_rt.to_goal(&HashMap::from([
-        ("Term3".to_string(), Term::Variable("Vals1".to_string())),
-        ("Term4".to_string(), subgoal_rt.to_goal(&named_values).unwrap().to_value_list())
-    ]
-    )).unwrap();
+    let binding_goal = binding_goal_rt
+        .to_goal(&HashMap::from([
+            ("Term3".to_string(), GoalTerm::Variable("Vals1".to_string())),
+            (
+                "Term4".to_string(),
+                Arc::clone(&subgoal_rt)
+                    .to_goal(&named_values)
+                    .unwrap()
+                    .to_data_value_list(),
+            ),
+        ]))
+        .unwrap();
 
-    let result = app_state.facts.get_facts(step_change_goal.and(binding_goal)).await.unwrap();
+    let result = app_state
+        .facts
+        .get_facts(step_change_goal.and(binding_goal), step_change_goal.type_)
+        .await
+        .unwrap();
 
-    let fs = result.iter().map(|f| f.assertion_str()).collect::<Vec<_>>();
+    let fs = result.iter().map(|f| f.to_string()).collect::<Vec<_>>();
 
     FactsTable { facts: fs }
 }
@@ -162,7 +173,7 @@ struct CreateFact {
 use models::fact::RecordType;
 
 // #[debug_handler]
-async fn create_fact(State(state): State<AppState>, Json(cf): Json<CreateFact>) -> String {
+async fn create_fact(State(_state): State<AppState>, Json(cf): Json<CreateFact>) -> String {
     dbg!(cf.clone());
 
     // let rt = Arc::new(RecordType::new("edge", &["X", "Y"]).unwrap());
@@ -174,28 +185,29 @@ async fn create_fact(State(state): State<AppState>, Json(cf): Json<CreateFact>) 
         .map(|i| format!("X{}", i))
         .collect::<Vec<_>>();
     let fields = fields_temp.iter().map(String::as_ref).collect::<Vec<_>>();
-    let rt0 = Arc::new(RecordType::new_without_id_fields(&cf.typename, &fields).unwrap());
+    let _rt0 = Arc::new(RecordType::new_without_id_fields(&cf.typename, &fields).unwrap());
 
-    let mapped_values = fields
+    let _mapped_values = fields
         .iter()
         .zip(cf.values.iter())
         .map(|(&field, value)| (field, value.as_str()))
         .collect::<HashMap<_, _>>();
 
-    let fact = rt0.to_fact(&mapped_values).unwrap();
+    "".to_string()
+    // let fact = rt0.to_fact(&mapped_values).unwrap();
+
+    // // let res = state.facts.add_fact(fact).await.unwrap();
+    // // res.to_string()
 
     // let res = state.facts.add_fact(fact).await.unwrap();
-    // res.to_string()
+    // res.len().to_string();
 
-    let res = state.facts.add_fact(fact).await.unwrap();
-    res.len().to_string();
-
-    let result = state.facts.get_all_facts(cf.typename).await.unwrap();
-    result
-        .iter()
-        .map(|f| f.to_string())
-        .collect::<Vec<_>>()
-        .join(",\n")
+    // let result = state.facts.get_all_facts(cf.typename).await.unwrap();
+    // result
+    //     .iter()
+    //     .map(|f| f.to_string())
+    //     .collect::<Vec<_>>()
+    //     .join(",\n")
     // String::new()
 }
 
