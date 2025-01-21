@@ -3,7 +3,8 @@ use scryer_prolog::machine::parsed_results::{
     prolog_value_to_json_string, QueryMatch, QueryResolution,
 };
 use scryer_prolog::machine::Machine;
-use std::fmt::{format, Display, Formatter};
+use std::fmt::Formatter;
+use std::str::FromStr;
 use std::{clone::Clone, collections::HashMap, sync::Arc};
 
 // #[derive(PartialEq, Debug)]
@@ -69,19 +70,28 @@ impl RecordType {
             .collect()
     }
 
+    // pub fn to_data_record_type(self: Arc<Self>) -> RecordType {
+    //     RecordType {
+    //         name: Arc::clone(&self).name.clone() + "_data",
+    //         id_fields: Vec::new(),
+    //         data_fields: self.data_fields.clone(),
+    //         metadata_fields: Vec::new()
+    //     }
+    // }
+
     pub fn to_most_general_goal(self: Arc<Self>) -> Goal {
         let values = self
             .clone()
             .all_fields()
             .iter()
-            .map(|f| Term::Variable(f.to_string()))
+            .map(|f| GoalTerm::Variable(f.to_string()))
             .collect::<Vec<_>>();
         Goal::new(self, values)
     }
 
     pub fn to_goal(
         self: Arc<Self>,
-        data_values: &HashMap<String, Term>,
+        data_values: &HashMap<String, GoalTerm>,
     ) -> Result<Goal, RecordTypeError> {
         let mut unknown_values = data_values
             .keys()
@@ -96,19 +106,19 @@ impl RecordType {
         let id_values = self
             .id_fields
             .iter()
-            .map(|field| Term::Variable(field.to_string()));
+            .map(|field| GoalTerm::Variable(field.to_string()));
 
         let complete_data_values = self.data_fields.iter().map(|field| {
             data_values
                 .get(field)
                 .cloned()
-                .unwrap_or(Term::Variable(field.to_string()))
+                .unwrap_or(GoalTerm::Variable(field.to_string()))
         });
 
         let metadata_values = self
             .id_fields
             .iter()
-            .map(|field| Term::Variable(field.to_string()));
+            .map(|field| GoalTerm::Variable(field.to_string()));
 
         let all_values = id_values
             .chain(complete_data_values)
@@ -119,33 +129,27 @@ impl RecordType {
         Ok(g)
     }
 
-    pub fn to_fact(self: Arc<Self>, values: &HashMap<&str, &str>) -> Result<Fact, RecordTypeError> {
-        struct UnknownFieldName(String);
-        let mut unknown = Vec::new();
-
-        let values = values
-            .iter()
-            .map(|(&k, &v)| (k.to_owned(), v.to_owned()))
-            .map(|(k, v)| {
-                self.data_fields
-                    .contains(&k)
-                    .then_some((k.clone(), v))
-                    .ok_or(UnknownFieldName(k))
-            })
-            .filter_map(|r| r.map_err(|UnknownFieldName(e)| unknown.push(e)).ok())
-            .collect::<HashMap<_, _>>();
-
-        if !unknown.is_empty() {
-            return Err(RecordTypeError::UnknownFieldNames(unknown));
-        }
+    pub fn to_fact(
+        self: Arc<Self>,
+        all_values: &HashMap<String, FactTerm>,
+    ) -> Result<Fact, RecordTypeError> {
+        // let mut unknown_values = data_values
+        //     .keys()
+        //     .filter(|&a| !self.data_fields.contains(&a.to_owned()))
+        //     .peekable();
+        // if unknown_values.peek().is_some() {
+        //     return Err(RecordTypeError::UnknownFieldNames(
+        //         unknown_values.into_iter().cloned().collect::<Vec<_>>(),
+        //     ));
+        // }
 
         struct UngroundedValue(String);
         let mut ungrounded = Vec::new();
-        let complete_values = self
-            .data_fields
+        let complete_values = Arc::clone(&self)
+            .all_fields()
             .iter()
             .map(|field| {
-                values
+                all_values
                     .get(field)
                     .cloned()
                     .ok_or(UngroundedValue(field.to_string()))
@@ -159,7 +163,6 @@ impl RecordType {
 
         Ok(Fact::new(self, complete_values))
     }
-    // TODO: query() overload passing in vector of argument values in order
 }
 
 /// A Goal is a compound term which may not have all its values grounded.
@@ -168,43 +171,34 @@ impl RecordType {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Goal {
     pub type_: Arc<RecordType>,
-    pub values: Vec<Term>,
+    pub values: Vec<GoalTerm>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum Term {
-    String(String),
+pub enum GoalTerm {
     Variable(String),
-    List(Vec<Term>),
-    SubGoal(Goal),
+    String(String),
+    List(Vec<GoalTerm>),
+    SubTerm(Goal),
 }
 
 impl Goal {
-    pub fn new(type_: Arc<RecordType>, values: Vec<Term>) -> Self {
+    pub fn new(type_: Arc<RecordType>, values: Vec<GoalTerm>) -> Self {
         Goal {
             type_: Arc::clone(&type_),
             values,
         }
     }
 
-    pub fn to_unescaped_query(&self) -> String {
-        let values = self
-            .type_
-            .clone()
-            .all_fields()
+    pub fn to_all_values(&self) -> Vec<GoalTerm> {
+        self.values
             .iter()
-            .zip(self.values.iter())
-            .map(|(_, value)| value.to_string())
-            .collect::<Vec<_>>();
-
-        if !self.values.is_empty() {
-            format!("'{}'({})", self.type_.name, values.join(", "))
-        } else {
-            format!("{}", self.type_.name)
-        }
+            .take(self.type_.clone().all_fields().len())
+            .cloned()
+            .collect::<Vec<_>>()
     }
 
-    pub fn to_values(&self) -> HashMap<String, Term> {
+    pub fn to_data_values(&self) -> HashMap<String, GoalTerm> {
         self.type_
             .data_fields
             .iter()
@@ -213,8 +207,8 @@ impl Goal {
             .collect::<HashMap<_, _>>()
     }
 
-    pub fn to_value_list(&self) -> Term {
-        Term::List(
+    pub fn to_data_value_list(&self) -> GoalTerm {
+        GoalTerm::List(
             self.values
                 .iter()
                 .skip(self.type_.id_fields.len())
@@ -230,19 +224,35 @@ impl Goal {
 
         conjunction
             .to_goal(&HashMap::from([
-                ("Term1".to_string(), Term::SubGoal(self.clone())),
-                ("Term2".to_string(), Term::SubGoal(goal2)),
+                ("Term1".to_string(), GoalTerm::SubTerm(self.clone())),
+                ("Term2".to_string(), GoalTerm::SubTerm(goal2)),
             ]))
             .unwrap()
     }
 }
 
-impl fmt::Display for Term {
+impl fmt::Display for Goal {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let values = self
+            .to_all_values()
+            .iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>();
+
+        if !values.is_empty() {
+            write!(f, "'{}'({})", self.type_.name, values.join(", "))
+        } else {
+            write!(f, "{}", self.type_.name)
+        }
+    }
+}
+
+impl fmt::Display for GoalTerm {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Term::String(s) => write!(f, "\"{}\"", s),
-            Term::Variable(s) => write!(f, "{}", s),
-            Term::List(ss) => write!(
+            GoalTerm::Variable(var_name) => write!(f, "{}", var_name),
+            GoalTerm::String(s) => write!(f, "\"{}\"", s),
+            GoalTerm::List(ss) => write!(
                 f,
                 "[{}]",
                 ss.iter()
@@ -250,33 +260,42 @@ impl fmt::Display for Term {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            Term::SubGoal(g) => write!(f, "{}", g.to_unescaped_query()),
+            GoalTerm::SubTerm(g) => write!(f, "{}", g.to_string()),
         }
     }
 }
 
 /// A Fact is a compound term which has all its values grounded.
-/// It is meant to be asserted to the logic machine
+/// It is meant to be asserted to or by the logic machine
 #[derive(Debug, Clone, PartialEq)]
 pub struct Fact {
     type_: Arc<RecordType>,
-    values: Vec<String>,
+    values: Vec<FactTerm>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum FactTerm {
+    String(String),
+    Integer(i32),
+    Float(f64),
+    List(Vec<FactTerm>),
+    SubTerm(Fact),
 }
 
 impl Fact {
-    pub fn new(type_: Arc<RecordType>, values: Vec<String>) -> Self {
+    pub fn new(type_: Arc<RecordType>, values: Vec<FactTerm>) -> Self {
         Fact {
             type_: Arc::clone(&type_),
             values,
         }
     }
 
-    pub fn assertion_str(&self) -> String {
-        if !self.values.is_empty() {
-            format!(r#"{}({})"#, self.type_.name, self.values.join(", "))
-        } else {
-            format!(r#"{}"#, self.type_.name)
-        }
+    pub fn to_all_values(&self) -> Vec<FactTerm> {
+        self.values
+            .iter()
+            .take(self.type_.clone().all_fields().len())
+            .cloned()
+            .collect::<Vec<_>>()
     }
 
     pub fn data_fields(&self) -> Vec<String> {
@@ -292,9 +311,111 @@ impl Fact {
     }
 }
 
-impl Display for Fact {
+impl fmt::Display for Fact {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}({})", self.type_.name, self.values.join(","))
+        let values = self
+            .to_all_values()
+            .iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>();
+
+        if !values.is_empty() {
+            write!(f, "'{}'({})", self.type_.name, values.join(", "))
+        } else {
+            write!(f, "'{}'", self.type_.name)
+        }
+    }
+}
+
+impl fmt::Display for FactTerm {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            FactTerm::String(s) => write!(f, "\"{}\"", s),
+            FactTerm::Integer(i) => write!(f, "{}", i),
+            FactTerm::Float(flt) => write!(f, "{}", flt),
+            FactTerm::List(ss) => write!(
+                f,
+                "[{}]",
+                ss.iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            FactTerm::SubTerm(st) => write!(f, "{}", st),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct ParseFactTermError;
+
+impl FromStr for FactTerm {
+    type Err = ParseFactTermError;
+
+    fn from_str(str: &str) -> Result<Self, Self::Err> {
+        let s = str.trim();
+
+        if s.starts_with("\"") && s[1..].ends_with("\"") {
+            return Ok(FactTerm::String(
+                s[1..s.len() - 1].to_string(), // Remove quotes
+            ));
+        }
+
+        if let Ok(int) = s.parse::<i32>() {
+            return Ok(FactTerm::Integer(int));
+        }
+
+        if let Ok(float) = s.parse::<f64>() {
+            return Ok(FactTerm::Float(float));
+        }
+
+        if s.starts_with("[") && s.ends_with("]") {
+            let inner = &s[1..s.len() - 1];
+            let inner_terms = inner
+                .split(",")
+                .into_iter()
+                .map(|t| t.trim().parse::<FactTerm>())
+                .collect::<Result<Vec<_>, ParseFactTermError>>();
+
+            return inner_terms.and_then(|terms| Ok(FactTerm::List(terms)));
+        }
+
+        if let Some(type_name_start) = s.find("'") {
+            if let Some(type_name_end) = s[type_name_start + 1..].find("'") {
+                let type_name = &s[type_name_start + 1..type_name_start + 1 + type_name_end];
+
+                if s[type_name_start + 1 + type_name_end + 1..].starts_with("(") && s.ends_with(")")
+                {
+                    let inner = &s[type_name_start + 1 + type_name_end + 1 + 1..s.len() - 1];
+
+                    dbg!(&inner);
+
+                    let inner_terms = inner
+                        .split(",")
+                        .into_iter()
+                        .map(|t| t.trim().parse::<FactTerm>())
+                        .collect::<Result<Vec<_>, ParseFactTermError>>();
+
+                    dbg!(&inner_terms);
+
+                    return inner_terms.and_then(|terms| {
+                        let fields = (0..terms.len() - 1)
+                            .map(|i| format!("{}_{}", type_name.to_uppercase(), i.to_string()))
+                            .collect::<Vec<_>>();
+
+                        let rt = RecordType::new_without_id_fields(
+                            type_name,
+                            &fields.iter().map(|f| f.as_str()).collect::<Vec<_>>(),
+                        )
+                        .unwrap();
+
+                        Ok(FactTerm::SubTerm(Fact::new(Arc::new(rt), terms)))
+                    });
+                }
+            }
+        }
+
+        Err(ParseFactTermError)
     }
 }
 
@@ -330,12 +451,18 @@ impl LogicMachine {
             QueryResolution::Matches(m) => Ok(m
                 .iter()
                 .map(|QueryMatch { bindings: b }| {
-                    Fact::new(
-                        Arc::clone(&rt),
-                        b.values()
-                            .map(|v| prolog_value_to_json_string(v.clone()))
-                            .collect::<Vec<_>>(),
-                    )
+                    dbg!(&b);
+
+                    let map = b
+                        .into_iter()
+                        .map(|(k, v)| {
+                            let to_parse = prolog_value_to_json_string(v.clone());
+                            dbg!(&to_parse);
+                            (k.clone(), to_parse.parse::<FactTerm>().unwrap())
+                        })
+                        .collect::<HashMap<_, _>>();
+
+                    Arc::clone(&rt).to_fact(&map).unwrap()
                 })
                 .collect::<Vec<_>>()),
             _ => Err(LogicMachineError::UnexpectedQueryResolution),
@@ -358,31 +485,33 @@ impl LogicMachine {
 
     pub fn add_fact(&mut self, f: Fact) -> LogicMachineResult {
         self.machine
-            .run_query(format!(r#"assertz({})."#, f.assertion_str()))
+            .run_query(format!(r#"assertz({})."#, f.to_string()))
             .map_err(LogicMachineError::PrologError)?;
 
         self.fetch_all(f.type_)
     }
 
     pub fn fetch_all(&mut self, rt: Arc<RecordType>) -> LogicMachineResult {
-        self.fetch(Arc::clone(&rt).to_most_general_goal())
+        self.fetch(Arc::clone(&rt).to_most_general_goal(), Arc::clone(&rt))
     }
 
-    pub fn fetch(&mut self, g: Goal) -> LogicMachineResult {
-        dbg!(g.to_unescaped_query());
+    pub fn fetch(&mut self, g: Goal, target_rt: Arc<RecordType>) -> LogicMachineResult {
+        dbg!(g.to_string());
         let qr = self
             .machine
-            .run_query(format!(r#"{}."#, g.to_unescaped_query()))
+            .run_query(format!(r#"{}."#, g.to_string()))
             .map_err(LogicMachineError::PrologError)?;
 
-        Self::parse_to_facts(qr, Arc::clone(&g.type_))
+        let a = Self::parse_to_facts(qr, Arc::clone(&target_rt));
+        dbg!(&a);
+        a
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{LogicMachine, RecordType};
-    use crate::models::fact::Term;
+    use crate::models::fact::{FactTerm, GoalTerm};
     use std::collections::HashMap;
     use std::sync::Arc;
 
@@ -458,26 +587,6 @@ mod tests {
         "#,
         ));
 
-        let dimlink = Arc::new(
-            RecordType::new(
-                "dimlink",
-                &["Id"],
-                &["DimIdRef", "InvHeadRef", "BegPeriod", "EndPeriod"],
-                &["Context", "SysVersion", "RecType", "SeqNum"],
-            )
-            .unwrap(),
-        );
-
-        let dimlink = Arc::new(
-            RecordType::new(
-                "dimlink",
-                &["Id"],
-                &["DimIdRef", "InvHeadRef", "BegPeriod", "EndPeriod"],
-                &["Context", "SysVersion", "RecType", "SeqNum"],
-            )
-            .unwrap(),
-        );
-
         let step_change = Arc::new(
             RecordType::new_without_id_fields("step_change", &["Ctx", "Id", "Vals1", "Vals2"])
                 .unwrap(),
@@ -486,29 +595,36 @@ mod tests {
         let g = step_change
             .to_goal(&HashMap::from([(
                 "Vals1".to_string(),
-                Term::List(vec![
-                    Term::Variable("DimIdRef".to_string()),
-                    Term::String("JH00000001".to_string()),
-                    Term::Variable("BegPeriod".to_string()),
-                    Term::Variable("EndPeriod".to_string()),
-                ]),
+                GoalTerm::List(vec![
+                    GoalTerm::Variable("DimIdRef".to_string()),
+                    GoalTerm::String("JH00000001".to_string()).into(),
+                    GoalTerm::Variable("BegPeriod".to_string()),
+                    GoalTerm::Variable("EndPeriod".to_string()),
+                ])
+                .into(),
             )]))
             .unwrap();
 
-        let s = g.to_unescaped_query();
+        let s = g.to_string();
         dbg!(&s);
 
-        let res = lm.machine.run_query(format!("{}.", g.to_unescaped_query()));
+        let res = lm.machine.run_query(format!("{}.", g.to_string()));
         // let res = lm.machine.run_query(
         //     "step_change(Ctx, Id, [DimIdRef, \"JH00000001\", BegPeriod, EndPeriod], Vals2)."
         //         .to_string(),
         // );
         dbg!(&res);
 
-        dbg!("hellooo");
-
         // let res = lm.fetch(g);
 
         // dbg!(&res);
+    }
+
+    #[test]
+    fn parse_fact() {
+        // let fs = "[\"3\", 3, 3.0, 3.1, 0, -1, \"-12\", -111111111111111111111111111.1]".parse::<FactTerm>();
+        let fs = "'goal'(\"3\", 3.4)".parse::<FactTerm>();
+
+        dbg!(&fs);
     }
 }

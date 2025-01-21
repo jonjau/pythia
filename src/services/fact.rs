@@ -1,6 +1,7 @@
+use std::sync::Arc;
 use std::vec;
 
-use crate::models::fact::{Fact, Goal, LogicMachineResult, RecordType, RecordTypeResult, Term};
+use crate::models::fact::{Fact, Goal, LogicMachineResult, RecordType, RecordTypeResult};
 use crate::models::{self};
 use models::fact::LogicMachine;
 
@@ -34,9 +35,10 @@ impl FactService {
     pub async fn get_facts(
         &self,
         goal: Goal,
+        target_rt: Arc<RecordType>
     ) -> LogicMachineResult {
         self.lm_actor
-            .send_query(GetFactsQuery { goal })
+            .send_query(GetFactsQuery { goal, target_rt })
             .await
     }
 
@@ -55,6 +57,7 @@ struct GetAllFactsQuery {
 
 struct GetFactsQuery {
     goal: Goal,
+    target_rt: Arc<RecordType>
 }
 
 struct GetRecordTypeQuery {
@@ -148,7 +151,7 @@ impl Actor {
             }
             ActorMessage::GetFacts(Message { query, respond_to }) => {
                 dbg!(&query.goal);
-                let _ = respond_to.send(self.lm.fetch(query.goal));
+                let _ = respond_to.send(self.lm.fetch(query.goal, query.target_rt));
             }
             ActorMessage::GetRecordType(Message { query, respond_to }) => {
                 let r = self.lm.get_record_type(&query.fact_type);
