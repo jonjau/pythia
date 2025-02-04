@@ -27,12 +27,17 @@ step_change(Ctx, Id, Vals1, Vals2) :-
     number_chars(Num2, SeqNum2),
     Num2 #= Num1 + 1.
 
-leap_change(Ctx, Id, Vals1, Vals2) :-
-    record(Ctx, _, SeqNum1, _, Id, Vals1),
-    record(Ctx, _, SeqNum2, _, Id, Vals2),
-    number_chars(Num1, SeqNum1),
-    number_chars(Num2, SeqNum2),
-    Num2 #> Num1.
+leap_change(Vals1, Vals2, []) :-
+    % Base case: No steps, Vals1 and Vals2 are the same
+    record(_, _, _, _, _, Vals1),
+    record(_, _, _, _, _, Vals2),
+    Vals1 = Vals2.
+
+leap_change(Vals1, Vals2, [step_change(Ctx, Id, Vals1, ValsMid)|Steps]) :-
+    % Recursive case: Find an intermediate step
+    step_change(Ctx, Id, Vals1, ValsMid),
+    % Continue finding steps until reaching Vals2
+    leap_change(ValsMid, Vals2, Steps).
 
 :- dynamic(edge/2).
 edge(3, 4).
