@@ -12,22 +12,27 @@ use serde::{Deserialize, Serialize};
 
 mod models;
 mod services;
+mod utils;
 
 use models::fact::GoalTerm;
-use services::fact::FactService;
+use services::{fact::FactService, state_change::StateChangeService};
 
 #[derive(Clone)]
 struct AppState {
     facts: FactService,
+    state_changes: StateChangeService,
 }
 
 #[tokio::main]
 async fn main() {
     let db = include_str!("../data/db.pl");
 
+    let facts = FactService::new(db);
+
     // TODO: graceful shutdown of actor
     let state = AppState {
-        facts: FactService::new(db),
+        facts: facts.clone(),
+        state_changes: StateChangeService::new(facts.clone()),
     };
 
     let r = Router::new()
@@ -112,17 +117,27 @@ async fn get_state_changes(
         .await
         .unwrap();
 
-    let named_values = states
+    let named_values0 = states
         .iter()
         .filter_map(|(field, value)| {
-            if field.starts_with("0.") || field.starts_with("1.") {
+            if field.starts_with("0.") {
                 Some((field[2..].to_string(), GoalTerm::String(value.to_string())))
             } else {
                 None
             }
         })
         .collect::<HashMap<_, _>>();
-    dbg!(&named_values);
+
+    let named_values1 = states
+        .iter()
+        .filter_map(|(field, value)| {
+            if field.starts_with("1.") {
+                Some((field[2..].to_string(), GoalTerm::String(value.to_string())))
+            } else {
+                None
+            }
+        })
+        .collect::<HashMap<_, _>>();
 
     let rt = app_state
         .facts
@@ -130,32 +145,42 @@ async fn get_state_changes(
         .await
         .unwrap();
 
-    let m = HashMap::from([(
-        "Vals1".to_string(),
-        // subgoal_rt.to_goal(&named_values).unwrap().to_value_list(),
-        GoalTerm::Variable("Vals1".to_string()),
-    )]);
+    let m = HashMap::from([
+        ("Vals1".to_string(), GoalTerm::Variable("Vals1".to_string())),
+        ("Vals2".to_string(), GoalTerm::Variable("Vals2".to_string())),
+    ]);
     let step_change_goal = rt.to_goal(&m).unwrap();
-    dbg!(&step_change_goal);
+    // dbg!(&step_change_goal);
 
     let binding_goal_rt =
-        Arc::new(RecordType::new_without_id_fields("=", &["Term3", "Term4"]).unwrap());
-    let binding_goal = binding_goal_rt
+        Arc::new(RecordType::new_with_display_name("=", "equal", &["Term3", "Term4"]).unwrap());
+    let binding_goal1 = Arc::clone(&binding_goal_rt)
         .to_goal(&HashMap::from([
             ("Term3".to_string(), GoalTerm::Variable("Vals1".to_string())),
             (
                 "Term4".to_string(),
                 Arc::clone(&subgoal_rt)
-                    .to_goal(&named_values)
+                    .to_goal(&named_values0)
                     .unwrap()
                     .to_data_value_list(),
             ),
         ]))
         .unwrap();
+    let binding_goal2 = Arc::clone(&binding_goal_rt)
+    .to_goal(&HashMap::from([
+        ("Term3".to_string(), GoalTerm::Variable("Vals2".to_string())),
+        (
+            "Term4".to_string(),
+            Arc::clone(&subgoal_rt)
+                .to_goal(&named_values1)
+                .unwrap()
+                .to_data_value_list(),
+        ),
+    ])).unwrap();
 
     let result = app_state
         .facts
-        .get_facts(step_change_goal.and(binding_goal), step_change_goal.type_)
+        .get_facts(step_change_goal.and(binding_goal1).and(binding_goal2), step_change_goal.type_)
         .await
         .unwrap();
 
@@ -174,8 +199,6 @@ use models::fact::RecordType;
 
 // #[debug_handler]
 async fn create_fact(State(_state): State<AppState>, Json(cf): Json<CreateFact>) -> String {
-    dbg!(cf.clone());
-
     // let rt = Arc::new(RecordType::new("edge", &["X", "Y"]).unwrap());
     // let fact = rt
     //     .to_fact(&HashMap::from([("X", "3"), ("Y", "5")]))

@@ -7,6 +7,8 @@ use std::fmt::Formatter;
 use std::str::FromStr;
 use std::{clone::Clone, collections::HashMap, sync::Arc};
 
+use crate::utils::tracking::IdContext;
+
 // #[derive(PartialEq, Debug)]
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum RecordTypeError {
@@ -16,12 +18,18 @@ pub enum RecordTypeError {
     UngroundedValues(Vec<String>),
     #[error("field names not starting with uppercase ASCII: {}", .0.join(", "))]
     InvalidFieldNames(Vec<String>),
+    #[error("missing goal name")]
+    MissingGoalName,
+    #[error("empty goal")]
+    EmptyGoal,
 }
 
-// TODO JCJ: need id and data fields
+// TODO JCJ: split to LmRecordType, which would wrap RecordType and add IdCtx
 #[derive(Clone, Debug, PartialEq)]
 pub struct RecordType {
+    id_ctx: IdContext,
     pub name: String,
+    pub display_name: String,
     pub id_fields: Vec<String>,
     pub data_fields: Vec<String>,
     pub metadata_fields: Vec<String>,
@@ -46,12 +54,24 @@ impl RecordType {
             Err(RecordTypeError::InvalidFieldNames(invalid))
         } else {
             Ok(RecordType {
+                id_ctx: IdContext::new(),
                 name: name.into(),
+                display_name: name.into(),
                 id_fields: id_fields.iter().cloned().map(Into::into).collect(),
                 data_fields: data_fields.iter().cloned().map(Into::into).collect(),
                 metadata_fields: metadata_fields.iter().cloned().map(Into::into).collect(),
             })
         }
+    }
+
+    pub fn new_with_display_name(
+        name: &str,
+        display_name: &str,
+        data_fields: &[&str],
+    ) -> Result<Self, RecordTypeError> {
+        let mut res = Self::new_without_id_fields(name, data_fields)?;
+        res.display_name = display_name.to_string();
+        Ok(res)
     }
 
     pub fn new_without_id_fields(
@@ -79,14 +99,23 @@ impl RecordType {
     //     }
     // }
 
+    fn get_term_id(&self, id_number: usize) -> String {
+        self.display_name.clone().to_uppercase() + &id_number.to_string()
+    }
+
+    fn get_var(&self, id_number: usize, var_name: &str) -> GoalTerm {
+        GoalTerm::LocalVariable(format!("X_{}_{}", self.get_term_id(id_number), var_name))
+    }
+
     pub fn to_most_general_goal(self: Arc<Self>) -> Goal {
+        let id_number = self.id_ctx.next_id();
         let values = self
             .clone()
             .all_fields()
             .iter()
-            .map(|f| GoalTerm::Variable(f.to_string()))
+            .map(|f| self.get_var(id_number, f))
             .collect::<Vec<_>>();
-        Goal::new(self, values)
+        Goal::new(self.id_ctx.next_id(), self, values)
     }
 
     pub fn to_goal(
@@ -103,45 +132,123 @@ impl RecordType {
             ));
         }
 
+        let id_num = self.id_ctx.next_id();
+
         let id_values = self
             .id_fields
             .iter()
-            .map(|field| GoalTerm::Variable(field.to_string()));
+            .map(|field| self.get_var(id_num, field));
 
         let complete_data_values = self.data_fields.iter().map(|field| {
             data_values
                 .get(field)
                 .cloned()
-                .unwrap_or(GoalTerm::Variable(field.to_string()))
+                .and_then(|gt| {
+                    dbg!(&gt);
+                    match gt {
+                        GoalTerm::LocalVariable(f) => Some(
+                            self.get_var(id_num, &f)
+                        ),
+                        GoalTerm::Variable(f) => Some(GoalTerm::Variable(
+                            format!("FINAL{}", f)
+                        )),
+                        _ => Some(gt),
+                    }
+                } 
+                    
+                    )
+                .unwrap_or(self.get_var(id_num, field))
         });
 
         let metadata_values = self
             .id_fields
             .iter()
-            .map(|field| GoalTerm::Variable(field.to_string()));
+            .map(|field| self.get_var(id_num, field));
 
         let all_values = id_values
             .chain(complete_data_values)
             .chain(metadata_values)
             .collect::<Vec<_>>();
 
-        let g = Goal::new(self, all_values);
+        let g = Goal::new(id_num, self, all_values);
         Ok(g)
+    }
+
+    fn change_prefix<T: Clone>(
+        map: &HashMap<String, T>,
+        from_prefix: &str,
+        to_prefix: &str,
+    ) -> HashMap<String, T> {
+        map.iter()
+            .map(|(key, value)| {
+                if key.starts_with(from_prefix) {
+                    let new_key = format!("{}{}", to_prefix, &key[from_prefix.len()..]);
+                    (new_key, value.clone())
+                } else {
+                    (key.clone(), value.clone())
+                }
+            })
+            .collect()
+    }
+
+    fn filter_by_prefix<T: Clone>(map: &HashMap<String, T>, prefix: &str) -> HashMap<String, T> {
+        map.iter()
+            .filter(|(key, _)| key.starts_with(prefix))
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect()
+    }
+
+    fn find_common_prefix<T>(map_pre: &HashMap<String, T>) -> Result<String, RecordTypeError> {
+        let mut iter = map_pre.keys();
+        let first_key = iter.next().ok_or(RecordTypeError::EmptyGoal)?;
+
+        let common_prefix = iter.fold(first_key.clone(), |acc, key| {
+            acc.chars()
+                .zip(key.chars())
+                .take_while(|(a, b)| a == b)
+                .map(|(c, _)| c)
+                .collect()
+        });
+
+        if common_prefix.is_empty() {
+            Err(RecordTypeError::MissingGoalName)
+        } else {
+            Ok(common_prefix)
+        }
+    }
+
+    fn strip_common_prefix<T: Clone>(
+        common_prefix: String,
+        map: &HashMap<String, T>,
+    ) -> HashMap<String, T> {
+        map.iter()
+            .map(|(key, value)| (key[common_prefix.len()..].to_string(), value.clone()))
+            .collect()
     }
 
     pub fn to_fact(
         self: Arc<Self>,
         all_values: &HashMap<String, FactTerm>,
     ) -> Result<Fact, RecordTypeError> {
-        // let mut unknown_values = data_values
-        //     .keys()
-        //     .filter(|&a| !self.data_fields.contains(&a.to_owned()))
-        //     .peekable();
-        // if unknown_values.peek().is_some() {
-        //     return Err(RecordTypeError::UnknownFieldNames(
-        //         unknown_values.into_iter().cloned().collect::<Vec<_>>(),
-        //     ));
-        // }
+        dbg!(&self);
+        dbg!(&all_values);
+        // TODO: instead of finding and stripping the common prefix,
+        // we should compute the prefix from the recordtype
+        // find mapped_values that start with that prefix,
+        // then strip the common prefix among those mapped values
+
+        let name = "X_".to_string() + &self.display_name.clone().to_uppercase();
+
+        let final_values = Self::change_prefix(&Self::filter_by_prefix(all_values, "FINAL"), "FINAL", "");
+
+        let filtered = Self::filter_by_prefix(all_values, &name);
+
+        let id_number = self.id_ctx.next_id();
+
+        let goal_id = Self::find_common_prefix(&filtered)?;
+        let stripped = Self::strip_common_prefix(goal_id, &filtered);
+        let stripped = stripped.into_iter().chain(final_values).collect::<HashMap<_, _>>();
+        dbg!(&stripped);
 
         struct UngroundedValue(String);
         let mut ungrounded = Vec::new();
@@ -149,7 +256,7 @@ impl RecordType {
             .all_fields()
             .iter()
             .map(|field| {
-                all_values
+                stripped
                     .get(field)
                     .cloned()
                     .ok_or(UngroundedValue(field.to_string()))
@@ -161,7 +268,7 @@ impl RecordType {
             return Err(RecordTypeError::UngroundedValues(ungrounded));
         }
 
-        Ok(Fact::new(self, complete_values))
+        Ok(Fact::new(id_number, self, complete_values))
     }
 }
 
@@ -170,12 +277,14 @@ impl RecordType {
 /// Values that are not grounded are to be left as a Term::Variable.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Goal {
+    pub id: String,
     pub type_: Arc<RecordType>,
     pub values: Vec<GoalTerm>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum GoalTerm {
+    LocalVariable(String),
     Variable(String),
     String(String),
     List(Vec<GoalTerm>),
@@ -183,8 +292,9 @@ pub enum GoalTerm {
 }
 
 impl Goal {
-    pub fn new(type_: Arc<RecordType>, values: Vec<GoalTerm>) -> Self {
+    fn new(id_number: usize, type_: Arc<RecordType>, values: Vec<GoalTerm>) -> Self {
         Goal {
+            id: Arc::clone(&type_).get_term_id(id_number),
             type_: Arc::clone(&type_),
             values,
         }
@@ -220,14 +330,17 @@ impl Goal {
 
     pub fn and(&self, goal2: Goal) -> Goal {
         let conjunction =
-            Arc::new(RecordType::new_without_id_fields(",", &["Term1", "Term2"]).unwrap());
+            Arc::new(RecordType::new_with_display_name(",", "comma", &["Term1", "Term2"]).unwrap());
 
-        conjunction
+        let res = conjunction
             .to_goal(&HashMap::from([
                 ("Term1".to_string(), GoalTerm::SubTerm(self.clone())),
                 ("Term2".to_string(), GoalTerm::SubTerm(goal2)),
             ]))
-            .unwrap()
+            .unwrap();
+
+        dbg!(&res);
+        res
     }
 }
 
@@ -250,7 +363,9 @@ impl fmt::Display for Goal {
 impl fmt::Display for GoalTerm {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            GoalTerm::Variable(var_name) => write!(f, "{}", var_name),
+            GoalTerm::LocalVariable(var_name) | GoalTerm::Variable(var_name) => {
+                write!(f, "{}", var_name)
+            }
             GoalTerm::String(s) => write!(f, "\"{}\"", s),
             GoalTerm::List(ss) => write!(
                 f,
@@ -267,13 +382,14 @@ impl fmt::Display for GoalTerm {
 
 /// A Fact is a compound term which has all its values grounded.
 /// It is meant to be asserted to or by the logic machine
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Fact {
+    id: String,
     type_: Arc<RecordType>,
     values: Vec<FactTerm>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum FactTerm {
     String(String),
     Integer(i32),
@@ -283,8 +399,9 @@ pub enum FactTerm {
 }
 
 impl Fact {
-    pub fn new(type_: Arc<RecordType>, values: Vec<FactTerm>) -> Self {
+    pub fn new(id_number: usize, type_: Arc<RecordType>, values: Vec<FactTerm>) -> Self {
         Fact {
+            id: Arc::clone(&type_).get_term_id(id_number),
             type_: Arc::clone(&type_),
             values,
         }
@@ -387,29 +504,32 @@ impl FromStr for FactTerm {
                 if s[type_name_start + 1 + type_name_end + 1..].starts_with("(") && s.ends_with(")")
                 {
                     let inner = &s[type_name_start + 1 + type_name_end + 1 + 1..s.len() - 1];
-
-                    dbg!(&inner);
-
                     let inner_terms = inner
                         .split(",")
                         .into_iter()
                         .map(|t| t.trim().parse::<FactTerm>())
                         .collect::<Result<Vec<_>, ParseFactTermError>>();
 
-                    dbg!(&inner_terms);
-
                     return inner_terms.and_then(|terms| {
                         let fields = (0..terms.len() - 1)
                             .map(|i| format!("{}_{}", type_name.to_uppercase(), i.to_string()))
                             .collect::<Vec<_>>();
 
-                        let rt = RecordType::new_without_id_fields(
-                            type_name,
-                            &fields.iter().map(|f| f.as_str()).collect::<Vec<_>>(),
-                        )
-                        .unwrap();
+                        let rt = Arc::new(
+                            RecordType::new_without_id_fields(
+                                type_name,
+                                &fields.iter().map(|f| f.as_str()).collect::<Vec<_>>(),
+                            )
+                            .unwrap(),
+                        );
 
-                        Ok(FactTerm::SubTerm(Fact::new(Arc::new(rt), terms)))
+                        let id_number = rt.id_ctx.next_id();
+
+                        Ok(FactTerm::SubTerm(Fact::new(
+                            id_number,
+                            Arc::clone(&rt),
+                            terms,
+                        )))
                     });
                 }
             }
@@ -502,9 +622,7 @@ impl LogicMachine {
             .run_query(format!(r#"{}."#, g.to_string()))
             .map_err(LogicMachineError::PrologError)?;
 
-        let a = Self::parse_to_facts(qr, Arc::clone(&target_rt));
-        dbg!(&a);
-        a
+        Self::parse_to_facts(qr, Arc::clone(&target_rt))
     }
 }
 
@@ -596,10 +714,10 @@ mod tests {
             .to_goal(&HashMap::from([(
                 "Vals1".to_string(),
                 GoalTerm::List(vec![
-                    GoalTerm::Variable("DimIdRef".to_string()),
+                    GoalTerm::LocalVariable("DimIdRef".to_string()),
                     GoalTerm::String("JH00000001".to_string()).into(),
-                    GoalTerm::Variable("BegPeriod".to_string()),
-                    GoalTerm::Variable("EndPeriod".to_string()),
+                    GoalTerm::LocalVariable("BegPeriod".to_string()),
+                    GoalTerm::LocalVariable("EndPeriod".to_string()),
                 ])
                 .into(),
             )]))
