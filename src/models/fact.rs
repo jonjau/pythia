@@ -24,7 +24,6 @@ pub enum RecordTypeError {
     EmptyGoal,
 }
 
-// TODO JCJ: split to LmRecordType, which would wrap RecordType and add IdCtx
 #[derive(Clone, Debug, PartialEq)]
 pub struct RecordType {
     id_ctx: IdContext,
@@ -90,21 +89,12 @@ impl RecordType {
             .collect()
     }
 
-    // pub fn to_data_record_type(self: Arc<Self>) -> RecordType {
-    //     RecordType {
-    //         name: Arc::clone(&self).name.clone() + "_data",
-    //         id_fields: Vec::new(),
-    //         data_fields: self.data_fields.clone(),
-    //         metadata_fields: Vec::new()
-    //     }
-    // }
-
     fn get_term_id(&self, id_number: usize) -> String {
         self.display_name.clone().to_uppercase() + &id_number.to_string()
     }
 
     fn get_var(&self, id_number: usize, var_name: &str) -> GoalTerm {
-        GoalTerm::LocalVariable(format!("X_{}_{}", self.get_term_id(id_number), var_name))
+        GoalTerm::LocalVariable(format!("{}_{}", self.get_term_id(id_number), var_name))
     }
 
     pub fn to_most_general_goal(self: Arc<Self>) -> Goal {
@@ -144,7 +134,6 @@ impl RecordType {
                 .get(field)
                 .cloned()
                 .and_then(|gt| {
-                    dbg!(&gt);
                     match gt {
                         GoalTerm::LocalVariable(f) => Some(
                             self.get_var(id_num, &f)
@@ -230,14 +219,12 @@ impl RecordType {
         self: Arc<Self>,
         all_values: &HashMap<String, FactTerm>,
     ) -> Result<Fact, RecordTypeError> {
-        dbg!(&self);
-        dbg!(&all_values);
         // TODO: instead of finding and stripping the common prefix,
         // we should compute the prefix from the recordtype
         // find mapped_values that start with that prefix,
         // then strip the common prefix among those mapped values
 
-        let name = "X_".to_string() + &self.display_name.clone().to_uppercase();
+        let name = &self.display_name.clone().to_uppercase();
 
         let final_values = Self::change_prefix(&Self::filter_by_prefix(all_values, "FINAL"), "FINAL", "");
 
@@ -248,7 +235,6 @@ impl RecordType {
         let goal_id = Self::find_common_prefix(&filtered)?;
         let stripped = Self::strip_common_prefix(goal_id, &filtered);
         let stripped = stripped.into_iter().chain(final_values).collect::<HashMap<_, _>>();
-        dbg!(&stripped);
 
         struct UngroundedValue(String);
         let mut ungrounded = Vec::new();
@@ -282,6 +268,7 @@ pub struct Goal {
     pub values: Vec<GoalTerm>,
 }
 
+/// a LocalVariable is local to the goal it is for
 #[derive(Clone, Debug, PartialEq)]
 pub enum GoalTerm {
     LocalVariable(String),
@@ -339,7 +326,6 @@ impl Goal {
             ]))
             .unwrap();
 
-        dbg!(&res);
         res
     }
 }
@@ -571,13 +557,10 @@ impl LogicMachine {
             QueryResolution::Matches(m) => Ok(m
                 .iter()
                 .map(|QueryMatch { bindings: b }| {
-                    dbg!(&b);
-
                     let map = b
                         .into_iter()
                         .map(|(k, v)| {
                             let to_parse = prolog_value_to_json_string(v.clone());
-                            dbg!(&to_parse);
                             (k.clone(), to_parse.parse::<FactTerm>().unwrap())
                         })
                         .collect::<HashMap<_, _>>();
@@ -616,7 +599,6 @@ impl LogicMachine {
     }
 
     pub fn fetch(&mut self, g: Goal, target_rt: Arc<RecordType>) -> LogicMachineResult {
-        dbg!(g.to_string());
         let qr = self
             .machine
             .run_query(format!(r#"{}."#, g.to_string()))
@@ -671,7 +653,6 @@ mod tests {
         // );
         // let a = lm.fetch_all(Arc::clone(&edge));
 
-        // dbg!(&a);
     }
 
     #[test]
@@ -735,7 +716,6 @@ mod tests {
 
         // let res = lm.fetch(g);
 
-        // dbg!(&res);
     }
 
     #[test]

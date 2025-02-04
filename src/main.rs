@@ -49,6 +49,14 @@ async fn main() {
             "/start-state/:fact_type/:field_name/specified",
             delete(set_to_unspecified),
         )
+        .route(
+            "/end-state/:fact_type/:field_name/specified",
+            post(set_to_specified_end),
+        )
+        .route(
+            "/end-state/:fact_type/:field_name/specified",
+            delete(set_to_unspecified_end),
+        )
         .with_state(state);
 
     // run our app with hyper, listening globally on port 3000
@@ -138,6 +146,7 @@ async fn get_state_changes(
             }
         })
         .collect::<HashMap<_, _>>();
+    dbg!(&named_values1);
 
     let rt = app_state
         .facts
@@ -150,7 +159,7 @@ async fn get_state_changes(
         ("Vals2".to_string(), GoalTerm::Variable("Vals2".to_string())),
     ]);
     let step_change_goal = rt.to_goal(&m).unwrap();
-    // dbg!(&step_change_goal);
+    dbg!(&step_change_goal);
 
     let binding_goal_rt =
         Arc::new(RecordType::new_with_display_name("=", "equal", &["Term3", "Term4"]).unwrap());
@@ -261,6 +270,39 @@ async fn set_to_unspecified(
     Path((fact_type, field_name)): Path<(String, String)>,
 ) -> SetFieldToUnspecifiedTemplate {
     SetFieldToUnspecifiedTemplate {
+        fact_type,
+        field: field_name,
+    }
+}
+
+
+#[derive(Template)]
+#[template(path = "set-end-state-field-to-specified.html", ext = "html")]
+struct SetEndStateFieldToSpecifiedTemplate {
+    fact_type: String,
+    field: String,
+}
+
+async fn set_to_specified_end(
+    Path((fact_type, field_name)): Path<(String, String)>,
+) -> SetEndStateFieldToSpecifiedTemplate {
+    SetEndStateFieldToSpecifiedTemplate {
+        fact_type,
+        field: field_name,
+    }
+}
+
+#[derive(Template)]
+#[template(path = "set-end-state-field-to-unspecified.html", ext = "html")]
+struct SetEndStateFieldToUnspecifiedTemplate {
+    fact_type: String,
+    field: String,
+}
+
+async fn set_to_unspecified_end(
+    Path((fact_type, field_name)): Path<(String, String)>,
+) -> SetEndStateFieldToUnspecifiedTemplate {
+    SetEndStateFieldToUnspecifiedTemplate {
         fact_type,
         field: field_name,
     }
