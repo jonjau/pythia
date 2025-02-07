@@ -14,7 +14,7 @@ mod models;
 mod services;
 mod utils;
 
-use models::fact::GoalTerm;
+use models::fact::{GoalTerm, RecordTypeBuilder};
 use services::{fact::FactService, state_change::StateChangeService};
 
 #[derive(Clone)]
@@ -162,12 +162,12 @@ async fn get_state_changes(
     dbg!(&step_change_goal);
 
     let binding_goal_rt =
-        Arc::new(RecordType::new_with_display_name("=", "equal", &["Term3", "Term4"]).unwrap());
+        Arc::new(RecordTypeBuilder::new("=", vec!["A", "B"]).display_name("equal").build().unwrap());
     let binding_goal1 = Arc::clone(&binding_goal_rt)
         .to_goal(&HashMap::from([
-            ("Term3".to_string(), GoalTerm::Variable("Vals1".to_string())),
+            ("A".to_string(), GoalTerm::Variable("Vals1".to_string())),
             (
-                "Term4".to_string(),
+                "B".to_string(),
                 Arc::clone(&subgoal_rt)
                     .to_goal(&named_values0)
                     .unwrap()
@@ -177,9 +177,9 @@ async fn get_state_changes(
         .unwrap();
     let binding_goal2 = Arc::clone(&binding_goal_rt)
     .to_goal(&HashMap::from([
-        ("Term3".to_string(), GoalTerm::Variable("Vals2".to_string())),
+        ("A".to_string(), GoalTerm::Variable("Vals2".to_string())),
         (
-            "Term4".to_string(),
+            "B".to_string(),
             Arc::clone(&subgoal_rt)
                 .to_goal(&named_values1)
                 .unwrap()
@@ -204,8 +204,6 @@ struct CreateFact {
     values: Vec<String>,
 }
 
-use models::fact::RecordType;
-
 // #[debug_handler]
 async fn create_fact(State(_state): State<AppState>, Json(cf): Json<CreateFact>) -> String {
     // let rt = Arc::new(RecordType::new("edge", &["X", "Y"]).unwrap());
@@ -213,17 +211,17 @@ async fn create_fact(State(_state): State<AppState>, Json(cf): Json<CreateFact>)
     //     .to_fact(&HashMap::from([("X", "3"), ("Y", "5")]))
     //     .unwrap();
 
-    let fields_temp = (0..cf.values.len())
-        .map(|i| format!("X{}", i))
-        .collect::<Vec<_>>();
-    let fields = fields_temp.iter().map(String::as_ref).collect::<Vec<_>>();
-    let _rt0 = Arc::new(RecordType::new_without_id_fields(&cf.typename, &fields).unwrap());
+    // let fields_temp = (0..cf.values.len())
+    //     .map(|i| format!("X{}", i))
+    //     .collect::<Vec<_>>();
+    // let fields = fields_temp.iter().map(String::as_ref).collect::<Vec<_>>();
+    // let _rt0 = Arc::new(RecordTypeBuilder::new(&cf.typename, fields).build().unwrap());
 
-    let _mapped_values = fields
-        .iter()
-        .zip(cf.values.iter())
-        .map(|(&field, value)| (field, value.as_str()))
-        .collect::<HashMap<_, _>>();
+    // let _mapped_values = fields
+    //     .iter()
+    //     .zip(cf.values.iter())
+    //     .map(|(&field, value)| (field, value.as_str()))
+    //     .collect::<HashMap<_, _>>();
 
     "".to_string()
     // let fact = rt0.to_fact(&mapped_values).unwrap();

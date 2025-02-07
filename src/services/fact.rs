@@ -1,7 +1,9 @@
 use std::sync::Arc;
 use std::vec;
 
-use crate::models::fact::{Fact, Goal, LogicMachineResult, RecordType, RecordTypeResult};
+use crate::models::fact::{
+    Fact, Goal, LogicMachineResult, RecordType, RecordTypeBuilder, RecordTypeResult,
+};
 use crate::models::{self};
 use models::fact::LogicMachine;
 
@@ -32,11 +34,7 @@ impl FactService {
             .await
     }
 
-    pub async fn get_facts(
-        &self,
-        goal: Goal,
-        target_rt: Arc<RecordType>
-    ) -> LogicMachineResult {
+    pub async fn get_facts(&self, goal: Goal, target_rt: Arc<RecordType>) -> LogicMachineResult {
         self.lm_actor
             .send_query(GetFactsQuery { goal, target_rt })
             .await
@@ -57,7 +55,7 @@ struct GetAllFactsQuery {
 
 struct GetFactsQuery {
     goal: Goal,
-    target_rt: Arc<RecordType>
+    target_rt: Arc<RecordType>,
 }
 
 struct GetRecordTypeQuery {
@@ -114,18 +112,25 @@ impl Actor {
     fn new(program: &str, receiver: mpsc::Receiver<ActorMessage>) -> Self {
         let mut lm = LogicMachine::new(program);
         lm.define_types(vec![
-            RecordType::new_without_id_fields("edge", &["X", "Y"]).unwrap(),
-            RecordType::new_without_id_fields("arc", &["X", "Y"]).unwrap(),
-            RecordType::new(
-                "dimlink",
-                &["Id"],
-                &["DimIdRef", "InvHeadRef", "BegPeriod", "EndPeriod"],
-                &["Context", "SysVersion", "RecType", "SeqNum"],
-            )
-            .unwrap(),
-            RecordType::new_without_id_fields("step_change", &["Ctx", "Id", "Vals1", "Vals2"])
+            RecordTypeBuilder::new("edge", vec!["X", "Y"])
+                .build()
                 .unwrap(),
-            RecordType::new_without_id_fields("leap_change", &["Ctx", "Id", "Vals1", "Vals2"])
+            RecordTypeBuilder::new("arc", vec!["X", "Y"])
+                .build()
+                .unwrap(),
+            RecordTypeBuilder::new(
+                "dimlink",
+                vec!["DimIdRef", "InvHeadRef", "BegPeriod", "EndPeriod"],
+            )
+            .id_fields(vec!["Id"])
+            .metadata_fields(vec!["Context", "SysVersion", "RecType", "SeqNum"])
+            .build()
+            .unwrap(),
+            RecordTypeBuilder::new("step_change", vec!["Ctx", "Id", "Vals1", "Vals2"])
+                .build()
+                .unwrap(),
+            RecordTypeBuilder::new("leap_change", vec!["Ctx", "Id", "Vals1", "Vals2"])
+                .build()
                 .unwrap(),
         ]);
 
