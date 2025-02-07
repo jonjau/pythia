@@ -9,7 +9,6 @@ use std::{clone::Clone, collections::HashMap, sync::Arc};
 
 use crate::utils::tracking::IdContext;
 
-// #[derive(PartialEq, Debug)]
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum RecordTypeError {
     #[error("unknown field names: {}", .0.join(", "))]
@@ -34,19 +33,51 @@ pub struct RecordType {
     pub metadata_fields: Vec<String>,
 }
 
-impl RecordType {
-    pub fn new(
-        name: &str,
-        id_fields: &[&str],
-        data_fields: &[&str],
-        metadata_fields: &[&str],
-    ) -> Result<Self, RecordTypeError> {
+pub struct RecordTypeBuilder {
+    name: String,
+    display_name: Option<String>,
+    id_fields: Option<Vec<String>>,
+    data_fields: Vec<String>,
+    metadata_fields: Option<Vec<String>>,
+}
+
+impl RecordTypeBuilder {
+    pub fn new(name: impl Into<String>, data_fields: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        Self {
+            name: name.into(),
+            display_name: None,
+            id_fields: None,
+            data_fields: data_fields.into_iter().map(Into::into).collect(),
+            metadata_fields: None,
+        }
+    }
+
+    pub fn display_name(mut self, display_name: impl Into<String>) -> Self {
+        self.display_name = Some(display_name.into());
+        self
+    }
+
+    pub fn id_fields(mut self, id_fields: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.id_fields = Some(id_fields.into_iter().map(Into::into).collect());
+        self
+    }
+
+    pub fn metadata_fields(mut self, metadata_fields: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.metadata_fields = Some(metadata_fields.into_iter().map(Into::into).collect());
+        self
+    }
+
+    pub fn build(self) -> Result<RecordType, RecordTypeError> {
+        let display_name = self.display_name.unwrap_or_else(|| self.name.clone());
+        let id_fields = self.id_fields.unwrap_or_default();
+        let metadata_fields = self.metadata_fields.unwrap_or_default();
+
         let invalid = id_fields
             .iter()
-            .chain(data_fields.iter())
+            .chain(self.data_fields.iter())
             .chain(metadata_fields.iter())
-            .filter(|&&field| !field.chars().next().is_some_and(|c| c.is_ascii_uppercase()))
-            .map(|&f| f.to_string())
+            .filter(|&field| !field.chars().next().is_some_and(|c| c.is_ascii_uppercase()))
+            .cloned()
             .collect::<Vec<_>>();
 
         if !invalid.is_empty() {
@@ -54,32 +85,17 @@ impl RecordType {
         } else {
             Ok(RecordType {
                 id_ctx: IdContext::new(),
-                name: name.into(),
-                display_name: name.into(),
-                id_fields: id_fields.iter().cloned().map(Into::into).collect(),
-                data_fields: data_fields.iter().cloned().map(Into::into).collect(),
-                metadata_fields: metadata_fields.iter().cloned().map(Into::into).collect(),
+                name: self.name,
+                display_name,
+                id_fields,
+                data_fields: self.data_fields,
+                metadata_fields,
             })
         }
     }
+}
 
-    pub fn new_with_display_name(
-        name: &str,
-        display_name: &str,
-        data_fields: &[&str],
-    ) -> Result<Self, RecordTypeError> {
-        let mut res = Self::new_without_id_fields(name, data_fields)?;
-        res.display_name = display_name.to_string();
-        Ok(res)
-    }
-
-    pub fn new_without_id_fields(
-        name: &str,
-        data_fields: &[&str],
-    ) -> Result<Self, RecordTypeError> {
-        Self::new(name, &[], data_fields, &[])
-    }
-
+impl RecordType {
     pub fn all_fields(self: Arc<Self>) -> Vec<String> {
         self.id_fields
             .iter()
@@ -317,7 +333,7 @@ impl Goal {
 
     pub fn and(&self, goal2: Goal) -> Goal {
         let conjunction =
-            Arc::new(RecordType::new_with_display_name(",", "comma", &["Term1", "Term2"]).unwrap());
+            Arc::new(RecordTypeBuilder::new(",", vec!["Term1", "Term2"]).display_name("comma").build().unwrap());
 
         let res = conjunction
             .to_goal(&HashMap::from([
@@ -502,10 +518,11 @@ impl FromStr for FactTerm {
                             .collect::<Vec<_>>();
 
                         let rt = Arc::new(
-                            RecordType::new_without_id_fields(
+                            RecordTypeBuilder::new(
                                 type_name,
-                                &fields.iter().map(|f| f.as_str()).collect::<Vec<_>>(),
+                                fields.iter().map(|f| f.as_str()).collect::<Vec<_>>(),
                             )
+                            .build()
                             .unwrap(),
                         );
 
@@ -610,8 +627,8 @@ impl LogicMachine {
 
 #[cfg(test)]
 mod tests {
-    use super::{LogicMachine, RecordType};
-    use crate::models::fact::{FactTerm, GoalTerm};
+    use super::{LogicMachine};
+    use crate::models::fact::{FactTerm, GoalTerm, RecordTypeBuilder};
     use std::collections::HashMap;
     use std::sync::Arc;
 
@@ -687,7 +704,8 @@ mod tests {
         ));
 
         let step_change = Arc::new(
-            RecordType::new_without_id_fields("step_change", &["Ctx", "Id", "Vals1", "Vals2"])
+            RecordTypeBuilder::new("step_change", vec!["Ctx", "Id", "Vals1", "Vals2"])
+                .build()
                 .unwrap(),
         );
 
