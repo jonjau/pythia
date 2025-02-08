@@ -22,9 +22,9 @@ impl FactService {
         }
     }
 
-    pub async fn get_record_type(&self, fact_type: String) -> RecordTypeResult {
+    pub async fn get_record_type(&self, fact_type: impl Into<String>) -> RecordTypeResult {
         self.lm_actor
-            .send_query(GetRecordTypeQuery { fact_type })
+            .send_query(GetRecordTypeQuery { fact_type: fact_type.into() })
             .await
     }
 
@@ -132,6 +132,7 @@ impl Actor {
             RecordTypeBuilder::new("leap_change", vec!["Ctx", "Id", "Vals1", "Vals2"])
                 .build()
                 .unwrap(),
+            RecordTypeBuilder::new("=", vec!["A", "B"]).display_name("equal").build().unwrap()
         ]);
 
         Actor { receiver, lm }
