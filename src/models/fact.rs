@@ -7,8 +7,6 @@ use std::fmt::Formatter;
 use std::str::FromStr;
 use std::{clone::Clone, collections::HashMap, sync::Arc};
 
-use uuid::Uuid;
-
 use crate::utils::tracking::IdContext;
 
 #[derive(thiserror::Error, Debug, PartialEq)]
@@ -253,8 +251,6 @@ impl RecordType {
 
         let name = &self.display_name.clone().to_uppercase();
 
-        // let (prefixed, unprefixed) = Self::split_by_prefix(all_values.clone(), &name);
-
         let final_values =
             Self::change_prefix(&Self::filter_by_prefix(all_values, "RT_"), "RT_", "");
 
@@ -326,15 +322,6 @@ impl Goal {
             .take(self.type_.clone().all_fields().len())
             .cloned()
             .collect::<Vec<_>>()
-    }
-
-    pub fn to_data_values(&self) -> HashMap<String, GoalTerm> {
-        self.type_
-            .data_fields
-            .iter()
-            .zip(self.values.iter())
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect::<HashMap<_, _>>()
     }
 
     pub fn to_data_value_list(&self) -> GoalTerm {
