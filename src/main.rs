@@ -118,13 +118,6 @@ async fn get_state_changes(
     State(app_state): State<AppState>,
     Query(states): Query<HashMap<String, String>>,
 ) -> FactsTable {
-    let fact_type = states.get("_fact_type").unwrap();
-    let subgoal_rt = app_state
-        .facts
-        .get_record_type(fact_type.to_string())
-        .await
-        .unwrap();
-
     let get_named_values = |prefix: &str| {
         states
             .iter()
@@ -135,61 +128,24 @@ async fn get_state_changes(
             })
             .collect::<HashMap<_, _>>()
     };
-
     let named_values0 = get_named_values("0.");
     let named_values1 = get_named_values("1.");
 
-    // TODO: start state and end state, get facts back
-
-    let rt = app_state
+    let fact_type = states.get("_fact_type").unwrap();
+    let subgoal_rt = app_state
         .facts
-        .get_record_type("step_change")
+        .get_record_type(fact_type.to_string())
         .await
         .unwrap();
 
-    let step_change_goal = rt
-        .to_goal_from_named_values(&[
-            ("Vals1".to_string(), GoalTerm::Variable("Vals1".to_string())), 
-            ("Vals2".to_string(), GoalTerm::Variable("Vals2".to_string())),
-        ].into())
-        .unwrap();
+    let facts = app_state
+        .state_changes
+        .get_step_changes(subgoal_rt, named_values0, named_values1)
+        .await;
 
-    let binding_goal_rt = app_state
-        .facts
-        .get_record_type("=".to_string())
-        .await
-        .unwrap();
-
-    let binding_goal1 = Arc::clone(&binding_goal_rt)
-        .to_goal(vec![
-            GoalTerm::Variable("Vals1".to_string()),
-            Arc::clone(&subgoal_rt)
-                .to_goal_from_named_values(&named_values0)
-                .unwrap()
-                .to_data_value_list(),
-        ])
-        .unwrap();
-    let binding_goal2 = Arc::clone(&binding_goal_rt)
-        .to_goal(vec![
-            GoalTerm::Variable("Vals2".to_string()),
-            Arc::clone(&subgoal_rt)
-                .to_goal_from_named_values(&named_values1)
-                .unwrap()
-                .to_data_value_list(),
-        ])
-        .unwrap();
-
-    let result = app_state
-        .facts
-        .get_facts(
-            step_change_goal.and(binding_goal1).and(binding_goal2),
-            step_change_goal.type_,
-        )
-        .await
-        .unwrap();
-
-    let facts = result.iter().map(|f| f.to_string()).collect::<Vec<_>>();
-    FactsTable { facts }
+    FactsTable {
+        facts: facts.iter().map(|f| f.to_string()).collect::<Vec<_>>(),
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
