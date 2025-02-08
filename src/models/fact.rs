@@ -7,6 +7,8 @@ use std::fmt::Formatter;
 use std::str::FromStr;
 use std::{clone::Clone, collections::HashMap, sync::Arc};
 
+use uuid::Uuid;
+
 use crate::utils::tracking::IdContext;
 
 #[derive(thiserror::Error, Debug, PartialEq)]
@@ -23,9 +25,10 @@ pub enum RecordTypeError {
     EmptyGoal,
 }
 
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct RecordType {
-    id_ctx: IdContext,
+    term_id_ctx: IdContext,
     pub name: String,
     pub display_name: String,
     pub id_fields: Vec<String>,
@@ -42,7 +45,10 @@ pub struct RecordTypeBuilder {
 }
 
 impl RecordTypeBuilder {
-    pub fn new(name: impl Into<String>, data_fields: impl IntoIterator<Item = impl Into<String>>) -> Self {
+    pub fn new(
+        name: impl Into<String>,
+        data_fields: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
         Self {
             name: name.into(),
             display_name: None,
@@ -62,7 +68,10 @@ impl RecordTypeBuilder {
         self
     }
 
-    pub fn metadata_fields(mut self, metadata_fields: impl IntoIterator<Item = impl Into<String>>) -> Self {
+    pub fn metadata_fields(
+        mut self,
+        metadata_fields: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
         self.metadata_fields = Some(metadata_fields.into_iter().map(Into::into).collect());
         self
     }
@@ -84,7 +93,7 @@ impl RecordTypeBuilder {
             Err(RecordTypeError::InvalidFieldNames(invalid))
         } else {
             Ok(RecordType {
-                id_ctx: IdContext::new(),
+                term_id_ctx: IdContext::new(),
                 name: self.name,
                 display_name,
                 id_fields,
@@ -109,19 +118,19 @@ impl RecordType {
         self.display_name.clone().to_uppercase() + &id_number.to_string()
     }
 
-    fn get_var(&self, id_number: usize, var_name: &str) -> GoalTerm {
-        GoalTerm::LocalVariable(format!("{}_{}", self.get_term_id(id_number), var_name))
+    fn get_local_var(&self, id_number: usize, var_name: &str) -> GoalTerm {
+        GoalTerm::Variable(format!("{}_{}", self.get_term_id(id_number), var_name))
     }
 
     pub fn to_most_general_goal(self: Arc<Self>) -> Goal {
-        let id_number = self.id_ctx.next_id();
+        let id_number = self.term_id_ctx.next_id();
         let values = self
             .clone()
             .all_fields()
             .iter()
-            .map(|f| self.get_var(id_number, f))
+            .map(|f| self.get_local_var(id_number, f))
             .collect::<Vec<_>>();
-        Goal::new(self.id_ctx.next_id(), self, values)
+        Goal::new(self.term_id_ctx.next_id(), self, values)
     }
 
     pub fn to_goal(
@@ -138,37 +147,30 @@ impl RecordType {
             ));
         }
 
-        let id_num = self.id_ctx.next_id();
+        let id_num = self.term_id_ctx.next_id();
 
         let id_values = self
             .id_fields
             .iter()
-            .map(|field| self.get_var(id_num, field));
+            .map(|field| self.get_local_var(id_num, field));
 
         let complete_data_values = self.data_fields.iter().map(|field| {
             data_values
                 .get(field)
                 .cloned()
-                .and_then(|gt| {
-                    match gt {
-                        GoalTerm::LocalVariable(f) => Some(
-                            self.get_var(id_num, &f)
-                        ),
-                        GoalTerm::Variable(f) => Some(GoalTerm::Variable(
-                            format!("FINAL{}", f)
-                        )),
-                        _ => Some(gt),
-                    }
-                } 
-                    
-                    )
-                .unwrap_or(self.get_var(id_num, field))
+                .and_then(|gt| match gt {
+                    // TODO: the "RT_" should involve some sort of constant (i.e. UUID) scoped to the LM
+                    // need to change how we create/fetch RTs so that they all know the same LM's ID
+                    GoalTerm::Variable(f) => Some(GoalTerm::Variable(format!("RT_{}", f))),
+                    _ => Some(gt),
+                })
+                .unwrap_or(self.get_local_var(id_num, field))
         });
 
         let metadata_values = self
             .id_fields
             .iter()
-            .map(|field| self.get_var(id_num, field));
+            .map(|field| self.get_local_var(id_num, field));
 
         let all_values = id_values
             .chain(complete_data_values)
@@ -231,6 +233,13 @@ impl RecordType {
             .collect()
     }
 
+    // fn split_by_prefix<T>(
+    //     input: HashMap<String, T>, 
+    //     prefix: &str
+    // ) -> (HashMap<String, T>, HashMap<String, T>) {
+    //     input.into_iter().partition(|(key, _)| key.starts_with(prefix))
+    // }
+
     pub fn to_fact(
         self: Arc<Self>,
         all_values: &HashMap<String, FactTerm>,
@@ -242,15 +251,21 @@ impl RecordType {
 
         let name = &self.display_name.clone().to_uppercase();
 
-        let final_values = Self::change_prefix(&Self::filter_by_prefix(all_values, "FINAL"), "FINAL", "");
+        // let (prefixed, unprefixed) = Self::split_by_prefix(all_values.clone(), &name);
+
+        let final_values =
+            Self::change_prefix(&Self::filter_by_prefix(all_values, "RT_"), "RT_", "");
 
         let filtered = Self::filter_by_prefix(all_values, &name);
 
-        let id_number = self.id_ctx.next_id();
+        let id_number = self.term_id_ctx.next_id();
 
         let goal_id = Self::find_common_prefix(&filtered)?;
         let stripped = Self::strip_common_prefix(goal_id, &filtered);
-        let stripped = stripped.into_iter().chain(final_values).collect::<HashMap<_, _>>();
+        let stripped = stripped
+            .into_iter()
+            .chain(final_values)
+            .collect::<HashMap<_, _>>();
 
         struct UngroundedValue(String);
         let mut ungrounded = Vec::new();
@@ -285,9 +300,9 @@ pub struct Goal {
 }
 
 /// a LocalVariable is local to the goal it is for
+/// TODO: Variable can be scoped to the query or a particular goal that comprises it
 #[derive(Clone, Debug, PartialEq)]
 pub enum GoalTerm {
-    LocalVariable(String),
     Variable(String),
     String(String),
     List(Vec<GoalTerm>),
@@ -332,8 +347,12 @@ impl Goal {
     }
 
     pub fn and(&self, goal2: Goal) -> Goal {
-        let conjunction =
-            Arc::new(RecordTypeBuilder::new(",", vec!["Term1", "Term2"]).display_name("comma").build().unwrap());
+        let conjunction = Arc::new(
+            RecordTypeBuilder::new(",", vec!["Term1", "Term2"])
+                .display_name("comma")
+                .build()
+                .unwrap(),
+        );
 
         let res = conjunction
             .to_goal(&HashMap::from([
@@ -365,7 +384,7 @@ impl fmt::Display for Goal {
 impl fmt::Display for GoalTerm {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            GoalTerm::LocalVariable(var_name) | GoalTerm::Variable(var_name) => {
+            GoalTerm::Variable(var_name) => {
                 write!(f, "{}", var_name)
             }
             GoalTerm::String(s) => write!(f, "\"{}\"", s),
@@ -526,7 +545,7 @@ impl FromStr for FactTerm {
                             .unwrap(),
                         );
 
-                        let id_number = rt.id_ctx.next_id();
+                        let id_number = rt.term_id_ctx.next_id();
 
                         Ok(FactTerm::SubTerm(Fact::new(
                             id_number,
@@ -627,7 +646,7 @@ impl LogicMachine {
 
 #[cfg(test)]
 mod tests {
-    use super::{LogicMachine};
+    use super::LogicMachine;
     use crate::models::fact::{FactTerm, GoalTerm, RecordTypeBuilder};
     use std::collections::HashMap;
     use std::sync::Arc;
@@ -669,7 +688,6 @@ mod tests {
         //         .unwrap(),
         // );
         // let a = lm.fetch_all(Arc::clone(&edge));
-
     }
 
     #[test]
@@ -713,10 +731,10 @@ mod tests {
             .to_goal(&HashMap::from([(
                 "Vals1".to_string(),
                 GoalTerm::List(vec![
-                    GoalTerm::LocalVariable("DimIdRef".to_string()),
+                    // GoalTerm::LocalVariable("DimIdRef".to_string()),
                     GoalTerm::String("JH00000001".to_string()).into(),
-                    GoalTerm::LocalVariable("BegPeriod".to_string()),
-                    GoalTerm::LocalVariable("EndPeriod".to_string()),
+                    // GoalTerm::LocalVariable("BegPeriod".to_string()),
+                    // GoalTerm::LocalVariable("EndPeriod".to_string()),
                 ])
                 .into(),
             )]))
@@ -733,7 +751,6 @@ mod tests {
         dbg!(&res);
 
         // let res = lm.fetch(g);
-
     }
 
     #[test]
