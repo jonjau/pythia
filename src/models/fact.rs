@@ -25,7 +25,6 @@ pub enum RecordTypeError {
     EmptyGoal,
 }
 
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct RecordType {
     term_id_ctx: IdContext,
@@ -133,7 +132,17 @@ impl RecordType {
         Goal::new(self.term_id_ctx.next_id(), self, values)
     }
 
-    pub fn to_goal(
+    pub fn to_goal(self: Arc<Self>, data_values: Vec<GoalTerm>) -> Result<Goal, RecordTypeError> {
+        Arc::clone(&self).to_goal_from_named_values(
+            &Arc::clone(&self).data_fields
+                .iter()
+                .zip(data_values)
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect::<HashMap<_, _>>()
+        )
+    }
+
+    pub fn to_goal_from_named_values(
         self: Arc<Self>,
         data_values: &HashMap<String, GoalTerm>,
     ) -> Result<Goal, RecordTypeError> {
@@ -232,13 +241,6 @@ impl RecordType {
             .map(|(key, value)| (key[common_prefix.len()..].to_string(), value.clone()))
             .collect()
     }
-
-    // fn split_by_prefix<T>(
-    //     input: HashMap<String, T>, 
-    //     prefix: &str
-    // ) -> (HashMap<String, T>, HashMap<String, T>) {
-    //     input.into_iter().partition(|(key, _)| key.starts_with(prefix))
-    // }
 
     pub fn to_fact(
         self: Arc<Self>,
@@ -355,7 +357,7 @@ impl Goal {
         );
 
         let res = conjunction
-            .to_goal(&HashMap::from([
+            .to_goal_from_named_values(&HashMap::from([
                 ("Term1".to_string(), GoalTerm::SubTerm(self.clone())),
                 ("Term2".to_string(), GoalTerm::SubTerm(goal2)),
             ]))
@@ -728,7 +730,7 @@ mod tests {
         );
 
         let g = step_change
-            .to_goal(&HashMap::from([(
+            .to_goal_from_named_values(&HashMap::from([(
                 "Vals1".to_string(),
                 GoalTerm::List(vec![
                     // GoalTerm::LocalVariable("DimIdRef".to_string()),
