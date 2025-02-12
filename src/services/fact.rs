@@ -129,10 +129,11 @@ impl Actor {
             RecordTypeBuilder::new("step_change", vec!["Ctx", "Id", "Vals1", "Vals2"])
                 .build()
                 .unwrap(),
-            RecordTypeBuilder::new("leap_change", vec!["Ctx", "Id", "Vals1", "Vals2"])
+            RecordTypeBuilder::new("leap_change", vec!["Ctx", "Id", "Vals1", "Vals2", "Steps"])
                 .build()
                 .unwrap(),
-            RecordTypeBuilder::new("=", vec!["A", "B"]).display_name("equal").build().unwrap()
+            RecordTypeBuilder::new("=", vec!["A", "B"]).display_name("equal").build().unwrap(),
+            RecordTypeBuilder::new("length", vec!["X", "Length"]).build().unwrap()
         ]);
 
         Actor { receiver, lm }

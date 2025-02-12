@@ -1,4 +1,14 @@
 use core::fmt;
+use nom::{
+    branch::alt,
+    bytes::complete::{escaped, tag},
+    character::complete::{char, digit1, multispace0, none_of, one_of},
+    combinator::{map, map_res, recognize},
+    error::ParseError,
+    multi::separated_list0,
+    sequence::{delimited, separated_pair, tuple},
+    IResult, Parser,
+};
 use scryer_prolog::machine::parsed_results::{
     prolog_value_to_json_string, QueryMatch, QueryResolution,
 };
@@ -132,11 +142,12 @@ impl RecordType {
 
     pub fn to_goal(self: Arc<Self>, data_values: Vec<GoalTerm>) -> Result<Goal, RecordTypeError> {
         Arc::clone(&self).to_goal_from_named_values(
-            &Arc::clone(&self).data_fields
+            &Arc::clone(&self)
+                .data_fields
                 .iter()
                 .zip(data_values)
                 .map(|(k, v)| (k.clone(), v.clone()))
-                .collect::<HashMap<_, _>>()
+                .collect::<HashMap<_, _>>(),
         )
     }
 
@@ -303,6 +314,7 @@ pub struct Goal {
 pub enum GoalTerm {
     Variable(String),
     String(String),
+    Integer(i32),
     List(Vec<GoalTerm>),
     SubTerm(Goal),
 }
@@ -335,7 +347,7 @@ impl Goal {
         )
     }
 
-    pub fn and(&self, goal2: Goal) -> Goal {
+    pub fn and(self, goal2: Goal) -> Goal {
         let conjunction = Arc::new(
             RecordTypeBuilder::new(",", vec!["Term1", "Term2"])
                 .display_name("comma")
@@ -345,7 +357,7 @@ impl Goal {
 
         let res = conjunction
             .to_goal_from_named_values(&HashMap::from([
-                ("Term1".to_string(), GoalTerm::SubTerm(self.clone())),
+                ("Term1".to_string(), GoalTerm::SubTerm(self)),
                 ("Term2".to_string(), GoalTerm::SubTerm(goal2)),
             ]))
             .unwrap();
@@ -377,6 +389,7 @@ impl fmt::Display for GoalTerm {
                 write!(f, "{}", var_name)
             }
             GoalTerm::String(s) => write!(f, "\"{}\"", s),
+            GoalTerm::Integer(i) => write!(f, "{}", i),
             GoalTerm::List(ss) => write!(
                 f,
                 "[{}]",
@@ -436,6 +449,19 @@ impl Fact {
     pub fn type_name(&self) -> String {
         self.type_.name.clone()
     }
+
+    fn to_data_values(&self) -> HashMap<String, FactTerm> {
+        self.type_
+            .data_fields
+            .iter()
+            .zip(self.values.iter())
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect::<HashMap<_, _>>()
+    }
+
+    pub fn get(&self, field: &str) -> Option<FactTerm> {
+        self.to_data_values().get(field).cloned()
+    }
 }
 
 impl fmt::Display for Fact {
@@ -473,80 +499,109 @@ impl fmt::Display for FactTerm {
     }
 }
 
+/// A combinator that takes a parser `inner` and produces a parser that also consumes both leading and
+/// trailing whitespace, returning the output of `inner`.
+pub fn ws<'a, O, E: ParseError<&'a str>, F>(inner: F) -> impl Parser<&'a str, Output = O, Error = E>
+where
+    F: Parser<&'a str, Output = O, Error = E>,
+{
+    delimited(multispace0, inner, multispace0)
+}
+
+fn parse_fact_term(input: &str) -> IResult<&str, FactTerm> {
+    alt((
+        map(parse_string, FactTerm::String),
+        map(parse_float, FactTerm::Float),
+        map(parse_integer, FactTerm::Integer),
+        map(parse_list, FactTerm::List),
+        map(parse_subterm, FactTerm::SubTerm),
+    ))
+    .parse(input)
+}
+
+fn parse_string(input: &str) -> IResult<&str, String> {
+    ws(delimited(
+        char('"'),
+        escaped(none_of(r#"\""#), '\\', one_of(r#""\"#)),
+        char('"'),
+    ))
+    .parse(input)
+    .map(|(rest, s)| (rest, s.to_string()))
+}
+
+fn parse_atom(input: &str) -> IResult<&str, String> {
+    ws(delimited(
+        char('\''),
+        escaped(none_of(r#"\'"#), '\\', one_of(r#"'\"#)),
+        char('\''),
+    ))
+    .parse(input)
+    .map(|(rest, s)| (rest, s.to_string()))
+}
+
+fn parse_integer(input: &str) -> IResult<&str, i32> {
+    map_res(ws(digit1), |s: &str| s.parse::<i32>()).parse(input)
+}
+
+fn parse_float(input: &str) -> IResult<&str, f64> {
+    map_res(ws(recognize((digit1, char('.'), digit1))), |s: &str| {
+        s.parse::<f64>()
+    })
+    .parse(input)
+}
+
+// Parser for List
+fn parse_list(input: &str) -> IResult<&str, Vec<FactTerm>> {
+    ws(delimited(
+        char('['),
+        separated_list0(char(','), parse_fact_term),
+        char(']'),
+    ))
+    .parse(input)
+}
+
+// Parser for SubTerm (Fact)
+fn parse_subterm(input: &str) -> IResult<&str, Fact> {
+    let (input, (functor, args)) = separated_pair(
+        parse_atom,
+        char('('),
+        separated_list0(char(','), parse_fact_term),
+    )
+    .parse(input)?;
+    let (input, _) = char(')')(input)?;
+
+    let rt = Arc::new(
+        RecordTypeBuilder::new(
+            functor.clone(),
+            args.iter()
+                .enumerate()
+                .map(|(i, _)| format!("{}{}", functor.to_uppercase(), i))
+                .collect::<Vec<_>>(),
+        )
+        .build()
+        .unwrap(),
+    );
+
+    Ok((
+        input,
+        Fact {
+            id: functor,
+            type_: rt, // Replace with actual RecordType
+            values: args,
+        },
+    ))
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct ParseFactTermError;
 
 impl FromStr for FactTerm {
-    type Err = ParseFactTermError;
+    type Err = String;
 
-    fn from_str(str: &str) -> Result<Self, Self::Err> {
-        let s = str.trim();
-
-        if s.starts_with("\"") && s[1..].ends_with("\"") {
-            return Ok(FactTerm::String(
-                s[1..s.len() - 1].to_string(), // Remove quotes
-            ));
-        }
-
-        if let Ok(int) = s.parse::<i32>() {
-            return Ok(FactTerm::Integer(int));
-        }
-
-        if let Ok(float) = s.parse::<f64>() {
-            return Ok(FactTerm::Float(float));
-        }
-
-        if s.starts_with("[") && s.ends_with("]") {
-            let inner = &s[1..s.len() - 1];
-            let inner_terms = inner
-                .split(",")
-                .into_iter()
-                .map(|t| t.trim().parse::<FactTerm>())
-                .collect::<Result<Vec<_>, ParseFactTermError>>();
-
-            return inner_terms.and_then(|terms| Ok(FactTerm::List(terms)));
-        }
-
-        if let Some(type_name_start) = s.find("'") {
-            if let Some(type_name_end) = s[type_name_start + 1..].find("'") {
-                let type_name = &s[type_name_start + 1..type_name_start + 1 + type_name_end];
-
-                if s[type_name_start + 1 + type_name_end + 1..].starts_with("(") && s.ends_with(")")
-                {
-                    let inner = &s[type_name_start + 1 + type_name_end + 1 + 1..s.len() - 1];
-                    let inner_terms = inner
-                        .split(",")
-                        .into_iter()
-                        .map(|t| t.trim().parse::<FactTerm>())
-                        .collect::<Result<Vec<_>, ParseFactTermError>>();
-
-                    return inner_terms.and_then(|terms| {
-                        let fields = (0..terms.len() - 1)
-                            .map(|i| format!("{}_{}", type_name.to_uppercase(), i.to_string()))
-                            .collect::<Vec<_>>();
-
-                        let rt = Arc::new(
-                            RecordTypeBuilder::new(
-                                type_name,
-                                fields.iter().map(|f| f.as_str()).collect::<Vec<_>>(),
-                            )
-                            .build()
-                            .unwrap(),
-                        );
-
-                        let id_number = rt.term_id_ctx.next_id();
-
-                        Ok(FactTerm::SubTerm(Fact::new(
-                            id_number,
-                            Arc::clone(&rt),
-                            terms,
-                        )))
-                    });
-                }
-            }
-        }
-
-        Err(ParseFactTermError)
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        parse_fact_term(s)
+            .map(|(_, term)| term)
+            .map_err(|e| format!("Parsing error: {:?}", e))
     }
 }
 
@@ -624,6 +679,7 @@ impl LogicMachine {
     }
 
     pub fn fetch(&mut self, g: Goal, target_rt: Arc<RecordType>) -> LogicMachineResult {
+        dbg!(&g.to_string());
         let qr = self
             .machine
             .run_query(format!(r#"{}."#, g.to_string()))
@@ -684,20 +740,24 @@ mod tests {
         let mut lm = LogicMachine::new(String::from(
             r#"
                 :- use_module(library(clpz)).
+                :- use_module(library(lists)).
+
                 :- dynamic(dimlink/9).
 
                 dimlink("Test1", "MR00000001", "ID00000001", "JH00000001", "2023-02-08", "2023-02-10", "2024-02-18 08:16:11", "D", "0"). 
                 dimlink("Test1", "MR00000001", "ID00000001", "JH00000001", "2023-02-09", "2023-02-10", "2024-02-18 08:17:11", "E", "1"). 
                 dimlink("Test1", "MR00000002", "ID00000002", "JH00000001", "2023-02-08", "2023-02-11", "2024-02-18 08:20:11", "D", "0").
                 dimlink("Test1", "MR00000002", "ID00000002", "JH00000001", "2023-02-08", "2023-02-11", "2024-02-18 08:20:12", "D", "1"). 
-                dimlink("Test1", "MR00000002", "ID00000002", "JH00000001", "2023-02-08", "2023-02-11", "2024-02-18 08:20:13", "E", "2"). 
+                dimlink("Test1", "MR00000002", "ID00000002", "JH00000001", "2023-02-08", "2023-02-11", "2024-02-18 08:20:13", "D", "2"). 
+                dimlink("Test1", "MR00000002", "ID00000002", "JH00000002", "2023-02-09", "2023-02-11", "2024-02-18 08:20:14", "D", "3"). 
+                dimlink("Test1", "MR00000002", "ID00000002", "JH00000003", "2023-02-08", "2023-02-11", "2024-02-18 08:20:15", "E", "4"). 
                 dimlink("Test1", "MR00000003", "ID00000002", "JH00000002", "2023-02-08", "2023-02-09", "2024-02-18 08:20:14", "O", "0"). 
                 dimlink("Test1", "MR00000004", "ID00000001", "JH00000002", "2023-02-08", "2023-02-09", "2024-02-18 09:17:11", "O", "0").
                 dimlink("Test1", "MR00000005", "ID00000001", "JH00000003", "2023-02-08", "2023-02-09", "2024-02-18 09:17:11", "D", "0").
                 dimlink("Test1", "MR00000005", "ID00000001", "JH00000003", "2023-02-08", "2023-02-09", "2024-02-18 09:17:11", "V", "1").
-            
+
                 table("dimlink", "MgrLinkRef", ["DimIdRef", "InvHeadRef", "BegPeriod", "EndPeriod"]).
-                
+
                 record(Context, SysVersion, SeqNum, RecType, Id, [DimIdRef, InvHeadRef, BegPeriod, EndPeriod]) :-
                     dimlink(Context, Id, DimIdRef, InvHeadRef, BegPeriod, EndPeriod, SysVersion, RecType, SeqNum).
 
@@ -706,47 +766,127 @@ mod tests {
                     record(Ctx, _, SeqNum2, _, Id, Vals2),
                     number_chars(Num1, SeqNum1),
                     number_chars(Num2, SeqNum2),
-                    Num2 #= Num1 + 1.
+                    Num2 #= Num1 + 1,
+                    Vals1 \= Vals2.
+
+                leap_change(Ctx, Id, Vals, Vals, []) :-
+                    record(Ctx, _, _, _, Id, Vals).
+
+                leap_change(Ctx, Id, Vals1, Vals2, [Step|Steps]) :-
+                    step_change(Ctx, Id, Vals1, ValsMid),  % Enforce step exists
+                    Step = [Vals1, ValsMid],    % Construct step term
+                    leap_change(Ctx, Id, ValsMid, Vals2, Steps).
         "#,
         ));
 
-        let step_change = Arc::new(
-            RecordTypeBuilder::new("step_change", vec!["Ctx", "Id", "Vals1", "Vals2"])
-                .build()
-                .unwrap(),
+        // let leap_change = Arc::new(
+        //     RecordTypeBuilder::new("leap_change", vec!["Ctx", "Id", "Vals1", "Vals2", "Steps"])
+        //         .build()
+        //         .unwrap(),
+        // );
+
+        // let g = leap_change
+        //     .to_goal_from_named_values(&HashMap::from([
+        //         (
+        //             "Vals1".to_string(),
+        //             GoalTerm::List(vec![
+        //                 // GoalTerm::LocalVariable("DimIdRef".to_string()),
+        //                 GoalTerm::String("JH00000001".to_string()).into(),
+        //                 // GoalTerm::LocalVariable("BegPeriod".to_string()),
+        //                 // GoalTerm::LocalVariable("EndPeriod".to_string()),
+        //             ]),
+        //         ),
+        //         (
+        //             "Vals2".to_string(),
+        //             GoalTerm::List(vec![
+        //                 // GoalTerm::LocalVariable("DimIdRef".to_string()),
+        //                 GoalTerm::String("JH00000003".to_string()).into(),
+        //                 // GoalTerm::LocalVariable("BegPeriod".to_string()),
+        //                 // GoalTerm::LocalVariable("EndPeriod".to_string()),
+        //             ]),
+        //         ),
+        //     ]))
+        //     .unwrap();
+
+        // let s = g.to_string();
+        // dbg!(&s);
+
+        // let res = lm.machine.run_query(format!(
+        //     "','(','(','('leap_change'(LEAP_CHANGE0_Ctx, LEAP_CHANGE0_Id, RT_Vals1, RT_Vals2, RT_Steps), 'length'(RT_Steps, 2)), '='(RT_Vals1, [DIMLINK13_DimIdRef, \"JH00000001\", DIMLINK13_BegPeriod, DIMLINK13_EndPeriod])), '='(RT_Vals2, [DIMLINK14_DimIdRef, \"JH00000003\", DIMLINK14_BegPeriod, DIMLINK14_EndPeriod]))."
+        // ));
+        // let res = lm.machine.run_query(format!(
+        //     "leap_change(Ctx, Id, Vals1, Vals2, X), length(X, 2), Vals1 = [_, \"JH00000001\",_, _], Vals2 = [_, \"JH00000003\",_, _]."
+        // ));
+        // let res = lm.machine.run_query(
+        //     r#"Vals1 = [_, "JH00000001",_, _], Vals2 = [_, "JH00000003",_, _], length(X, 2), leap_change(Ctx, Id, Vals1, Vals2, X)."#.to_string()
+        // );
+        // let res = lm.machine.run_query(
+        //     r#"Vals1 = ["ID00000002", "JH00000001", "2023-02-08", "2023-02-11"], X = [], leap_change(Ctx, "MR00000002", Vals1, Vals1, X)."#.to_string()
+        // );
+        // let res = lm.machine.run_query(
+        //     r#"Vals1 = ["ID00000002", "JH00000001", "2023-02-08", "2023-02-11"], X = A, A = [], leap_change(Ctx, "MR00000002", Vals1, Vals1, X)."#.to_string()
+        // );
+        // let res = lm.machine.run_query(
+        //     r#"leap_change(Ctx, "MR00000002", Vals1, Vals2, X), length(X, 1), Vals1 = [A, B, C, D]."#.to_string()
+        // );
+
+        let res = lm.machine.run_query(
+            r#"
+            ','(
+                ','(
+                    ','(
+                        'leap_change'(LEAP_CHANGE0_Ctx, LEAP_CHANGE0_Id, RT_Vals1, RT_Vals2, RT_Steps),
+                        'length'(RT_Steps, 2)
+                    ),
+                    '='(RT_Vals1, [DIMLINK13_DimIdRef, "JH00000001", DIMLINK13_BegPeriod, DIMLINK13_EndPeriod])
+                ),
+                '='(RT_Vals2, [DIMLINK14_DimIdRef, DIMLINK14_InvHeadRef, DIMLINK14_BegPeriod, DIMLINK14_EndPeriod])
+            )."#.to_string()
         );
 
-        let g = step_change
-            .to_goal_from_named_values(&HashMap::from([(
-                "Vals1".to_string(),
-                GoalTerm::List(vec![
-                    // GoalTerm::LocalVariable("DimIdRef".to_string()),
-                    GoalTerm::String("JH00000001".to_string()).into(),
-                    // GoalTerm::LocalVariable("BegPeriod".to_string()),
-                    // GoalTerm::LocalVariable("EndPeriod".to_string()),
-                ])
-                .into(),
-            )]))
-            .unwrap();
-
-        let s = g.to_string();
-        dbg!(&s);
-
-        let res = lm.machine.run_query(format!("{}.", g.to_string()));
-        // let res = lm.machine.run_query(
-        //     "step_change(Ctx, Id, [DimIdRef, \"JH00000001\", BegPeriod, EndPeriod], Vals2)."
-        //         .to_string(),
-        // );
+        let res = lm.machine.run_query(
+            r#"
+                leap_change(LEAP_CHANGE0_Ctx, LEAP_CHANGE0_Id, RT_Vals1, RT_Vals2, RT_Steps),
+                length(RT_Steps, 2),
+                RT_Vals1 = [DIMLINK13_DimIdRef, "JH00000001", DIMLINK13_BegPeriod, DIMLINK13_EndPeriod],
+                RT_Vals2 = [DIMLINK14_DimIdRef, DIMLINK14_InvHeadRef, DIMLINK14_BegPeriod, DIMLINK14_EndPeriod].
+            "#.to_string()
+        );
         dbg!(&res);
 
-        // let res = lm.fetch(g);
+        // let res = lm.fetch(g);kfd
     }
 
     #[test]
     fn parse_fact() {
         // let fs = "[\"3\", 3, 3.0, 3.1, 0, -1, \"-12\", -111111111111111111111111111.1]".parse::<FactTerm>();
-        let fs = "'goal'(\"3\", 3.4)".parse::<FactTerm>();
+        let fs = r#"'goal'("3"  ,  0.2)"#.parse::<FactTerm>();
 
         dbg!(&fs);
+    }
+
+    #[test]
+    fn parse_fact2() {
+        // let fs = r#"
+        //     [
+        //         [
+        //             ["ID00000002","JH00000001","2023-02-08","2023-02-11"],
+        //             ["ID00000002","JH00000002","2023-02-09","2023-02-11"]
+        //         ],
+        //         [
+        //             ["ID00000002","JH00000002","2023-02-09","2023-02-11"],
+        //             ["ID00000002","JH00000003","2023-02-08","2023-02-11"]
+        //         ]
+        //     ]
+        // "#;
+
+        // let fs = r#"
+        //     [[["ID00000002","JH00000001","2023-02-08","2023-02-11"],["ID00000002","JH00000002","2023-02-09","2023-02-11"]],[["ID00000002","JH00000002","2023-02-09","2023-02-11"],["ID00000002","JH00000003","2023-02-08","2023-02-11"]]]
+        // "#.parse::<FactTerm>();
+
+        // let fs = r#"12343.3434"#
+        //     .parse::<FactTerm>();
+
+        // dbg!(&fs);
     }
 }

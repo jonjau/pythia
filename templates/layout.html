@@ -46,8 +46,19 @@
           hx-include="#start-state :not([disabled]), #end-state :not([disabled])"
         >
           <button type="submit">
-            Calculate state-changes from start state
+            Calculate 1-step changes from start state to end state
           </button>
+        </form>
+        <form
+          hx-get="/state-changes-leap"
+          hx-target="#state-changes"
+          hx-include="#start-state :not([disabled]), #end-state :not([disabled])"
+        >
+          <button type="submit">
+            Calculate N-step changes from start state to end state
+          </button>
+          <label>N</label>
+          <input type="number" name="num-steps">asdf</input>
         </form>
         <div id="state-changes">state changes</div>
       </div>

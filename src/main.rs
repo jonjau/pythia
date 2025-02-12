@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, fmt};
 
 use askama::Template;
 use axum::{
@@ -41,6 +41,7 @@ async fn main() {
         .route("/facts", post(create_fact))
         .route("/all-state-changes", get(get_all_state_changes))
         .route("/state-changes", get(get_state_changes))
+        .route("/state-changes-leap", get(get_state_changes_leap))
         .route(
             "/start-state/:fact_type/:field_name/specified",
             post(set_to_specified),
@@ -99,11 +100,22 @@ async fn get_facts(query: Query<Params>, State(state): State<AppState>) -> Facts
 
 #[derive(Template)]
 #[template(path = "fact-table.html", ext = "html")]
-struct FactsTable {
-    facts: Vec<String>,
+struct StateChangeTable {
+    changes: Vec<StateChange>,
 }
 
-async fn get_all_state_changes(State(state): State<AppState>) -> FactsTable {
+struct StateChange {
+    before: String,
+    after: String,
+}
+
+impl fmt::Display for StateChange {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} -> {}", self.before, self.after)
+    }
+}
+
+async fn get_all_state_changes(State(state): State<AppState>) -> StateChangeTable {
     let result = state
         .facts
         .get_all_facts("step_change".to_string())
@@ -111,13 +123,13 @@ async fn get_all_state_changes(State(state): State<AppState>) -> FactsTable {
         .unwrap();
     let fs = result.iter().map(|f| f.to_string()).collect::<Vec<_>>();
 
-    FactsTable { facts: fs }
+    StateChangeTable { changes: vec![] }
 }
 
 async fn get_state_changes(
     State(app_state): State<AppState>,
     Query(states): Query<HashMap<String, String>>,
-) -> FactsTable {
+) -> StateChangeTable {
     let get_named_values = |prefix: &str| {
         states
             .iter()
@@ -143,8 +155,54 @@ async fn get_state_changes(
         .get_step_changes(subgoal_rt, named_values0, named_values1)
         .await;
 
-    FactsTable {
-        facts: facts.iter().map(|f| f.to_string()).collect::<Vec<_>>(),
+    StateChangeTable {
+        changes: facts
+            .iter()
+            .map(|sc| StateChange {
+                before: sc.get("Vals1").map(|v| v.to_string()).unwrap(),
+                after: sc.get("Vals2").map(|v| v.to_string()).unwrap(),
+            })
+            .collect::<Vec<_>>(),
+    }
+}
+
+async fn get_state_changes_leap(
+    State(app_state): State<AppState>,
+    Query(states): Query<HashMap<String, String>>,
+) -> StateChangeTable {
+    let get_named_values = |prefix: &str| {
+        states
+            .iter()
+            .filter_map(|(field, value)| {
+                field
+                    .starts_with(prefix)
+                    .then_some((field[2..].to_string(), GoalTerm::String(value.to_string())))
+            })
+            .collect::<HashMap<_, _>>()
+    };
+    let named_values0 = get_named_values("0.");
+    let named_values1 = get_named_values("1.");
+
+    let fact_type = states.get("_fact_type").unwrap();
+    let subgoal_rt = app_state
+        .facts
+        .get_record_type(fact_type.to_string())
+        .await
+        .unwrap();
+
+    let facts = app_state
+        .state_changes
+        .get_leap_changes(subgoal_rt, named_values0, named_values1, 2)
+        .await;
+
+    StateChangeTable {
+        changes: facts
+            .iter()
+            .map(|sc| StateChange {
+                before: sc.get("Vals1").map(|v| v.to_string()).unwrap(),
+                after: sc.get("Vals2").map(|v| v.to_string()).unwrap(),
+            })
+            .collect::<Vec<_>>(),
     }
 }
 
