@@ -15,9 +15,9 @@
       <fieldset>
         <legend>Start state</legend>
         <div id="start-state-inputs">
-          <input type="text" hidden name="_fact_type" value="{{fact_type}}" />
+          <input type="text" hidden name="_fact-type" value="{{fact_type}}" />
           <table>
-          {% for field in start_state_fields %}
+          {% for field in state_fields %}
             <tr>
               <td>
                 <label for="start-{{field}}" style="text-align: right; margin-right: 10px;">{{field}}</label>
@@ -38,7 +38,7 @@
         <legend>End state</legend>
         <div id="end-state-inputs">
           <table>
-          {% for field in start_state_fields %}
+          {% for field in state_fields %}
             <tr>
               <td>
                 <label for="end-{{field}}" style="text-align: right; margin-right: 10px;">{{field}}</label>
