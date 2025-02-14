@@ -43,20 +43,9 @@ async fn main() {
         .route("/state-changes", get(get_state_changes))
         .route("/state-changes-leap", get(get_state_changes_leap))
         .route(
-            "/start-state/:fact_type/:field_name/specified",
-            post(set_to_specified),
-        )
-        .route(
-            "/start-state/:fact_type/:field_name/specified",
-            delete(set_to_unspecified),
-        )
-        .route(
-            "/end-state/:fact_type/:field_name/specified",
-            post(set_to_specified_end),
-        )
-        .route(
-            "/end-state/:fact_type/:field_name/specified",
-            delete(set_to_unspecified_end),
+            "/state/:state_id/:fact_type/:field_name/specified",
+            post(set_to_specified)
+            .delete(set_to_unspecified)
         )
         .with_state(state);
 
@@ -168,22 +157,23 @@ async fn get_state_changes(
 
 async fn get_state_changes_leap(
     State(app_state): State<AppState>,
-    Query(states): Query<HashMap<String, String>>,
+    Query(q): Query<HashMap<String, String>>,
 ) -> StateChangeTable {
     let get_named_values = |prefix: &str| {
-        states
+        q
             .iter()
             .filter_map(|(field, value)| {
                 field
                     .starts_with(prefix)
-                    .then_some((field[2..].to_string(), GoalTerm::String(value.to_string())))
+                    .then_some((field[prefix.len()..].to_string(), GoalTerm::String(value.to_string())))
             })
             .collect::<HashMap<_, _>>()
     };
-    let named_values0 = get_named_values("0.");
-    let named_values1 = get_named_values("1.");
+    let named_values0 = get_named_values("start.");
+    let named_values1 = get_named_values("end.");
+    let n_steps = q.get("number-of-steps").unwrap().parse::<i32>().unwrap();
 
-    let fact_type = states.get("_fact_type").unwrap();
+    let fact_type = q.get("_fact_type").unwrap();
     let subgoal_rt = app_state
         .facts
         .get_record_type(fact_type.to_string())
@@ -192,7 +182,7 @@ async fn get_state_changes_leap(
 
     let facts = app_state
         .state_changes
-        .get_leap_changes(subgoal_rt, named_values0, named_values1, 2)
+        .get_leap_changes(subgoal_rt, named_values0, named_values1, n_steps)
         .await;
 
     StateChangeTable {
@@ -200,7 +190,7 @@ async fn get_state_changes_leap(
             .iter()
             .map(|sc| StateChange {
                 before: sc.get("Vals1").map(|v| v.to_string()).unwrap(),
-                after: sc.get("Vals2").map(|v| v.to_string()).unwrap(),
+                after: sc.get("Steps").map(|v| v.to_string()).unwrap(),
             })
             .collect::<Vec<_>>(),
     }
@@ -252,14 +242,16 @@ async fn create_fact(State(_state): State<AppState>, Json(cf): Json<CreateFact>)
 #[derive(Template)]
 #[template(path = "set-field-to-specified.html", ext = "html")]
 struct SetFieldToSpecifiedTemplate {
+    state_id: String,
     fact_type: String,
     field: String,
 }
 
 async fn set_to_specified(
-    Path((fact_type, field_name)): Path<(String, String)>,
+    Path((state_id, fact_type, field_name)): Path<(String, String, String)>,
 ) -> SetFieldToSpecifiedTemplate {
     SetFieldToSpecifiedTemplate {
+        state_id,
         fact_type,
         field: field_name,
     }
@@ -268,46 +260,16 @@ async fn set_to_specified(
 #[derive(Template)]
 #[template(path = "set-field-to-unspecified.html", ext = "html")]
 struct SetFieldToUnspecifiedTemplate {
+    state_id: String,
     fact_type: String,
     field: String,
 }
 
 async fn set_to_unspecified(
-    Path((fact_type, field_name)): Path<(String, String)>,
+    Path((state_id, fact_type, field_name)): Path<(String, String, String)>,
 ) -> SetFieldToUnspecifiedTemplate {
     SetFieldToUnspecifiedTemplate {
-        fact_type,
-        field: field_name,
-    }
-}
-
-#[derive(Template)]
-#[template(path = "set-end-state-field-to-specified.html", ext = "html")]
-struct SetEndStateFieldToSpecifiedTemplate {
-    fact_type: String,
-    field: String,
-}
-
-async fn set_to_specified_end(
-    Path((fact_type, field_name)): Path<(String, String)>,
-) -> SetEndStateFieldToSpecifiedTemplate {
-    SetEndStateFieldToSpecifiedTemplate {
-        fact_type,
-        field: field_name,
-    }
-}
-
-#[derive(Template)]
-#[template(path = "set-end-state-field-to-unspecified.html", ext = "html")]
-struct SetEndStateFieldToUnspecifiedTemplate {
-    fact_type: String,
-    field: String,
-}
-
-async fn set_to_unspecified_end(
-    Path((fact_type, field_name)): Path<(String, String)>,
-) -> SetEndStateFieldToUnspecifiedTemplate {
-    SetEndStateFieldToUnspecifiedTemplate {
+        state_id,
         fact_type,
         field: field_name,
     }

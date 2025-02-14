@@ -70,10 +70,9 @@ impl StateChangeService {
         subgoal_rt: Arc<RecordType>,
         start_state: HashMap<String, GoalTerm>,
         end_state: HashMap<String, GoalTerm>,
-        _num_steps: i32,
+        num_steps: i32,
     ) -> Vec<Fact> {
         let leap_change_rt = self.facts.get_record_type("leap_change").await.unwrap();
-
 
         let leap_change_goal = leap_change_rt
             .to_goal_from_named_values(
@@ -110,7 +109,7 @@ impl StateChangeService {
         let length_rt = self.facts.get_record_type("length").await.unwrap();
         let length_goal = length_rt.to_goal(vec![
             GoalTerm::Variable("Steps".to_string()),
-            GoalTerm::Integer(2)
+            GoalTerm::Integer(num_steps)
         ]).unwrap();
 
         let result = self

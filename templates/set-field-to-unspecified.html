@@ -1,5 +1,4 @@
-<form hx-post="/start-state/{{fact_type}}/{{field}}/specified" hx-swap="outerHTML">
-  <input type="text" name="0.{{field}}" disabled />
-  <input type="text" hidden name="_field_name" value="{{field}}" />
-  <button type="submit">Edit</button>
+<form id="{{state_id}}-{{field}}" hx-post="/state/{{state_id}}/{{fact_type}}/{{field}}/specified" hx-swap="innerHTML" hx-target="#{{state_id}}-{{field}}-cell">
+  <input type="text" name="{{state_id}}.{{field}}" disabled />
 </form>
+<button type="submit" form="{{state_id}}-{{field}}">Specify</button>
