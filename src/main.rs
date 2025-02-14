@@ -4,7 +4,7 @@ use askama::Template;
 use axum::{
     extract::{Path, Query, State},
     response::Redirect,
-    routing::{delete, get, post},
+    routing::{get, post},
     Json, Router,
 };
 
@@ -39,8 +39,6 @@ async fn main() {
         .route("/", get(|| async { Redirect::permanent("/facts") }))
         .route("/facts", get(get_facts))
         .route("/facts", post(create_fact))
-        .route("/all-state-changes", get(get_all_state_changes))
-        .route("/state-changes", get(get_state_changes))
         .route("/state-changes-leap", get(get_state_changes_leap))
         .route(
             "/state/:state_id/:fact_type/:field_name/specified",
@@ -59,7 +57,7 @@ async fn main() {
 struct FactsPage {
     fact_type: String,
     facts: Vec<String>,
-    start_state_fields: Vec<String>,
+    state_fields: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -72,7 +70,7 @@ async fn get_facts(query: Query<Params>, State(state): State<AppState>) -> Facts
         None => FactsPage {
             fact_type: "".to_string(),
             facts: vec![],
-            start_state_fields: vec![],
+            state_fields: vec![],
         },
         Some(ft) => {
             let result = state.facts.get_all_facts(ft.to_string()).await.unwrap();
@@ -81,7 +79,7 @@ async fn get_facts(query: Query<Params>, State(state): State<AppState>) -> Facts
             FactsPage {
                 fact_type: result[0].type_name(),
                 facts: fs,
-                start_state_fields: result[0].data_fields(),
+                state_fields: result[0].data_fields(),
             }
         }
     }
@@ -104,57 +102,6 @@ impl fmt::Display for StateChange {
     }
 }
 
-async fn get_all_state_changes(State(state): State<AppState>) -> StateChangeTable {
-    let result = state
-        .facts
-        .get_all_facts("step_change".to_string())
-        .await
-        .unwrap();
-    let fs = result.iter().map(|f| f.to_string()).collect::<Vec<_>>();
-
-    StateChangeTable { changes: vec![] }
-}
-
-async fn get_state_changes(
-    State(app_state): State<AppState>,
-    Query(states): Query<HashMap<String, String>>,
-) -> StateChangeTable {
-    let get_named_values = |prefix: &str| {
-        states
-            .iter()
-            .filter_map(|(field, value)| {
-                field
-                    .starts_with(prefix)
-                    .then_some((field[2..].to_string(), GoalTerm::String(value.to_string())))
-            })
-            .collect::<HashMap<_, _>>()
-    };
-    let named_values0 = get_named_values("0.");
-    let named_values1 = get_named_values("1.");
-
-    let fact_type = states.get("_fact_type").unwrap();
-    let subgoal_rt = app_state
-        .facts
-        .get_record_type(fact_type.to_string())
-        .await
-        .unwrap();
-
-    let facts = app_state
-        .state_changes
-        .get_step_changes(subgoal_rt, named_values0, named_values1)
-        .await;
-
-    StateChangeTable {
-        changes: facts
-            .iter()
-            .map(|sc| StateChange {
-                before: sc.get("Vals1").map(|v| v.to_string()).unwrap(),
-                after: sc.get("Vals2").map(|v| v.to_string()).unwrap(),
-            })
-            .collect::<Vec<_>>(),
-    }
-}
-
 async fn get_state_changes_leap(
     State(app_state): State<AppState>,
     Query(q): Query<HashMap<String, String>>,
@@ -173,7 +120,7 @@ async fn get_state_changes_leap(
     let named_values1 = get_named_values("end.");
     let n_steps = q.get("number-of-steps").unwrap().parse::<i32>().unwrap();
 
-    let fact_type = q.get("_fact_type").unwrap();
+    let fact_type = q.get("_fact-type").unwrap();
     let subgoal_rt = app_state
         .facts
         .get_record_type(fact_type.to_string())
@@ -203,40 +150,8 @@ struct CreateFact {
 }
 
 // #[debug_handler]
-async fn create_fact(State(_state): State<AppState>, Json(cf): Json<CreateFact>) -> String {
-    // let rt = Arc::new(RecordType::new("edge", &["X", "Y"]).unwrap());
-    // let fact = rt
-    //     .to_fact(&HashMap::from([("X", "3"), ("Y", "5")]))
-    //     .unwrap();
-
-    // let fields_temp = (0..cf.values.len())
-    //     .map(|i| format!("X{}", i))
-    //     .collect::<Vec<_>>();
-    // let fields = fields_temp.iter().map(String::as_ref).collect::<Vec<_>>();
-    // let _rt0 = Arc::new(RecordTypeBuilder::new(&cf.typename, fields).build().unwrap());
-
-    // let _mapped_values = fields
-    //     .iter()
-    //     .zip(cf.values.iter())
-    //     .map(|(&field, value)| (field, value.as_str()))
-    //     .collect::<HashMap<_, _>>();
-
+async fn create_fact(State(_state): State<AppState>, Json(_cf): Json<CreateFact>) -> String {
     "".to_string()
-    // let fact = rt0.to_fact(&mapped_values).unwrap();
-
-    // // let res = state.facts.add_fact(fact).await.unwrap();
-    // // res.to_string()
-
-    // let res = state.facts.add_fact(fact).await.unwrap();
-    // res.len().to_string();
-
-    // let result = state.facts.get_all_facts(cf.typename).await.unwrap();
-    // result
-    //     .iter()
-    //     .map(|f| f.to_string())
-    //     .collect::<Vec<_>>()
-    //     .join(",\n")
-    // String::new()
 }
 
 #[derive(Template)]

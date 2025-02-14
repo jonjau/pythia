@@ -14,57 +14,6 @@ impl StateChangeService {
         StateChangeService { facts }
     }
 
-    pub async fn get_step_changes(
-        &self,
-        subgoal_rt: Arc<RecordType>,
-        start_state: HashMap<String, GoalTerm>,
-        end_state: HashMap<String, GoalTerm>,
-    ) -> Vec<Fact> {
-        let step_change_rt = self.facts.get_record_type("step_change").await.unwrap();
-
-        let step_change_goal = step_change_rt
-            .to_goal_from_named_values(
-                &[
-                    ("Vals1".to_string(), GoalTerm::Variable("Vals1".to_string())),
-                    ("Vals2".to_string(), GoalTerm::Variable("Vals2".to_string())),
-                ]
-                .into(),
-            )
-            .unwrap();
-
-        let binding_goal_rt = self.facts.get_record_type("=".to_string()).await.unwrap();
-
-        let binding_goal1 = Arc::clone(&binding_goal_rt)
-            .to_goal(vec![
-                GoalTerm::Variable("Vals1".to_string()),
-                Arc::clone(&subgoal_rt)
-                    .to_goal_from_named_values(&start_state)
-                    .unwrap()
-                    .to_data_value_list(),
-            ])
-            .unwrap();
-        let binding_goal2 = Arc::clone(&binding_goal_rt)
-            .to_goal(vec![
-                GoalTerm::Variable("Vals2".to_string()),
-                Arc::clone(&subgoal_rt)
-                    .to_goal_from_named_values(&end_state)
-                    .unwrap()
-                    .to_data_value_list(),
-            ])
-            .unwrap();
-
-        let result = self
-            .facts
-            .get_facts(
-                step_change_goal.clone().and(binding_goal1).and(binding_goal2),
-                step_change_goal.type_,
-            )
-            .await
-            .unwrap();
-
-        result
-    }
-
     pub async fn get_leap_changes(
         &self,
         subgoal_rt: Arc<RecordType>,

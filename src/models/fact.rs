@@ -1,12 +1,12 @@
 use core::fmt;
 use nom::{
     branch::alt,
-    bytes::complete::{escaped, tag},
+    bytes::complete::escaped,
     character::complete::{char, digit1, multispace0, none_of, one_of},
     combinator::{map, map_res, recognize},
     error::ParseError,
     multi::separated_list0,
-    sequence::{delimited, separated_pair, tuple},
+    sequence::{delimited, separated_pair},
     IResult, Parser,
 };
 use scryer_prolog::machine::parsed_results::{
