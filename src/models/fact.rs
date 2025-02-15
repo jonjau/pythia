@@ -761,7 +761,7 @@ mod tests {
                 record(Context, SysVersion, SeqNum, RecType, Id, [DimIdRef, InvHeadRef, BegPeriod, EndPeriod]) :-
                     dimlink(Context, Id, DimIdRef, InvHeadRef, BegPeriod, EndPeriod, SysVersion, RecType, SeqNum).
 
-                step_change(Ctx, Id, Vals1, Vals2) :-
+                change_step(Ctx, Id, Vals1, Vals2) :-
                     record(Ctx, _, SeqNum1, _, Id, Vals1),
                     record(Ctx, _, SeqNum2, _, Id, Vals2),
                     number_chars(Num1, SeqNum1),
@@ -769,13 +769,13 @@ mod tests {
                     Num2 #= Num1 + 1,
                     Vals1 \= Vals2.
 
-                leap_change(Ctx, Id, Vals, Vals, []) :-
+                change_path(Ctx, Id, Vals, Vals, []) :-
                     record(Ctx, _, _, _, Id, Vals).
 
-                leap_change(Ctx, Id, Vals1, Vals2, [Step|Steps]) :-
-                    step_change(Ctx, Id, Vals1, ValsMid),  % Enforce step exists
+                change_path(Ctx, Id, Vals1, Vals2, [Step|Steps]) :-
+                    change_step(Ctx, Id, Vals1, ValsMid),  % Enforce step exists
                     Step = [Vals1, ValsMid],    % Construct step term
-                    leap_change(Ctx, Id, ValsMid, Vals2, Steps).
+                    change_path(Ctx, Id, ValsMid, Vals2, Steps).
         "#,
         ));
 

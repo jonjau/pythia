@@ -39,11 +39,11 @@ async fn main() {
         .route("/", get(|| async { Redirect::permanent("/facts") }))
         .route("/facts", get(get_facts))
         .route("/facts", post(create_fact))
-        .route("/state-changes-leap", get(get_state_changes_leap))
+        .route("/state-change-paths", get(get_state_change_paths))
         .route(
-            "/state/:state_id/:fact_type/:field_name/specified",
-            post(set_to_specified)
-            .delete(set_to_unspecified)
+            "/states/:state_id/:fact_type/:field_name/specified",
+            post(set_field_to_specified)
+            .delete(set_field_to_unspecified)
         )
         .with_state(state);
 
@@ -102,7 +102,7 @@ impl fmt::Display for StateChange {
     }
 }
 
-async fn get_state_changes_leap(
+async fn get_state_change_paths(
     State(app_state): State<AppState>,
     Query(q): Query<HashMap<String, String>>,
 ) -> StateChangeTable {
@@ -118,7 +118,7 @@ async fn get_state_changes_leap(
     };
     let named_values0 = get_named_values("start.");
     let named_values1 = get_named_values("end.");
-    let n_steps = q.get("number-of-steps").unwrap().parse::<i32>().unwrap();
+    let n_steps = q.get("num-steps").unwrap().parse::<i32>().unwrap();
 
     let fact_type = q.get("_fact-type").unwrap();
     let subgoal_rt = app_state
@@ -129,7 +129,7 @@ async fn get_state_changes_leap(
 
     let facts = app_state
         .state_changes
-        .get_leap_changes(subgoal_rt, named_values0, named_values1, n_steps)
+        .get_paths(subgoal_rt, named_values0, named_values1, n_steps)
         .await;
 
     StateChangeTable {
@@ -162,7 +162,7 @@ struct SetFieldToSpecifiedTemplate {
     field: String,
 }
 
-async fn set_to_specified(
+async fn set_field_to_specified(
     Path((state_id, fact_type, field_name)): Path<(String, String, String)>,
 ) -> SetFieldToSpecifiedTemplate {
     SetFieldToSpecifiedTemplate {
@@ -180,7 +180,7 @@ struct SetFieldToUnspecifiedTemplate {
     field: String,
 }
 
-async fn set_to_unspecified(
+async fn set_field_to_unspecified(
     Path((state_id, fact_type, field_name)): Path<(String, String, String)>,
 ) -> SetFieldToUnspecifiedTemplate {
     SetFieldToUnspecifiedTemplate {

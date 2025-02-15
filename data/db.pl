@@ -23,7 +23,7 @@ table("dimlink", "MgrLinkRef", ["DimIdRef", "InvHeadRef", "BegPeriod", "EndPerio
 record(Context, EditTime, SeqNum, RecStatus, Id, [DRef, IRef, BegPeriod, EndPeriod]) :-
     dimlink(Context, Id, DRef, IRef, BegPeriod, EndPeriod, EditTime, RecStatus, SeqNum).
 
-step_change(Ctx, Id, Vals1, Vals2) :-
+change_step(Ctx, Id, Vals1, Vals2) :-
     record(Ctx, _, SeqNum1, _, Id, Vals1),
     record(Ctx, _, SeqNum2, _, Id, Vals2),
     number_chars(Num1, SeqNum1),
@@ -31,26 +31,14 @@ step_change(Ctx, Id, Vals1, Vals2) :-
     Num2 #= Num1 + 1,
     Vals1 \= Vals2.
 
-% leap_change(Ctx, Id, Vals1, Vals2, []) :-
-%     % Base case: No steps, Vals1 and Vals2 are the same
-%     record(Ctx, _, _, _, Id, Vals1),
-%     record(Ctx, _, _, _, Id, Vals2),
-%     Vals1 = Vals2.
-
-% leap_change(Ctx, Id, Vals1, Vals2, [step_change(Ctx, Id, Vals1, ValsMid)|Steps]) :-
-%     % Recursive case: Find an intermediate step
-%     step_change(Ctx, Id, Vals1, ValsMid),
-%     % Continue finding steps until reaching Vals2
-%     leap_change(Ctx, Id, ValsMid, Vals2, Steps).
-
-leap_change(Ctx, Id, Vals, Vals, []) :-
+change_path(Ctx, Id, Vals, Vals, []) :-
     record(Ctx, _, _, _, Id, Vals).
 
-leap_change(Ctx, Id, Vals1, Vals2, [Step|Steps]) :-
+change_path(Ctx, Id, Vals1, Vals2, [Step|Steps]) :-
     % Enforce step exists before constructing step term
-    step_change(Ctx, Id, Vals1, ValsMid),  
+    change_step(Ctx, Id, Vals1, ValsMid),  
     Step = [Vals1, ValsMid],
-    leap_change(Ctx, Id, ValsMid, Vals2, Steps).
+    change_path(Ctx, Id, ValsMid, Vals2, Steps).
 
 :- dynamic(edge/2).
 edge(3, 4).
