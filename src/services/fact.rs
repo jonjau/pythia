@@ -126,10 +126,10 @@ impl Actor {
             .metadata_fields(vec!["Context", "SysVersion", "RecType", "SeqNum"])
             .build()
             .unwrap(),
-            RecordTypeBuilder::new("step_change", vec!["Ctx", "Id", "Vals1", "Vals2"])
+            RecordTypeBuilder::new("change_step", vec!["Ctx", "Id", "Vals1", "Vals2"])
                 .build()
                 .unwrap(),
-            RecordTypeBuilder::new("leap_change", vec!["Ctx", "Id", "Vals1", "Vals2", "Steps"])
+            RecordTypeBuilder::new("change_path", vec!["Ctx", "Id", "Vals1", "Vals2", "Steps"])
                 .build()
                 .unwrap(),
             RecordTypeBuilder::new("=", vec!["A", "B"]).display_name("equal").build().unwrap(),

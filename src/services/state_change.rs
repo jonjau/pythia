@@ -14,16 +14,16 @@ impl StateChangeService {
         StateChangeService { facts }
     }
 
-    pub async fn get_leap_changes(
+    pub async fn get_paths(
         &self,
         subgoal_rt: Arc<RecordType>,
         start_state: HashMap<String, GoalTerm>,
         end_state: HashMap<String, GoalTerm>,
         num_steps: i32,
     ) -> Vec<Fact> {
-        let leap_change_rt = self.facts.get_record_type("leap_change").await.unwrap();
+        let change_path_rt = self.facts.get_record_type("change_path").await.unwrap();
 
-        let leap_change_goal = leap_change_rt
+        let change_path_goal = change_path_rt
             .to_goal_from_named_values(
                 &[
                     ("Vals1".to_string(), GoalTerm::Variable("Vals1".to_string())),
@@ -64,8 +64,8 @@ impl StateChangeService {
         let result = self
             .facts
             .get_facts(
-                leap_change_goal.clone().and(length_goal).and(binding_goal1).and(binding_goal2),
-                leap_change_goal.type_,
+                change_path_goal.clone().and(length_goal).and(binding_goal1).and(binding_goal2),
+                change_path_goal.type_,
             )
             .await
             .unwrap();

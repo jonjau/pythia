@@ -23,7 +23,7 @@
                 <label for="start-{{field}}" style="text-align: right; margin-right: 10px;">{{field}}</label>
               </td>
               <td id="start-{{field}}-cell" style="display: flex;">
-                <form id="start-{{field}}" hx-post="/state/start/{{fact_type}}/{{field}}/specified" hx-swap="innerHTML" hx-target="#start-{{field}}-cell">
+                <form id="start-{{field}}" hx-post="/states/start/{{fact_type}}/{{field}}/specified" hx-swap="innerHTML" hx-target="#start-{{field}}-cell">
                   <input type="text" name="start.{{field}}" disabled/>
                 </form>
                 <button type="submit" form="start-{{field}}">Specify</button>
@@ -44,7 +44,7 @@
                 <label for="end-{{field}}" style="text-align: right; margin-right: 10px;">{{field}}</label>
               </td>
               <td id="end-{{field}}-cell" style="display: flex;">
-                <form id="end-{{field}}" hx-post="/state/end/{{fact_type}}/{{field}}/specified" hx-swap="innerHTML" hx-target="#end-{{field}}-cell">
+                <form id="end-{{field}}" hx-post="/states/end/{{fact_type}}/{{field}}/specified" hx-swap="innerHTML" hx-target="#end-{{field}}-cell">
                   <input type="text" name="end.{{field}}" disabled/>
                 </form>
                 <button type="submit" form="end-{{field}}">Specify</button>
@@ -55,9 +55,9 @@
         </div>
       </fieldset>
 
-      <form hx-get="/state-changes-leap" hx-target="#state-changes" hx-include="#start-state-inputs :not([disabled]), #end-state-inputs :not([disabled])">
+      <form hx-get="/state-change-paths" hx-target="#state-change-paths" hx-include="#start-state-inputs :not([disabled]), #end-state-inputs :not([disabled])">
         <label for="steps">Number of Steps:</label>
-        <input type="number" id="steps" name="number-of-steps" min="1" max="100" value="1">
+        <input type="number" id="steps" name="num-steps" min="1" max="100" value="1">
         <button type="submit">
           Calculate N-step paths
         </button>
@@ -69,7 +69,7 @@
       <div id="content">{% block content %}{% endblock %}</div>
       <hr />
 
-      <div id="state-changes">state changes</div>
+      <div id="state-change-paths">state changes</div>
     </div>
   </main>
 </body>
