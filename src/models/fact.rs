@@ -739,22 +739,22 @@ mod tests {
 
                 :- dynamic(dimlink/9).
 
-                dimlink("Test1", "MR00000001", "ID00000001", "JH00000001", "2023-02-08", "2023-02-10", "2024-02-18 08:16:11", "D", "0"). 
-                dimlink("Test1", "MR00000001", "ID00000001", "JH00000001", "2023-02-09", "2023-02-10", "2024-02-18 08:17:11", "E", "1"). 
-                dimlink("Test1", "MR00000002", "ID00000002", "JH00000001", "2023-02-08", "2023-02-11", "2024-02-18 08:20:11", "D", "0").
-                dimlink("Test1", "MR00000002", "ID00000002", "JH00000001", "2023-02-08", "2023-02-11", "2024-02-18 08:20:12", "D", "1"). 
-                dimlink("Test1", "MR00000002", "ID00000002", "JH00000001", "2023-02-08", "2023-02-11", "2024-02-18 08:20:13", "D", "2"). 
-                dimlink("Test1", "MR00000002", "ID00000002", "JH00000002", "2023-02-09", "2023-02-11", "2024-02-18 08:20:14", "D", "3"). 
-                dimlink("Test1", "MR00000002", "ID00000002", "JH00000003", "2023-02-08", "2023-02-11", "2024-02-18 08:20:15", "E", "4"). 
-                dimlink("Test1", "MR00000003", "ID00000002", "JH00000002", "2023-02-08", "2023-02-09", "2024-02-18 08:20:14", "O", "0"). 
-                dimlink("Test1", "MR00000004", "ID00000001", "JH00000002", "2023-02-08", "2023-02-09", "2024-02-18 09:17:11", "O", "0").
-                dimlink("Test1", "MR00000005", "ID00000001", "JH00000003", "2023-02-08", "2023-02-09", "2024-02-18 09:17:11", "D", "0").
-                dimlink("Test1", "MR00000005", "ID00000001", "JH00000003", "2023-02-08", "2023-02-09", "2024-02-18 09:17:11", "V", "1").
+                dimlink("Test1", "M1", "ID1", "J1", "2023-02-08", "2023-02-10", "2024-02-18 08:16:11", "D", "0"). 
+                dimlink("Test1", "M1", "ID1", "J1", "2023-02-09", "2023-02-10", "2024-02-18 08:17:11", "E", "1"). 
+                dimlink("Test1", "M2", "ID2", "J1", "2023-02-08", "2023-02-11", "2024-02-18 08:20:11", "D", "0").
+                dimlink("Test1", "M2", "ID2", "J1", "2023-02-08", "2023-02-11", "2024-02-18 08:20:12", "D", "1"). 
+                dimlink("Test1", "M2", "ID2", "J1", "2023-02-08", "2023-02-11", "2024-02-18 08:20:13", "D", "2"). 
+                dimlink("Test1", "M2", "ID2", "J2", "2023-02-09", "2023-02-11", "2024-02-18 08:20:14", "D", "3"). 
+                dimlink("Test1", "M2", "ID2", "J3", "2023-02-08", "2023-02-11", "2024-02-18 08:20:15", "E", "4"). 
+                dimlink("Test1", "M3", "ID2", "J2", "2023-02-08", "2023-02-09", "2024-02-18 08:20:14", "O", "0"). 
+                dimlink("Test1", "M4", "ID1", "J2", "2023-02-08", "2023-02-09", "2024-02-18 09:17:11", "O", "0").
+                dimlink("Test1", "M5", "ID1", "J3", "2023-02-08", "2023-02-09", "2024-02-18 09:17:11", "D", "0").
+                dimlink("Test1", "M5", "ID1", "J3", "2023-02-08", "2023-02-09", "2024-02-18 09:17:11", "V", "1").
 
-                table("dimlink", "MgrLinkRef", ["DimIdRef", "InvHeadRef", "BegPeriod", "EndPeriod"]).
+                table("dimlink", "MRef", ["DRef", "IRef", "BegPeriod", "EndPeriod"]).
 
-                record(Context, SysVersion, SeqNum, RecType, Id, [DimIdRef, InvHeadRef, BegPeriod, EndPeriod]) :-
-                    dimlink(Context, Id, DimIdRef, InvHeadRef, BegPeriod, EndPeriod, SysVersion, RecType, SeqNum).
+                record(Context, EditTime, SeqNum, RecStatus, Id, [DRef, IRef, BegPeriod, EndPeriod]) :-
+                    dimlink(Context, Id, DRef, IRef, BegPeriod, EndPeriod, EditTime, RecStatus, SeqNum).
 
                 change_step(Ctx, Id, Vals1, Vals2) :-
                     record(Ctx, _, SeqNum1, _, Id, Vals1),
@@ -785,8 +785,8 @@ mod tests {
         //         (
         //             "Vals1".to_string(),
         //             GoalTerm::List(vec![
-        //                 // GoalTerm::LocalVariable("DimIdRef".to_string()),
-        //                 GoalTerm::String("JH00000001".to_string()).into(),
+        //                 // GoalTerm::LocalVariable("DRef".to_string()),
+        //                 GoalTerm::String("J1".to_string()).into(),
         //                 // GoalTerm::LocalVariable("BegPeriod".to_string()),
         //                 // GoalTerm::LocalVariable("EndPeriod".to_string()),
         //             ]),
@@ -794,8 +794,8 @@ mod tests {
         //         (
         //             "Vals2".to_string(),
         //             GoalTerm::List(vec![
-        //                 // GoalTerm::LocalVariable("DimIdRef".to_string()),
-        //                 GoalTerm::String("JH00000003".to_string()).into(),
+        //                 // GoalTerm::LocalVariable("DRef".to_string()),
+        //                 GoalTerm::String("J3".to_string()).into(),
         //                 // GoalTerm::LocalVariable("BegPeriod".to_string()),
         //                 // GoalTerm::LocalVariable("EndPeriod".to_string()),
         //             ]),
@@ -807,22 +807,22 @@ mod tests {
         // dbg!(&s);
 
         // let res = lm.machine.run_query(format!(
-        //     "','(','(','('leap_change'(LEAP_CHANGE0_Ctx, LEAP_CHANGE0_Id, RT_Vals1, RT_Vals2, RT_Steps), 'length'(RT_Steps, 2)), '='(RT_Vals1, [DIMLINK13_DimIdRef, \"JH00000001\", DIMLINK13_BegPeriod, DIMLINK13_EndPeriod])), '='(RT_Vals2, [DIMLINK14_DimIdRef, \"JH00000003\", DIMLINK14_BegPeriod, DIMLINK14_EndPeriod]))."
+        //     "','(','(','('leap_change'(LEAP_CHANGE0_Ctx, LEAP_CHANGE0_Id, RT_Vals1, RT_Vals2, RT_Steps), 'length'(RT_Steps, 2)), '='(RT_Vals1, [DIMLINK13_DRef, \"J1\", DIMLINK13_BegPeriod, DIMLINK13_EndPeriod])), '='(RT_Vals2, [DIMLINK14_DRef, \"J3\", DIMLINK14_BegPeriod, DIMLINK14_EndPeriod]))."
         // ));
         // let res = lm.machine.run_query(format!(
-        //     "leap_change(Ctx, Id, Vals1, Vals2, X), length(X, 2), Vals1 = [_, \"JH00000001\",_, _], Vals2 = [_, \"JH00000003\",_, _]."
+        //     "leap_change(Ctx, Id, Vals1, Vals2, X), length(X, 2), Vals1 = [_, \"J1\",_, _], Vals2 = [_, \"J3\",_, _]."
         // ));
         // let res = lm.machine.run_query(
-        //     r#"Vals1 = [_, "JH00000001",_, _], Vals2 = [_, "JH00000003",_, _], length(X, 2), leap_change(Ctx, Id, Vals1, Vals2, X)."#.to_string()
+        //     r#"Vals1 = [_, "J1",_, _], Vals2 = [_, "J3",_, _], length(X, 2), leap_change(Ctx, Id, Vals1, Vals2, X)."#.to_string()
         // );
         // let res = lm.machine.run_query(
-        //     r#"Vals1 = ["ID00000002", "JH00000001", "2023-02-08", "2023-02-11"], X = [], leap_change(Ctx, "MR00000002", Vals1, Vals1, X)."#.to_string()
+        //     r#"Vals1 = ["ID2", "J1", "2023-02-08", "2023-02-11"], X = [], leap_change(Ctx, "M2", Vals1, Vals1, X)."#.to_string()
         // );
         // let res = lm.machine.run_query(
-        //     r#"Vals1 = ["ID00000002", "JH00000001", "2023-02-08", "2023-02-11"], X = A, A = [], leap_change(Ctx, "MR00000002", Vals1, Vals1, X)."#.to_string()
+        //     r#"Vals1 = ["ID2", "J1", "2023-02-08", "2023-02-11"], X = A, A = [], leap_change(Ctx, "M2", Vals1, Vals1, X)."#.to_string()
         // );
         // let res = lm.machine.run_query(
-        //     r#"leap_change(Ctx, "MR00000002", Vals1, Vals2, X), length(X, 1), Vals1 = [A, B, C, D]."#.to_string()
+        //     r#"leap_change(Ctx, "M2", Vals1, Vals2, X), length(X, 1), Vals1 = [A, B, C, D]."#.to_string()
         // );
 
         let res = lm.machine.run_query(
@@ -833,9 +833,9 @@ mod tests {
                         'leap_change'(LEAP_CHANGE0_Ctx, LEAP_CHANGE0_Id, RT_Vals1, RT_Vals2, RT_Steps),
                         'length'(RT_Steps, 2)
                     ),
-                    '='(RT_Vals1, [DIMLINK13_DimIdRef, "JH00000001", DIMLINK13_BegPeriod, DIMLINK13_EndPeriod])
+                    '='(RT_Vals1, [DIMLINK13_DRef, "J1", DIMLINK13_BegPeriod, DIMLINK13_EndPeriod])
                 ),
-                '='(RT_Vals2, [DIMLINK14_DimIdRef, DIMLINK14_InvHeadRef, DIMLINK14_BegPeriod, DIMLINK14_EndPeriod])
+                '='(RT_Vals2, [DIMLINK14_DRef, DIMLINK14_IRef, DIMLINK14_BegPeriod, DIMLINK14_EndPeriod])
             )."#.to_string()
         );
 
@@ -843,8 +843,8 @@ mod tests {
             r#"
                 leap_change(LEAP_CHANGE0_Ctx, LEAP_CHANGE0_Id, RT_Vals1, RT_Vals2, RT_Steps),
                 length(RT_Steps, 2),
-                RT_Vals1 = [DIMLINK13_DimIdRef, "JH00000001", DIMLINK13_BegPeriod, DIMLINK13_EndPeriod],
-                RT_Vals2 = [DIMLINK14_DimIdRef, DIMLINK14_InvHeadRef, DIMLINK14_BegPeriod, DIMLINK14_EndPeriod].
+                RT_Vals1 = [DIMLINK13_DRef, "J1", DIMLINK13_BegPeriod, DIMLINK13_EndPeriod],
+                RT_Vals2 = [DIMLINK14_DRef, DIMLINK14_IRef, DIMLINK14_BegPeriod, DIMLINK14_EndPeriod].
             "#.to_string()
         );
         dbg!(&res);
@@ -865,18 +865,18 @@ mod tests {
         // let fs = r#"
         //     [
         //         [
-        //             ["ID00000002","JH00000001","2023-02-08","2023-02-11"],
-        //             ["ID00000002","JH00000002","2023-02-09","2023-02-11"]
+        //             ["ID2","J1","2023-02-08","2023-02-11"],
+        //             ["ID2","J2","2023-02-09","2023-02-11"]
         //         ],
         //         [
-        //             ["ID00000002","JH00000002","2023-02-09","2023-02-11"],
-        //             ["ID00000002","JH00000003","2023-02-08","2023-02-11"]
+        //             ["ID2","J2","2023-02-09","2023-02-11"],
+        //             ["ID2","J3","2023-02-08","2023-02-11"]
         //         ]
         //     ]
         // "#;
 
         // let fs = r#"
-        //     [[["ID00000002","JH00000001","2023-02-08","2023-02-11"],["ID00000002","JH00000002","2023-02-09","2023-02-11"]],[["ID00000002","JH00000002","2023-02-09","2023-02-11"],["ID00000002","JH00000003","2023-02-08","2023-02-11"]]]
+        //     [[["ID2","J1","2023-02-08","2023-02-11"],["ID2","J2","2023-02-09","2023-02-11"]],[["ID2","J2","2023-02-09","2023-02-11"],["ID2","J3","2023-02-08","2023-02-11"]]]
         // "#.parse::<FactTerm>();
 
         // let fs = r#"12343.3434"#

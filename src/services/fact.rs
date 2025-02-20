@@ -120,10 +120,10 @@ impl Actor {
                 .unwrap(),
             RecordTypeBuilder::new(
                 "dimlink",
-                vec!["DimIdRef", "InvHeadRef", "BegPeriod", "EndPeriod"],
+                vec!["DRef", "IRef", "BegPeriod", "EndPeriod"],
             )
             .id_fields(vec!["Id"])
-            .metadata_fields(vec!["Context", "SysVersion", "RecType", "SeqNum"])
+            .metadata_fields(vec!["Context", "EditTime", "RecStatus", "SeqNum"])
             .build()
             .unwrap(),
             RecordTypeBuilder::new("change_step", vec!["Ctx", "Id", "Vals1", "Vals2"])
