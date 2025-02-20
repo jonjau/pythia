@@ -15,7 +15,7 @@ dimlink("Test1", "M4", "ID1", "J2", "2023-02-08", "2023-02-09", "2024-02-18 09:1
 dimlink("Test1", "M5", "ID1", "J3", "2023-02-08", "2023-02-09", "2024-02-18 09:17:11", "D", "0").
 dimlink("Test1", "M5", "ID1", "J3", "2023-02-08", "2023-02-09", "2024-02-18 09:17:11", "V", "1").
 
-table("dimlink", "MgrLinkRef", ["DimIdRef", "InvHeadRef", "BegPeriod", "EndPeriod"]).
+table("dimlink", "MRef", ["DRef", "IRef", "BegPeriod", "EndPeriod"]).
 
 % TODO: use a templating language to create these glue predicates:
 % if we try to get scryer-prolog to return an object like values(DRef, IRef, BegPeriod, EndPeriod)

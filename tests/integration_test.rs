@@ -57,7 +57,7 @@ fn prolog_module_works2() {
             dimlink(Context, Id, DRef, IRef, BegPeriod, EndPeriod, EditTime, RecStatus, SeqNum).
     "#));
 
-    let output = machine.run_query(String::from(r#"record(Context, SysVersion, SeqNum, RecType, Id, [InvHeadRef, DimIdRef, BegPeriod, EndPeriod])."#));
+    let output = machine.run_query(String::from(r#"record(Context, EditTime, SeqNum, RecStatus, Id, [IRef, DRef, BegPeriod, EndPeriod])."#));
 
     println!("output: {:?}", output);
 }
