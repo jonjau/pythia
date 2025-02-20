@@ -15,7 +15,7 @@ mod services;
 mod utils;
 
 use models::fact::GoalTerm;
-use services::{fact::FactService, state_change::StateChangeService};
+use services::{fact::FactService, state_change::{ChangePath, StateChangeService}};
 
 #[derive(Clone)]
 struct AppState {
@@ -88,18 +88,7 @@ async fn get_facts(query: Query<Params>, State(state): State<AppState>) -> Facts
 #[derive(Template)]
 #[template(path = "fact-table.html", ext = "html")]
 struct StateChangeTable {
-    changes: Vec<StateChange>,
-}
-
-struct StateChange {
-    before: String,
-    after: String,
-}
-
-impl fmt::Display for StateChange {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} -> {}", self.before, self.after)
-    }
+    paths: Vec<ChangePath>,
 }
 
 async fn get_state_change_paths(
@@ -127,20 +116,25 @@ async fn get_state_change_paths(
         .await
         .unwrap();
 
-    let facts = app_state
+    let paths = app_state
         .state_changes
         .get_paths(subgoal_rt, named_values0, named_values1, n_steps)
-        .await;
+        .await
+        .unwrap();
 
     StateChangeTable {
-        changes: facts
-            .iter()
-            .map(|sc| StateChange {
-                before: sc.get("Vals1").map(|v| v.to_string()).unwrap(),
-                after: sc.get("Steps").map(|v| v.to_string()).unwrap(),
-            })
-            .collect::<Vec<_>>(),
+        paths
     }
+
+    // StateChangeTable {
+    //     changes: facts
+    //         .iter()
+    //         .map(|sc| StateChange {
+    //             before: sc.get("Vals1").map(|v| v.to_string()).unwrap(),
+    //             after: sc.get("Steps").map(|v| v.to_string()).unwrap(),
+    //         })
+    //         .collect::<Vec<_>>(),
+    // }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

@@ -266,9 +266,7 @@ impl RecordType {
             Self::change_prefix(&Self::filter_by_prefix(all_values, "RT_"), "RT_", "");
 
         let filtered = Self::filter_by_prefix(all_values, &name);
-
-        let id_number = self.term_id_ctx.next_id();
-
+        
         let goal_id = Self::find_common_prefix(&filtered)?;
         let stripped = Self::strip_common_prefix(goal_id, &filtered);
         let stripped = stripped
@@ -294,7 +292,7 @@ impl RecordType {
             return Err(RecordTypeError::UngroundedValues(ungrounded));
         }
 
-        Ok(Fact::new(id_number, self, complete_values))
+        Ok(Fact::new(self, complete_values))
     }
 }
 
@@ -405,14 +403,13 @@ impl fmt::Display for GoalTerm {
 
 /// A Fact is a compound term which has all its values grounded.
 /// It is meant to be asserted to or by the logic machine
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Fact {
-    id: String,
     type_: Arc<RecordType>,
     values: Vec<FactTerm>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum FactTerm {
     String(String),
     Integer(i32),
@@ -422,9 +419,8 @@ pub enum FactTerm {
 }
 
 impl Fact {
-    pub fn new(id_number: usize, type_: Arc<RecordType>, values: Vec<FactTerm>) -> Self {
+    pub fn new(type_: Arc<RecordType>, values: Vec<FactTerm>) -> Self {
         Fact {
-            id: Arc::clone(&type_).get_term_id(id_number),
             type_: Arc::clone(&type_),
             values,
         }
@@ -585,7 +581,6 @@ fn parse_subterm(input: &str) -> IResult<&str, Fact> {
     Ok((
         input,
         Fact {
-            id: functor,
             type_: rt, // Replace with actual RecordType
             values: args,
         },
