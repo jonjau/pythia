@@ -63,11 +63,11 @@ impl fmt::Display for ChangePath {
     }
 }
 
-// #[derive(thiserror::Error, Debug, PartialEq)]
-// pub enum StateChangeError {
-//     #[error("unknown field names: {}", .0.join(", "))]
-// (Vec<String>),
-// }
+#[derive(thiserror::Error, Debug, PartialEq)]
+pub enum StateChangeError {
+    #[error("No Steps term found.")]
+    NoStepsTermFound,
+}
 
 #[derive(Clone)]
 pub struct StateChangeService {
@@ -79,14 +79,12 @@ impl StateChangeService {
         StateChangeService { facts }
     }
 
-    fn difference(f1: &Fact, f2: &Fact) -> Vec<FieldDiff> {
+    fn difference(f1: &Fact, f2: &Fact) -> Result<Vec<FieldDiff>, Box<dyn Error>> {
         f1.data_fields()
             .iter()
-            .filter_map(|field_name| {
-                let term1 = f1.get(field_name).unwrap();
-                let term2 = f2.get(field_name).unwrap();
-
-                if term1 != term2 {
+            .map(|field_name| {
+                let (term1, term2) = (f1.get(field_name)?, f2.get(field_name)?);
+                Ok(if term1 != term2 {
                     Some(FieldDiff {
                         field: field_name.to_string(),
                         before: term1,
@@ -94,45 +92,50 @@ impl StateChangeService {
                     })
                 } else {
                     None
-                }
-            })
-            .collect::<Vec<_>>()
-    }
-
-    fn to_change_path(rt: &Arc<RecordType>, steps_term: &FactTerm) -> Result<ChangePath, String> {
-        if let FactTerm::List(change_step_terms) = steps_term {
-            let change_steps = change_step_terms
-                .iter()
-                .map(|change_step_term| Self::to_change_step(&rt, change_step_term))
-                .collect::<Result<Vec<_>, _>>()?;
-
-            Ok(ChangePath {
-                steps: change_steps,
-            })
-        } else {
-            Err("Could not convert term to ChangePath".to_string())
-        }
-    }
-
-    fn to_change_step(rt: &Arc<RecordType>, step_term: &FactTerm) -> Result<ChangeStep, String> {
-        if let FactTerm::List(step) = step_term {
-            if let (FactTerm::List(before_vals), FactTerm::List(after_vals)) =
-                (step[0].clone(), step[1].clone())
-            {
-                let before = Fact::new(rt.clone(), before_vals);
-                let after = Fact::new(rt.clone(), after_vals);
-                let diffs = Self::difference(&before, &after);
-                Ok(ChangeStep {
-                    before,
-                    after,
-                    diffs,
                 })
-            } else {
-                Err("Could not convert term to ChangeStep".to_string())
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map(|diffs| diffs.into_iter().flatten().collect())
+    }
+
+    fn to_change_path(rt: &Arc<RecordType>, term: &FactTerm) -> Result<ChangePath, Box<dyn Error>> {
+        let change_step_terms = match term {
+            FactTerm::List(terms) => terms,
+            _ => {
+                return Err("Could not match ChangePath term to a list of ChangeStep terms".into())
             }
-        } else {
-            Err("Could not convert term to ChangeStep".to_string())
-        }
+        };
+
+        let change_steps = change_step_terms
+            .iter()
+            .map(|change_step_term| Self::to_change_step(&rt, change_step_term))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(ChangePath {
+            steps: change_steps,
+        })
+    }
+
+    fn to_change_step(rt: &Arc<RecordType>, term: &FactTerm) -> Result<ChangeStep, Box<dyn Error>> {
+        let step = match term {
+            FactTerm::List(step) if step.len() == 2 => step,
+            _ => return Err("Could not match term to list of 2 subterms".into()),
+        };
+
+        let (before_vals, after_vals) = match (&step[0], &step[1]) {
+            (FactTerm::List(before), FactTerm::List(after)) => (before, after),
+            _ => return Err("Could not match the pair of before/after terms to ChangeStep".into()),
+        };
+
+        let before = Fact::new(rt.clone(), before_vals.clone());
+        let after = Fact::new(rt.clone(), after_vals.clone());
+        let diffs = Self::difference(&before, &after)?;
+
+        Ok(ChangeStep {
+            before,
+            after,
+            diffs,
+        })
     }
 
     pub async fn get_paths(
@@ -141,7 +144,7 @@ impl StateChangeService {
         start_state: HashMap<String, GoalTerm>,
         end_state: HashMap<String, GoalTerm>,
         num_steps: i32,
-    ) -> Result<Vec<ChangePath>, String> {
+    ) -> Result<Vec<ChangePath>, Box<dyn Error>> {
         let change_path_rt = self.facts.get_record_type("change_path").await.unwrap();
 
         let change_path_goal = change_path_rt
@@ -197,12 +200,12 @@ impl StateChangeService {
             .await
             .unwrap();
 
-        change_paths
+        Ok(change_paths
             .iter()
             .map(|path| {
-                let steps_term = path.get("Steps").ok_or("No steps found")?;
+                let steps_term = path.get("Steps")?;
                 Self::to_change_path(&state_rt, &steps_term)
             })
-            .collect::<Result<Vec<_>, _>>()
+            .collect::<Result<Vec<_>, _>>()?)
     }
 }
