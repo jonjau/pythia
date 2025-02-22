@@ -418,6 +418,10 @@ pub enum FactTerm {
     SubTerm(Fact),
 }
 
+#[derive(thiserror::Error, Debug)]
+#[error("field not found: {}", 0)]
+pub struct FieldNotFound(String);
+
 impl Fact {
     pub fn new(type_: Arc<RecordType>, values: Vec<FactTerm>) -> Self {
         Fact {
@@ -455,8 +459,8 @@ impl Fact {
             .collect::<HashMap<_, _>>()
     }
 
-    pub fn get(&self, field: &str) -> Option<FactTerm> {
-        self.to_data_values().get(field).cloned()
+    pub fn get(&self, field: &str) -> Result<FactTerm, FieldNotFound> {
+        self.to_data_values().get(field).ok_or(FieldNotFound(field.to_string())).cloned()
     }
 }
 
