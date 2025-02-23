@@ -1,3 +1,6 @@
+{% if let Some(m) = error_message %}
+<div style="color: red;">{{ m }}</div>
+{% else %}
 <table style="border: 1px solid black;">
   <tbody>
     {% for path in paths %}
@@ -26,3 +29,4 @@
     {% endfor %}
   </tbody>
 </table>
+{% endif %}
