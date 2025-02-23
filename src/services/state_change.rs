@@ -145,47 +145,35 @@ impl StateChangeService {
         end_state: HashMap<String, GoalTerm>,
         num_steps: i32,
     ) -> Result<Vec<ChangePath>, Box<dyn Error>> {
-        let change_path_rt = self.facts.get_record_type("change_path").await.unwrap();
+        let change_path_rt = self.facts.get_record_type("change_path").await?;
+        let change_path_goal = change_path_rt.to_goal_from_named_values(
+            &[
+                ("Vals1".to_string(), GoalTerm::Variable("Vals1".to_string())),
+                ("Vals2".to_string(), GoalTerm::Variable("Vals2".to_string())),
+                ("Steps".to_string(), GoalTerm::Variable("Steps".to_string())),
+            ]
+            .into(),
+        )?;
 
-        let change_path_goal = change_path_rt
-            .to_goal_from_named_values(
-                &[
-                    ("Vals1".to_string(), GoalTerm::Variable("Vals1".to_string())),
-                    ("Vals2".to_string(), GoalTerm::Variable("Vals2".to_string())),
-                    ("Steps".to_string(), GoalTerm::Variable("Steps".to_string())),
-                ]
-                .into(),
-            )
-            .unwrap();
+        let binding_goal_rt = self.facts.get_record_type("=".to_string()).await?;
+        let binding_goal1 = Arc::clone(&binding_goal_rt).to_goal(vec![
+            GoalTerm::Variable("Vals1".to_string()),
+            Arc::clone(&state_rt)
+                .to_goal_from_named_values(&start_state)?
+                .to_data_value_list(),
+        ])?;
+        let binding_goal2 = Arc::clone(&binding_goal_rt).to_goal(vec![
+            GoalTerm::Variable("Vals2".to_string()),
+            Arc::clone(&state_rt)
+                .to_goal_from_named_values(&end_state)?
+                .to_data_value_list(),
+        ])?;
 
-        let binding_goal_rt = self.facts.get_record_type("=".to_string()).await.unwrap();
-
-        let binding_goal1 = Arc::clone(&binding_goal_rt)
-            .to_goal(vec![
-                GoalTerm::Variable("Vals1".to_string()),
-                Arc::clone(&state_rt)
-                    .to_goal_from_named_values(&start_state)
-                    .unwrap()
-                    .to_data_value_list(),
-            ])
-            .unwrap();
-        let binding_goal2 = Arc::clone(&binding_goal_rt)
-            .to_goal(vec![
-                GoalTerm::Variable("Vals2".to_string()),
-                Arc::clone(&state_rt)
-                    .to_goal_from_named_values(&end_state)
-                    .unwrap()
-                    .to_data_value_list(),
-            ])
-            .unwrap();
-
-        let length_rt = self.facts.get_record_type("length").await.unwrap();
-        let length_goal = length_rt
-            .to_goal(vec![
-                GoalTerm::Variable("Steps".to_string()),
-                GoalTerm::Integer(num_steps),
-            ])
-            .unwrap();
+        let length_rt = self.facts.get_record_type("length").await?;
+        let length_goal = length_rt.to_goal(vec![
+            GoalTerm::Variable("Steps".to_string()),
+            GoalTerm::Integer(num_steps),
+        ])?;
 
         let change_paths = self
             .facts
@@ -197,8 +185,7 @@ impl StateChangeService {
                     .and(binding_goal2),
                 change_path_goal.type_,
             )
-            .await
-            .unwrap();
+            .await?;
 
         Ok(change_paths
             .iter()
