@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::vec;
 
 use crate::models::fact::{
-    Fact, Goal, LogicMachineResult, RecordType, RecordTypeBuilder, RecordTypeResult,
+    Fact, Goal, LogicMachineResult, RecordType, RecordTypeBuilder,
 };
 use crate::models::{self};
 use models::fact::LogicMachine;
@@ -22,25 +22,25 @@ impl FactService {
         }
     }
 
-    pub async fn get_record_type(&self, fact_type: impl Into<String>) -> RecordTypeResult {
+    pub async fn get_record_type(&self, fact_type: impl Into<String>) -> LogicMachineResult<Arc<RecordType>> {
         self.lm_actor
             .send_query(GetRecordTypeQuery { fact_type: fact_type.into() })
             .await
     }
 
-    pub async fn get_all_facts(&self, fact_type: String) -> LogicMachineResult {
+    pub async fn get_all_facts(&self, fact_type: String) -> LogicMachineResult<Vec<Fact>> {
         self.lm_actor
             .send_query(GetAllFactsQuery { fact_type })
             .await
     }
 
-    pub async fn get_facts(&self, goal: Goal, target_rt: Arc<RecordType>) -> LogicMachineResult {
+    pub async fn get_facts(&self, goal: Goal, target_rt: Arc<RecordType>) -> LogicMachineResult<Vec<Fact>> {
         self.lm_actor
             .send_query(GetFactsQuery { goal, target_rt })
             .await
     }
 
-    pub async fn add_fact(&self, fact: Fact) -> LogicMachineResult {
+    pub async fn add_fact(&self, fact: Fact) -> LogicMachineResult<Vec<Fact>> {
         self.lm_actor.send_query(AddFactQuery { fact }).await
     }
 }
@@ -74,10 +74,10 @@ enum ActorMessage {
     GetRecordType(GetRecordTypeMessage),
 }
 
-type AddFactMessage = Message<AddFactQuery, LogicMachineResult>;
-type GetAllFactsMessage = Message<GetAllFactsQuery, LogicMachineResult>;
-type GetFactsMessage = Message<GetFactsQuery, LogicMachineResult>;
-type GetRecordTypeMessage = Message<GetRecordTypeQuery, RecordTypeResult>;
+type AddFactMessage = Message<AddFactQuery, LogicMachineResult<Vec<Fact>>>;
+type GetAllFactsMessage = Message<GetAllFactsQuery, LogicMachineResult<Vec<Fact>>>;
+type GetFactsMessage = Message<GetFactsQuery, LogicMachineResult<Vec<Fact>>>;
+type GetRecordTypeMessage = Message<GetRecordTypeQuery, LogicMachineResult<Arc<RecordType>>>;
 
 impl From<AddFactMessage> for ActorMessage {
     fn from(msg: AddFactMessage) -> Self {
