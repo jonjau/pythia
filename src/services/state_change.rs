@@ -1,6 +1,6 @@
-use std::{collections::HashMap, error::Error, fmt, sync::Arc};
+use std::{collections::HashMap, fmt, sync::Arc};
 
-use crate::models::fact::{Fact, FactTerm, GoalTerm, RecordType};
+use crate::models::fact::{Fact, FactTerm, FieldNotFound, GoalTerm, LogicMachineError, RecordType, RecordTypeError};
 
 use super::fact::FactService;
 
@@ -63,10 +63,17 @@ impl fmt::Display for ChangePath {
     }
 }
 
-#[derive(thiserror::Error, Debug, PartialEq)]
+#[derive(thiserror::Error, Debug)]
 pub enum StateChangeError {
-    #[error("No Steps term found.")]
-    NoStepsTermFound,
+    #[error("Term not found")]
+    FactError(#[from] LogicMachineError),
+    #[error("RT error")]
+    RecordTypeError(#[from] RecordTypeError),
+    #[error("Field not found")]
+    FieldNotFound(#[from] FieldNotFound),
+    #[error("Could not match to term to a list")]
+    CouldNotMatchList
+
 }
 
 #[derive(Clone)]
@@ -79,7 +86,7 @@ impl StateChangeService {
         StateChangeService { facts }
     }
 
-    fn difference(f1: &Fact, f2: &Fact) -> Result<Vec<FieldDiff>, Box<dyn Error>> {
+    fn difference(f1: &Fact, f2: &Fact) -> Result<Vec<FieldDiff>, StateChangeError> {
         f1.data_fields()
             .iter()
             .map(|field_name| {
@@ -98,11 +105,11 @@ impl StateChangeService {
             .map(|diffs| diffs.into_iter().flatten().collect())
     }
 
-    fn to_change_path(rt: &Arc<RecordType>, term: &FactTerm) -> Result<ChangePath, Box<dyn Error>> {
+    fn to_change_path(rt: &Arc<RecordType>, term: &FactTerm) -> Result<ChangePath, StateChangeError> {
         let change_step_terms = match term {
             FactTerm::List(terms) => terms,
             _ => {
-                return Err("Could not match ChangePath term to a list of ChangeStep terms".into())
+                return Err(StateChangeError::CouldNotMatchList)
             }
         };
 
@@ -116,15 +123,15 @@ impl StateChangeService {
         })
     }
 
-    fn to_change_step(rt: &Arc<RecordType>, term: &FactTerm) -> Result<ChangeStep, Box<dyn Error>> {
+    fn to_change_step(rt: &Arc<RecordType>, term: &FactTerm) -> Result<ChangeStep, StateChangeError> {
         let step = match term {
             FactTerm::List(step) if step.len() == 2 => step,
-            _ => return Err("Could not match term to list of 2 subterms".into()),
+            _ => return Err(StateChangeError::CouldNotMatchList)
         };
 
         let (before_vals, after_vals) = match (&step[0], &step[1]) {
             (FactTerm::List(before), FactTerm::List(after)) => (before, after),
-            _ => return Err("Could not match the pair of before/after terms to ChangeStep".into()),
+            _ => return Err(StateChangeError::CouldNotMatchList)
         };
 
         let before = Fact::new(rt.clone(), before_vals.clone());
@@ -144,7 +151,7 @@ impl StateChangeService {
         start_state: HashMap<String, GoalTerm>,
         end_state: HashMap<String, GoalTerm>,
         num_steps: i32,
-    ) -> Result<Vec<ChangePath>, Box<dyn Error>> {
+    ) -> Result<Vec<ChangePath>, StateChangeError> {
         let change_path_rt = self.facts.get_record_type("change_path").await?;
         let change_path_goal = change_path_rt.to_goal_from_named_values(
             &[
