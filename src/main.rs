@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt};
+use std::{collections::HashMap, error::Error};
 
 use askama::Template;
 use axum::{
@@ -89,7 +89,7 @@ async fn get_facts(query: Query<Params>, State(state): State<AppState>) -> Facts
 
 #[derive(Template)]
 #[template(path = "fact-table.html", ext = "html")]
-struct StateChangeTable {
+struct GetStateChangePathsResponse {
     error_message: Option<String>,
     paths: Vec<ChangePath>,
 }
@@ -97,7 +97,7 @@ struct StateChangeTable {
 async fn get_state_change_paths(
     State(app_state): State<AppState>,
     Query(q): Query<HashMap<String, String>>,
-) -> StateChangeTable {
+) -> GetStateChangePathsResponse {
     let get_named_values = |prefix: &str| {
         q.iter()
             .filter_map(|(field, value)| {
@@ -110,25 +110,39 @@ async fn get_state_change_paths(
     };
     let named_values0 = get_named_values("start.");
     let named_values1 = get_named_values("end.");
-    let n_steps = q.get("num-steps").unwrap().parse::<i32>().unwrap();
 
-    let fact_type = q.get("_fact-type").unwrap();
-    let subgoal_rt = app_state
-        .facts
-        .get_record_type(fact_type.to_string())
-        .await
-        .unwrap();
+    let parse = |q: &HashMap<String, String>| -> Result<(i32, String), Box<dyn Error>> {
+        let n_steps = q
+            .get("num-steps")
+            .ok_or("num-steps not found")?
+            .parse::<i32>().map_err(|_| "Invalid num-steps argument")?;
+        let fact_type = q
+            .get("_fact-type")
+            .ok_or("_fact-type not found")?
+            .to_string();
+        Ok((n_steps, fact_type))
+    };
+
+    let (n_steps, fact_type) = match parse(&q) {
+        Ok(i) => i,
+        Err(e) => {
+            return GetStateChangePathsResponse {
+                error_message: Some(e.to_string()),
+                paths: vec![],
+            }
+        }
+    };
 
     match app_state
         .state_changes
-        .get_paths(subgoal_rt, named_values0, named_values1, n_steps)
+        .get_paths(&fact_type, named_values0, named_values1, n_steps)
         .await
     {
-        Ok(paths) => StateChangeTable {
+        Ok(paths) => GetStateChangePathsResponse {
             error_message: None,
             paths,
         },
-        Err(e) => StateChangeTable {
+        Err(e) => GetStateChangePathsResponse {
             error_message: Some(e.to_string()),
             paths: vec![],
         },

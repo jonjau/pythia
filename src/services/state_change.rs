@@ -73,7 +73,6 @@ pub enum StateChangeError {
     FieldNotFound(#[from] FieldNotFound),
     #[error("Could not match to term to a list")]
     CouldNotMatchList
-
 }
 
 #[derive(Clone)]
@@ -147,11 +146,16 @@ impl StateChangeService {
 
     pub async fn get_paths(
         &self,
-        state_rt: Arc<RecordType>,
+        state_rt_name: &str,
         start_state: HashMap<String, GoalTerm>,
         end_state: HashMap<String, GoalTerm>,
         num_steps: i32,
     ) -> Result<Vec<ChangePath>, StateChangeError> {
+        let state_rt = self
+            .facts
+            .get_record_type(state_rt_name)
+            .await?;
+
         let change_path_rt = self.facts.get_record_type("change_path").await?;
         let change_path_goal = change_path_rt.to_goal_from_named_values(
             &[
