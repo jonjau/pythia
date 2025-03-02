@@ -418,6 +418,10 @@ pub enum FactTerm {
     SubTerm(Fact),
 }
 
+#[derive(thiserror::Error, Debug)]
+#[error("field not found: {}", 0)]
+pub struct FieldNotFound(String);
+
 impl Fact {
     pub fn new(type_: Arc<RecordType>, values: Vec<FactTerm>) -> Self {
         Fact {
@@ -455,8 +459,8 @@ impl Fact {
             .collect::<HashMap<_, _>>()
     }
 
-    pub fn get(&self, field: &str) -> Option<FactTerm> {
-        self.to_data_values().get(field).cloned()
+    pub fn get(&self, field: &str) -> Result<FactTerm, FieldNotFound> {
+        self.to_data_values().get(field).ok_or(FieldNotFound(field.to_string())).cloned()
     }
 }
 
@@ -606,10 +610,11 @@ pub enum LogicMachineError {
     UnexpectedQueryResolution,
     #[error("prolog error: {0}")]
     PrologError(String),
+    #[error("RecordType not found: {}", .0)]
+    RecordTypeNotFound(String)
 }
 
-pub type LogicMachineResult = Result<Vec<Fact>, LogicMachineError>;
-pub type RecordTypeResult = Result<Arc<RecordType>, String>;
+pub type LogicMachineResult<T> = Result<T, LogicMachineError>;
 
 pub struct LogicMachine {
     record_types: HashMap<String, RecordType>,
@@ -627,7 +632,7 @@ impl LogicMachine {
         }
     }
 
-    fn parse_to_facts<'a>(qr: QueryResolution, rt: Arc<RecordType>) -> LogicMachineResult {
+    fn parse_to_facts<'a>(qr: QueryResolution, rt: Arc<RecordType>) -> LogicMachineResult<Vec<Fact>> {
         match qr {
             QueryResolution::Matches(m) => Ok(m
                 .iter()
@@ -648,11 +653,11 @@ impl LogicMachine {
     }
 
     // Get predicate which has the given name
-    pub fn get_record_type(&self, name: &str) -> Result<Arc<RecordType>, String> {
+    pub fn get_record_type(&self, name: &str) -> LogicMachineResult<Arc<RecordType>> {
         self.record_types
             .get(name)
             .map(|record| Arc::new(record.clone()))
-            .ok_or("RecordType not found".to_string())
+            .ok_or(LogicMachineError::RecordTypeNotFound(name.to_string()))
     }
 
     pub fn define_types(&mut self, types: Vec<RecordType>) {
@@ -661,7 +666,7 @@ impl LogicMachine {
         }
     }
 
-    pub fn add_fact(&mut self, f: Fact) -> LogicMachineResult {
+    pub fn add_fact(&mut self, f: Fact) -> LogicMachineResult<Vec<Fact>> {
         self.machine
             .run_query(format!(r#"assertz({})."#, f.to_string()))
             .map_err(LogicMachineError::PrologError)?;
@@ -669,11 +674,11 @@ impl LogicMachine {
         self.fetch_all(f.type_)
     }
 
-    pub fn fetch_all(&mut self, rt: Arc<RecordType>) -> LogicMachineResult {
+    pub fn fetch_all(&mut self, rt: Arc<RecordType>) -> LogicMachineResult<Vec<Fact>> {
         self.fetch(Arc::clone(&rt).to_most_general_goal(), Arc::clone(&rt))
     }
 
-    pub fn fetch(&mut self, g: Goal, target_rt: Arc<RecordType>) -> LogicMachineResult {
+    pub fn fetch(&mut self, g: Goal, target_rt: Arc<RecordType>) -> LogicMachineResult<Vec<Fact>> {
         dbg!(&g.to_string());
         let qr = self
             .machine
