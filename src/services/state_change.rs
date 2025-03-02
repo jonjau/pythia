@@ -1,7 +1,8 @@
 use std::{collections::HashMap, fmt, sync::Arc};
 
-use super::fact::FactService;
-use crate::models::fact::{Fact, FactTerm, FieldNotFound, GoalTerm, LogicMachineError};
+use crate::services::fact::FactService;
+use crate::models::fact::{Fact, FactTerm, FieldNotFound, LogicMachineError};
+use crate::models::goal::GoalTerm;
 use crate::models::record_type::{RecordType, RecordTypeError};
 
 // TODO: to display a path:

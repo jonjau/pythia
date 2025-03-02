@@ -1,7 +1,8 @@
 use std::sync::Arc;
 use std::vec;
 
-use crate::models::fact::{Fact, Goal, LogicMachineResult};
+use crate::models::fact::{Fact, LogicMachineResult};
+use crate::models::goal::Goal;
 use crate::models::record_type::{RecordType, RecordTypeBuilder};
 use crate::models::{self};
 use models::fact::LogicMachine;

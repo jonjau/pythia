@@ -1,9 +1,9 @@
-use crate::GoalTerm;
 use std::{collections::HashMap, sync::Arc};
 
 use crate::utils::tracking::IdContext;
 
-use super::fact::{Fact, FactTerm, Goal};
+use crate::models::fact::{Fact, FactTerm};
+use crate::models::goal::{Goal, GoalTerm};
 
 impl Goal {
     fn new(id_number: usize, type_: Arc<RecordType>, values: Vec<GoalTerm>) -> Self {
