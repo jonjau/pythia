@@ -14,7 +14,7 @@ mod models;
 mod services;
 mod utils;
 
-use models::fact::GoalTerm;
+use models::goal::GoalTerm;
 use services::{
     fact::FactService,
     state_change::{ChangePath, StateChangeService},
