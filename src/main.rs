@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt};
+use std::{collections::HashMap, error::Error};
 
 use askama::Template;
 use axum::{
@@ -15,7 +15,10 @@ mod services;
 mod utils;
 
 use models::fact::GoalTerm;
-use services::{fact::FactService, state_change::{ChangePath, StateChangeService}};
+use services::{
+    fact::FactService,
+    state_change::{ChangePath, StateChangeService},
+};
 
 #[derive(Clone)]
 struct AppState {
@@ -42,8 +45,7 @@ async fn main() {
         .route("/state-change-paths", get(get_state_change_paths))
         .route(
             "/states/:state_id/:fact_type/:field_name/specified",
-            post(set_field_to_specified)
-            .delete(set_field_to_unspecified)
+            post(set_field_to_specified).delete(set_field_to_unspecified),
         )
         .with_state(state);
 
@@ -87,54 +89,64 @@ async fn get_facts(query: Query<Params>, State(state): State<AppState>) -> Facts
 
 #[derive(Template)]
 #[template(path = "fact-table.html", ext = "html")]
-struct StateChangeTable {
+struct GetStateChangePathsResponse {
+    error_message: Option<String>,
     paths: Vec<ChangePath>,
 }
 
 async fn get_state_change_paths(
     State(app_state): State<AppState>,
     Query(q): Query<HashMap<String, String>>,
-) -> StateChangeTable {
+) -> GetStateChangePathsResponse {
     let get_named_values = |prefix: &str| {
-        q
-            .iter()
+        q.iter()
             .filter_map(|(field, value)| {
-                field
-                    .starts_with(prefix)
-                    .then_some((field[prefix.len()..].to_string(), GoalTerm::String(value.to_string())))
+                field.starts_with(prefix).then_some((
+                    field[prefix.len()..].to_string(),
+                    GoalTerm::String(value.to_string()),
+                ))
             })
             .collect::<HashMap<_, _>>()
     };
     let named_values0 = get_named_values("start.");
     let named_values1 = get_named_values("end.");
-    let n_steps = q.get("num-steps").unwrap().parse::<i32>().unwrap();
 
-    let fact_type = q.get("_fact-type").unwrap();
-    let subgoal_rt = app_state
-        .facts
-        .get_record_type(fact_type.to_string())
-        .await
-        .unwrap();
+    let parse = |q: &HashMap<String, String>| -> Result<(i32, String), Box<dyn Error>> {
+        let n_steps = q
+            .get("num-steps")
+            .ok_or("num-steps not found")?
+            .parse::<i32>().map_err(|_| "Invalid num-steps argument")?;
+        let fact_type = q
+            .get("_fact-type")
+            .ok_or("_fact-type not found")?
+            .to_string();
+        Ok((n_steps, fact_type))
+    };
 
-    let paths = app_state
+    let (n_steps, fact_type) = match parse(&q) {
+        Ok(i) => i,
+        Err(e) => {
+            return GetStateChangePathsResponse {
+                error_message: Some(e.to_string()),
+                paths: vec![],
+            }
+        }
+    };
+
+    match app_state
         .state_changes
-        .get_paths(subgoal_rt, named_values0, named_values1, n_steps)
+        .get_paths(&fact_type, named_values0, named_values1, n_steps)
         .await
-        .unwrap();
-
-    StateChangeTable {
-        paths
+    {
+        Ok(paths) => GetStateChangePathsResponse {
+            error_message: None,
+            paths,
+        },
+        Err(e) => GetStateChangePathsResponse {
+            error_message: Some(e.to_string()),
+            paths: vec![],
+        },
     }
-
-    // StateChangeTable {
-    //     changes: facts
-    //         .iter()
-    //         .map(|sc| StateChange {
-    //             before: sc.get("Vals1").map(|v| v.to_string()).unwrap(),
-    //             after: sc.get("Steps").map(|v| v.to_string()).unwrap(),
-    //         })
-    //         .collect::<Vec<_>>(),
-    // }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
