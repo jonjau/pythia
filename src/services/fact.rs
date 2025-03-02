@@ -1,11 +1,10 @@
 use std::sync::Arc;
 use std::vec;
 
-use crate::models::fact::{Fact, LogicMachineResult};
+use crate::models::fact::Fact;
 use crate::models::goal::Goal;
+use crate::models::logic_machine::{LogicMachine, LogicMachineResult};
 use crate::models::record_type::{RecordType, RecordTypeBuilder};
-use crate::models::{self};
-use models::fact::LogicMachine;
 
 use tokio::sync::{mpsc, oneshot};
 use tokio::{runtime::Builder, task::LocalSet};

@@ -1,9 +1,10 @@
 use std::{collections::HashMap, fmt, sync::Arc};
 
-use crate::services::fact::FactService;
-use crate::models::fact::{Fact, FactTerm, FieldNotFound, LogicMachineError};
+use crate::models::fact::{Fact, FactTerm, FieldNotFound};
 use crate::models::goal::GoalTerm;
+use crate::models::logic_machine::LogicMachineError;
 use crate::models::record_type::{RecordType, RecordTypeError};
+use crate::services::fact::FactService;
 
 // TODO: to display a path:
 // detailed view: show a table with the columns being the field names of the state_rt
