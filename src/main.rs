@@ -88,7 +88,7 @@ async fn get_facts(query: Query<Params>, State(state): State<AppState>) -> Facts
 }
 
 #[derive(Template)]
-#[template(path = "fact-table.html", ext = "html")]
+#[template(path = "change-path-table.html", ext = "html")]
 struct GetStateChangePathsResponse {
     error_message: Option<String>,
     paths: Vec<ChangePath>,
