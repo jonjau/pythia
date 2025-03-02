@@ -1,9 +1,8 @@
 use std::sync::Arc;
 use std::vec;
 
-use crate::models::fact::{
-    Fact, Goal, LogicMachineResult, RecordType, RecordTypeBuilder,
-};
+use crate::models::fact::{Fact, Goal, LogicMachineResult};
+use crate::models::record_type::{RecordType, RecordTypeBuilder};
 use crate::models::{self};
 use models::fact::LogicMachine;
 
@@ -22,9 +21,14 @@ impl FactService {
         }
     }
 
-    pub async fn get_record_type(&self, fact_type: impl Into<String>) -> LogicMachineResult<Arc<RecordType>> {
+    pub async fn get_record_type(
+        &self,
+        fact_type: impl Into<String>,
+    ) -> LogicMachineResult<Arc<RecordType>> {
         self.lm_actor
-            .send_query(GetRecordTypeQuery { fact_type: fact_type.into() })
+            .send_query(GetRecordTypeQuery {
+                fact_type: fact_type.into(),
+            })
             .await
     }
 
@@ -34,7 +38,11 @@ impl FactService {
             .await
     }
 
-    pub async fn get_facts(&self, goal: Goal, target_rt: Arc<RecordType>) -> LogicMachineResult<Vec<Fact>> {
+    pub async fn get_facts(
+        &self,
+        goal: Goal,
+        target_rt: Arc<RecordType>,
+    ) -> LogicMachineResult<Vec<Fact>> {
         self.lm_actor
             .send_query(GetFactsQuery { goal, target_rt })
             .await
@@ -118,22 +126,24 @@ impl Actor {
             RecordTypeBuilder::new("arc", vec!["X", "Y"])
                 .build()
                 .unwrap(),
-            RecordTypeBuilder::new(
-                "dimlink",
-                vec!["DRef", "IRef", "BegPeriod", "EndPeriod"],
-            )
-            .id_fields(vec!["Id"])
-            .metadata_fields(vec!["Context", "EditTime", "RecStatus", "SeqNum"])
-            .build()
-            .unwrap(),
+            RecordTypeBuilder::new("dimlink", vec!["DRef", "IRef", "BegPeriod", "EndPeriod"])
+                .id_fields(vec!["Id"])
+                .metadata_fields(vec!["Context", "EditTime", "RecStatus", "SeqNum"])
+                .build()
+                .unwrap(),
             RecordTypeBuilder::new("change_step", vec!["Ctx", "Id", "Vals1", "Vals2"])
                 .build()
                 .unwrap(),
             RecordTypeBuilder::new("change_path", vec!["Ctx", "Id", "Vals1", "Vals2", "Steps"])
                 .build()
                 .unwrap(),
-            RecordTypeBuilder::new("=", vec!["A", "B"]).display_name("equal").build().unwrap(),
-            RecordTypeBuilder::new("length", vec!["X", "Length"]).build().unwrap()
+            RecordTypeBuilder::new("=", vec!["A", "B"])
+                .display_name("equal")
+                .build()
+                .unwrap(),
+            RecordTypeBuilder::new("length", vec!["X", "Length"])
+                .build()
+                .unwrap(),
         ]);
 
         Actor { receiver, lm }
