@@ -40,7 +40,7 @@ async fn main() {
 
     let r = Router::new()
         .route("/", get(|| async { Redirect::permanent("/facts") }))
-        .route("/facts", get(get_facts))
+        .route("/state-changes/:state_record_type", get(get_state_changes))
         .route("/facts", post(create_fact))
         .route("/state-change-paths", get(get_state_change_paths))
         .route(
@@ -56,34 +56,27 @@ async fn main() {
 
 #[derive(Template)]
 #[template(path = "index.html", ext = "html")]
-struct FactsPage {
+struct StateChangesPage {
     fact_type: String,
     facts: Vec<String>,
     state_fields: Vec<String>,
 }
 
-#[derive(Deserialize)]
-struct Params {
-    fact_type: Option<String>,
-}
+async fn get_state_changes(
+    Path(state_rt): Path<String>,
+    State(state): State<AppState>,
+) -> StateChangesPage {
+    let result = state
+        .facts
+        .get_all_facts(state_rt.to_string())
+        .await
+        .unwrap();
+    let fs = result.iter().map(|f| f.to_string()).collect::<Vec<_>>();
 
-async fn get_facts(query: Query<Params>, State(state): State<AppState>) -> FactsPage {
-    match &query.fact_type {
-        None => FactsPage {
-            fact_type: "".to_string(),
-            facts: vec![],
-            state_fields: vec![],
-        },
-        Some(ft) => {
-            let result = state.facts.get_all_facts(ft.to_string()).await.unwrap();
-            let fs = result.iter().map(|f| f.to_string()).collect::<Vec<_>>();
-
-            FactsPage {
-                fact_type: result[0].type_name(),
-                facts: fs,
-                state_fields: result[0].data_fields(),
-            }
-        }
+    StateChangesPage {
+        fact_type: result[0].type_name(),
+        facts: fs,
+        state_fields: result[0].data_fields(),
     }
 }
 
@@ -115,7 +108,8 @@ async fn get_state_change_paths(
         let n_steps = q
             .get("num-steps")
             .ok_or("num-steps not found")?
-            .parse::<i32>().map_err(|_| "Invalid num-steps argument")?;
+            .parse::<i32>()
+            .map_err(|_| "Invalid num-steps argument")?;
         let fact_type = q
             .get("_fact-type")
             .ok_or("_fact-type not found")?
