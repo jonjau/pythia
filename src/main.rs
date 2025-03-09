@@ -61,7 +61,6 @@ async fn main() {
 #[template(path = "index.html", ext = "html")]
 struct StateChangesPage {
     fact_type: String,
-    facts: Vec<String>,
     state_fields: Vec<String>,
 }
 
@@ -69,17 +68,11 @@ async fn get_state_changes(
     Path(state_rt): Path<String>,
     State(state): State<AppState>,
 ) -> StateChangesPage {
-    let result = state
-        .facts
-        .get_all_facts(state_rt.to_string())
-        .await
-        .unwrap();
-    let fs = result.iter().map(|f| f.to_string()).collect::<Vec<_>>();
+    let rt = state.facts.get_record_type(&state_rt).await.unwrap();
 
     StateChangesPage {
-        fact_type: result[0].type_name(),
-        facts: fs,
-        state_fields: result[0].data_fields(),
+        fact_type: rt.name.clone(),
+        state_fields: rt.data_fields.clone(),
     }
 }
 
