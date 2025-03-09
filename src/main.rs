@@ -42,7 +42,10 @@ async fn main() {
         .route("/", get(|| async { Redirect::permanent("/facts") }))
         .route("/state-changes/:state_record_type", get(get_state_changes))
         .route("/facts", post(create_fact))
-        .route("/state-change-paths", get(get_state_change_paths))
+        .route(
+            "/state-change-paths/:state_record_type",
+            get(get_state_change_paths),
+        )
         .route(
             "/states/:state_id/:fact_type/:field_name/specified",
             post(set_field_to_specified).delete(set_field_to_unspecified),
@@ -89,6 +92,7 @@ struct GetStateChangePathsResponse {
 
 async fn get_state_change_paths(
     State(app_state): State<AppState>,
+    Path(state_rt): Path<String>,
     Query(q): Query<HashMap<String, String>>,
 ) -> GetStateChangePathsResponse {
     let get_named_values = |prefix: &str| {
@@ -104,20 +108,16 @@ async fn get_state_change_paths(
     let named_values0 = get_named_values("start.");
     let named_values1 = get_named_values("end.");
 
-    let parse = |q: &HashMap<String, String>| -> Result<(i32, String), Box<dyn Error>> {
+    let parse = |q: &HashMap<String, String>| -> Result<i32, Box<dyn Error>> {
         let n_steps = q
             .get("num-steps")
             .ok_or("num-steps not found")?
             .parse::<i32>()
             .map_err(|_| "Invalid num-steps argument")?;
-        let fact_type = q
-            .get("_fact-type")
-            .ok_or("_fact-type not found")?
-            .to_string();
-        Ok((n_steps, fact_type))
+        Ok(n_steps)
     };
 
-    let (n_steps, fact_type) = match parse(&q) {
+    let n_steps = match parse(&q) {
         Ok(i) => i,
         Err(e) => {
             return GetStateChangePathsResponse {
@@ -129,7 +129,7 @@ async fn get_state_change_paths(
 
     match app_state
         .state_changes
-        .get_paths(&fact_type, named_values0, named_values1, n_steps)
+        .get_paths(&state_rt, named_values0, named_values1, n_steps)
         .await
     {
         Ok(paths) => GetStateChangePathsResponse {
