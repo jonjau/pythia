@@ -15,7 +15,6 @@
       <fieldset>
         <legend>Start state</legend>
         <div id="start-state-inputs">
-          <input type="text" hidden name="_fact-type" value="{{fact_type}}" />
           <table>
           {% for field in state_fields %}
             <tr>
@@ -55,7 +54,7 @@
         </div>
       </fieldset>
 
-      <form hx-get="/state-change-paths" hx-target="#state-change-paths" hx-include="#start-state-inputs :not([disabled]), #end-state-inputs :not([disabled])">
+      <form hx-get="/state-change-paths/{{fact_type}}" hx-push-url="true" hx-target="#state-change-paths" hx-include="#start-state-inputs :not([disabled]), #end-state-inputs :not([disabled])">
         <label for="steps">Number of Steps:</label>
         <input type="number" id="steps" name="num-steps" min="1" max="100" value="1">
         <button type="submit">
