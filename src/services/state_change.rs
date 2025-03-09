@@ -48,6 +48,8 @@ impl fmt::Display for ChangeStep {
 }
 
 pub struct ChangePath {
+    pub context: String,
+    pub id: String,
     pub steps: Vec<ChangeStep>,
 }
 
@@ -71,7 +73,7 @@ pub enum StateChangeError {
     FactError(#[from] LogicMachineError),
     #[error("RT error")]
     RecordTypeError(#[from] RecordTypeError),
-    #[error("Field not found")]
+    #[error("Field not found in state change: {0}")]
     FieldNotFound(#[from] FieldNotFound),
     #[error("Could not match to term to a list")]
     CouldNotMatchList,
@@ -108,9 +110,15 @@ impl StateChangeService {
 
     fn to_change_path(
         rt: &Arc<RecordType>,
-        term: &FactTerm,
+        path: &Fact,
     ) -> Result<ChangePath, StateChangeError> {
-        let change_step_terms = match term {
+        let (ctx, id, steps_term) = (
+            path.get("Ctx")?.to_string(),
+            path.get("Id")?.to_string(),
+            path.get("Steps")?,
+        );
+
+        let change_step_terms = match steps_term {
             FactTerm::List(terms) => terms,
             _ => return Err(StateChangeError::CouldNotMatchList),
         };
@@ -121,6 +129,8 @@ impl StateChangeService {
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(ChangePath {
+            context: ctx,
+            id,
             steps: change_steps,
         })
     }
@@ -204,8 +214,7 @@ impl StateChangeService {
         Ok(change_paths
             .iter()
             .map(|path| {
-                let steps_term = path.get("Steps")?;
-                Self::to_change_path(&state_rt, &steps_term)
+                Self::to_change_path(&state_rt, &path)
             })
             .collect::<Result<Vec<_>, _>>()?)
     }

@@ -34,7 +34,7 @@ pub enum FactTerm {
 }
 
 #[derive(thiserror::Error, Debug)]
-#[error("field not found: {}", 0)]
+#[error("field not found: {0}")]
 pub struct FieldNotFound(String);
 
 impl Fact {
