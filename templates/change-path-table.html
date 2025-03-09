@@ -9,6 +9,10 @@
     {% for path in paths %}
     <tr style="border: 1px solid black;">
       <td style="border: 1px solid black;">
+        <div>
+          <p>Context: {{path.context}}</p>
+          <p>ID: {{path.id}}</p>
+        </div>
         <ol>
           {% for step in path.steps %}
           <li>
