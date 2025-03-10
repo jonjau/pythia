@@ -22,7 +22,7 @@
                 <label for="start-{{field}}" style="text-align: right; margin-right: 10px;">{{field}}</label>
               </td>
               <td id="start-{{field}}-cell" style="display: flex;">
-                <form id="start-{{field}}" hx-post="/states/start/{{fact_type}}/{{field}}/specified" hx-swap="innerHTML" hx-target="#start-{{field}}-cell">
+                <form autocomplete="on" id="start-{{field}}" hx-post="/states/start/{{fact_type}}/{{field}}/specified" hx-swap="innerHTML" hx-target="#start-{{field}}-cell">
                   <input type="text" name="start.{{field}}" disabled/>
                 </form>
                 <button type="submit" form="start-{{field}}">Specify</button>
