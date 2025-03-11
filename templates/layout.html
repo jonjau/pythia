@@ -16,16 +16,18 @@
         <legend>Start state</legend>
         <div id="start-state-inputs">
           <table>
-          {% for field in state_fields %}
+          {% let state_id = "start" %}
+          {% for (field, value) in start_state_values %}
             <tr>
               <td>
                 <label for="start-{{field}}" style="text-align: right; margin-right: 10px;">{{field}}</label>
               </td>
               <td id="start-{{field}}-cell" style="display: flex;">
-                <form autocomplete="on" id="start-{{field}}" hx-post="/states/start/{{fact_type}}/{{field}}/specified" hx-swap="innerHTML" hx-target="#start-{{field}}-cell">
-                  <input type="text" name="start.{{field}}" disabled/>
-                </form>
-                <button type="submit" form="start-{{field}}">Specify</button>
+                {% if value == "" %}
+                  {% include "set-field-to-unspecified.html" %}
+                {% else %}
+                  {% include "set-field-to-specified.html" %}
+                {% endif %}
               </td>
             </tr>
           {% endfor %}
@@ -37,16 +39,18 @@
         <legend>End state</legend>
         <div id="end-state-inputs">
           <table>
-          {% for field in state_fields %}
+          {% let state_id = "end" %}
+          {% for (field, value) in end_state_values %}
             <tr>
               <td>
                 <label for="end-{{field}}" style="text-align: right; margin-right: 10px;">{{field}}</label>
               </td>
               <td id="end-{{field}}-cell" style="display: flex;">
-                <form id="end-{{field}}" hx-post="/states/end/{{fact_type}}/{{field}}/specified" hx-swap="innerHTML" hx-target="#end-{{field}}-cell">
-                  <input type="text" name="end.{{field}}" disabled/>
-                </form>
-                <button type="submit" form="end-{{field}}">Specify</button>
+                {% if value == "" %}
+                  {% include "set-field-to-unspecified.html" %}
+                {% else %}
+                  {% include "set-field-to-specified.html" %}
+                {% endif %}
               </td>
             </tr>
           {% endfor %}
@@ -54,9 +58,9 @@
         </div>
       </fieldset>
 
-      <form hx-get="/state-change-paths/{{fact_type}}" hx-push-url="true" hx-target="#state-change-paths" hx-include="#start-state-inputs :not([disabled]), #end-state-inputs :not([disabled])">
+      <form hx-get="/state-changes/{{fact_type}}" hx-push-url="true" hx-target="#state-change-paths" hx-include="#start-state-inputs :not([disabled]), #end-state-inputs :not([disabled])">
         <label for="steps">Number of Steps:</label>
-        <input type="number" id="steps" name="num-steps" min="1" max="100" value="1">
+        <input type="number" id="steps" name="num-steps" min="1" max="100" value="{{num_steps}}" />
         <button type="submit">
           Calculate N-step paths
         </button>
