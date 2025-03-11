@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error};
+use std::{collections::HashMap, error::Error, sync::Arc};
 
 use askama::Template;
 use askama_axum::IntoResponse;
@@ -16,7 +16,7 @@ mod models;
 mod services;
 mod utils;
 
-use models::goal::GoalTerm;
+use models::{goal::GoalTerm, record_type::RecordType};
 use services::{
     fact::FactService,
     state_change::{ChangePath, StateChangeService},
@@ -106,38 +106,15 @@ async fn get_state_changes(
     let named_values1 = get_named_values("end.");
     let n_steps = q.get("num-steps");
 
-    let rt = app_state.facts.get_record_type(&state_rt).await.unwrap();
-    let state_fields = rt.data_fields.clone();
-    let start_state_values = state_fields
-        .iter()
-        .map(|field_name| {
-            let value = named_values0
-                .get(field_name)
-                .map(|v| v.to_string().trim_matches('"').to_string())
-                .unwrap_or("".to_string());
-            (field_name.clone(), value)
-        })
-        .collect::<Vec<_>>();
-    let end_state_values = state_fields
-        .iter()
-        .map(|field_name| {
-            let value = named_values1
-                .get(field_name)
-                .map(|v| v.to_string().trim_matches('"').to_string())
-                .unwrap_or("".to_string());
-            (field_name.clone(), value)
-        })
-        .collect::<Vec<_>>();
-
     if !headers.contains_key("HX-Request") {
-        return StateChangesPage::Input(StateChangesPageInput {
-            fact_type: rt.name.clone(),
-            start_state_values,
-            end_state_values,
-            num_steps: n_steps.map(|s| s.parse::<i32>().unwrap_or(0)).unwrap_or(0),
-        });
+        return StateChangesPage::Input(get_state_changes_input(
+            app_state.facts.get_record_type(&state_rt).await.unwrap(),
+            named_values0,
+            named_values1,
+            n_steps.map(|s| s.parse::<i32>().unwrap_or(0)).unwrap_or(0),
+        ));
     } else {
-        let parse = |q: &HashMap<String, String>| -> Result<i32, Box<dyn Error>> {
+        let parse_n_steps = || -> Result<i32, Box<dyn Error>> {
             let n_steps = n_steps
                 .ok_or("num-steps not found")?
                 .parse::<i32>()
@@ -145,7 +122,7 @@ async fn get_state_changes(
             Ok(n_steps)
         };
 
-        let n_steps = match parse(&q) {
+        let n_steps = match parse_n_steps() {
             Ok(i) => i,
             Err(e) => {
                 return StateChangesPage::Output(StateChangesPageOutput {
@@ -169,6 +146,43 @@ async fn get_state_changes(
                 paths: vec![],
             }),
         }
+    }
+}
+
+fn get_state_changes_input(
+    state_rt: Arc<RecordType>,
+    named_values0: HashMap<String, GoalTerm>,
+    named_values1: HashMap<String, GoalTerm>,
+    num_steps: i32,
+) -> StateChangesPageInput {
+    let state_fields = state_rt.data_fields.clone();
+
+    let start_state_values = state_fields
+        .iter()
+        .map(|field_name| {
+            let value = named_values0
+                .get(field_name)
+                .map(|v| v.to_string().trim_matches('"').to_string())
+                .unwrap_or("".to_string());
+            (field_name.clone(), value)
+        })
+        .collect::<Vec<_>>();
+    let end_state_values = state_fields
+        .iter()
+        .map(|field_name| {
+            let value = named_values1
+                .get(field_name)
+                .map(|v| v.to_string().trim_matches('"').to_string())
+                .unwrap_or("".to_string());
+            (field_name.clone(), value)
+        })
+        .collect::<Vec<_>>();
+
+    StateChangesPageInput {
+        fact_type: state_rt.name.clone(),
+        start_state_values,
+        end_state_values,
+        num_steps,
     }
 }
 
