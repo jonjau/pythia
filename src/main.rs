@@ -106,8 +106,26 @@ async fn get_state_changes(
 
     if !headers.contains_key("HX-Request") {
         StateChangesPage::Input(
-            get_state_changes_input(app_state, state_rt, named_values0, named_values1, num_steps)
-                .await,
+            match app_state
+                .state_changes
+                .populate_all_state_values(&state_rt, named_values0, named_values1)
+                .await
+            {
+                Ok(values) => StateChangesPageInput {
+                    fact_type: state_rt,
+                    start_state_values: values.start_state_values,
+                    end_state_values: values.end_state_values,
+                    num_steps: num_steps
+                        .map(|s| s.parse::<i32>().unwrap_or(0))
+                        .unwrap_or(0),
+                },
+                Err(_) => StateChangesPageInput {
+                    fact_type: "".to_string(),
+                    start_state_values: vec![],
+                    end_state_values: vec![],
+                    num_steps: 0,
+                },
+            },
         )
     } else {
         StateChangesPage::Output(
@@ -126,50 +144,6 @@ async fn get_state_changes(
                 },
             },
         )
-    }
-}
-
-async fn get_state_changes_input(
-    app_state: AppState,
-    state_rt_name: String,
-    named_values0: HashMap<String, String>,
-    named_values1: HashMap<String, String>,
-    num_steps: Option<&String>,
-) -> StateChangesPageInput {
-    let state_rt = match app_state.facts.get_record_type(&state_rt_name).await {
-        Ok(rt) => rt,
-        Err(_) => {
-            return StateChangesPageInput {
-                fact_type: "".to_string(),
-                start_state_values: vec![],
-                end_state_values: vec![],
-                num_steps: 0,
-            }
-        }
-    };
-
-    let num_steps = num_steps
-        .map(|s| s.parse::<i32>().unwrap_or(0))
-        .unwrap_or(0);
-
-    let populate_all_state_values = |named_values: &HashMap<String, String>| {
-        state_rt
-            .data_fields
-            .iter()
-            .map(|field_name| {
-                (
-                    field_name.clone(),
-                    named_values.get(field_name).cloned().unwrap_or_default(),
-                )
-            })
-            .collect::<Vec<_>>()
-    };
-
-    StateChangesPageInput {
-        fact_type: state_rt_name,
-        start_state_values: populate_all_state_values(&named_values0),
-        end_state_values: populate_all_state_values(&named_values1),
-        num_steps,
     }
 }
 
