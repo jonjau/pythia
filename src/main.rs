@@ -1,8 +1,10 @@
-use std::{collections::HashMap, error::Error};
+use std::collections::HashMap;
 
 use askama::Template;
+use askama_axum::IntoResponse;
 use axum::{
     extract::{Path, Query, State},
+    http::HeaderMap,
     response::Redirect,
     routing::{get, post},
     Json, Router,
@@ -14,7 +16,6 @@ mod models;
 mod services;
 mod utils;
 
-use models::goal::GoalTerm;
 use services::{
     fact::FactService,
     state_change::{ChangePath, StateChangeService},
@@ -40,9 +41,8 @@ async fn main() {
 
     let r = Router::new()
         .route("/", get(|| async { Redirect::permanent("/facts") }))
-        .route("/facts", get(get_facts))
+        .route("/state-changes/:state_record_type", get(get_state_changes))
         .route("/facts", post(create_fact))
-        .route("/state-change-paths", get(get_state_change_paths))
         .route(
             "/states/:state_id/:fact_type/:field_name/specified",
             post(set_field_to_specified).delete(set_field_to_unspecified),
@@ -55,97 +55,95 @@ async fn main() {
 }
 
 #[derive(Template)]
-#[template(path = "index.html", ext = "html")]
-struct FactsPage {
+#[template(path = "layout.html", ext = "html")]
+struct StateChangesPageInput {
     fact_type: String,
-    facts: Vec<String>,
-    state_fields: Vec<String>,
-}
-
-#[derive(Deserialize)]
-struct Params {
-    fact_type: Option<String>,
-}
-
-async fn get_facts(query: Query<Params>, State(state): State<AppState>) -> FactsPage {
-    match &query.fact_type {
-        None => FactsPage {
-            fact_type: "".to_string(),
-            facts: vec![],
-            state_fields: vec![],
-        },
-        Some(ft) => {
-            let result = state.facts.get_all_facts(ft.to_string()).await.unwrap();
-            let fs = result.iter().map(|f| f.to_string()).collect::<Vec<_>>();
-
-            FactsPage {
-                fact_type: result[0].type_name(),
-                facts: fs,
-                state_fields: result[0].data_fields(),
-            }
-        }
-    }
+    start_state_values: Vec<(String, String)>,
+    end_state_values: Vec<(String, String)>,
+    num_steps: i32,
 }
 
 #[derive(Template)]
-#[template(path = "change-path-table.html", ext = "html")]
-struct GetStateChangePathsResponse {
+#[template(path = "state-changes-output.html", ext = "html")]
+struct StateChangesPageOutput {
     error_message: Option<String>,
     paths: Vec<ChangePath>,
 }
 
-async fn get_state_change_paths(
+enum StateChangesPage {
+    Input(StateChangesPageInput),
+    Output(StateChangesPageOutput),
+}
+
+impl IntoResponse for StateChangesPage {
+    fn into_response(self) -> axum::response::Response {
+        match self {
+            StateChangesPage::Input(t) => t.into_response(),
+            StateChangesPage::Output(t) => t.into_response(),
+        }
+    }
+}
+
+async fn get_state_changes(
     State(app_state): State<AppState>,
+    headers: HeaderMap,
+    Path(state_rt): Path<String>,
     Query(q): Query<HashMap<String, String>>,
-) -> GetStateChangePathsResponse {
-    let get_named_values = |prefix: &str| {
+) -> StateChangesPage {
+    let get_values_for_key_with_prefix = |prefix: &str| {
         q.iter()
             .filter_map(|(field, value)| {
-                field.starts_with(prefix).then_some((
-                    field[prefix.len()..].to_string(),
-                    GoalTerm::String(value.to_string()),
-                ))
+                field
+                    .starts_with(prefix)
+                    .then_some((field[prefix.len()..].to_string(), value.to_string()))
             })
             .collect::<HashMap<_, _>>()
     };
-    let named_values0 = get_named_values("start.");
-    let named_values1 = get_named_values("end.");
 
-    let parse = |q: &HashMap<String, String>| -> Result<(i32, String), Box<dyn Error>> {
-        let n_steps = q
-            .get("num-steps")
-            .ok_or("num-steps not found")?
-            .parse::<i32>().map_err(|_| "Invalid num-steps argument")?;
-        let fact_type = q
-            .get("_fact-type")
-            .ok_or("_fact-type not found")?
-            .to_string();
-        Ok((n_steps, fact_type))
-    };
+    let named_values0 = get_values_for_key_with_prefix("start.");
+    let named_values1 = get_values_for_key_with_prefix("end.");
+    let num_steps = q.get("num-steps");
 
-    let (n_steps, fact_type) = match parse(&q) {
-        Ok(i) => i,
-        Err(e) => {
-            return GetStateChangePathsResponse {
-                error_message: Some(e.to_string()),
-                paths: vec![],
-            }
-        }
-    };
-
-    match app_state
-        .state_changes
-        .get_paths(&fact_type, named_values0, named_values1, n_steps)
-        .await
-    {
-        Ok(paths) => GetStateChangePathsResponse {
-            error_message: None,
-            paths,
-        },
-        Err(e) => GetStateChangePathsResponse {
-            error_message: Some(e.to_string()),
-            paths: vec![],
-        },
+    if !headers.contains_key("HX-Request") {
+        StateChangesPage::Input(
+            match app_state
+                .state_changes
+                .populate_all_state_values(&state_rt, named_values0, named_values1)
+                .await
+            {
+                Ok(values) => StateChangesPageInput {
+                    fact_type: state_rt,
+                    start_state_values: values.start_state_values,
+                    end_state_values: values.end_state_values,
+                    num_steps: num_steps
+                        .map(|s| s.parse::<i32>().unwrap_or(0))
+                        .unwrap_or(0),
+                },
+                Err(_) => StateChangesPageInput {
+                    fact_type: "".to_string(),
+                    start_state_values: vec![],
+                    end_state_values: vec![],
+                    num_steps: 0,
+                },
+            },
+        )
+    } else {
+        StateChangesPage::Output(
+            match app_state
+                .state_changes
+                .find_paths(&state_rt, named_values0, named_values1, num_steps)
+                .await
+            {
+                Ok(paths) => StateChangesPageOutput {
+                    error_message: None,
+                    paths,
+                },
+                Err(e) => StateChangesPageOutput {
+                    error_message: Some(format!("Failed to get paths: {}", e)),
+                    paths: vec![],
+                },
+            },
+        )
     }
 }
 
@@ -166,6 +164,7 @@ struct SetFieldToSpecifiedTemplate {
     state_id: String,
     fact_type: String,
     field: String,
+    value: String,
 }
 
 async fn set_field_to_specified(
@@ -175,6 +174,7 @@ async fn set_field_to_specified(
         state_id,
         fact_type,
         field: field_name,
+        value: "".to_string(),
     }
 }
 
@@ -184,6 +184,7 @@ struct SetFieldToUnspecifiedTemplate {
     state_id: String,
     fact_type: String,
     field: String,
+    value: String,
 }
 
 async fn set_field_to_unspecified(
@@ -193,5 +194,6 @@ async fn set_field_to_unspecified(
         state_id,
         fact_type,
         field: field_name,
+        value: "".to_string(),
     }
 }
