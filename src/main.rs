@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error};
+use std::collections::HashMap;
 
 use askama::Template;
 use askama_axum::IntoResponse;
@@ -16,7 +16,6 @@ mod models;
 mod services;
 mod utils;
 
-use models::{goal::GoalTerm};
 use services::{
     fact::FactService,
     state_change::{ChangePath, StateChangeService},
@@ -103,113 +102,74 @@ async fn get_state_changes(
 
     let named_values0 = get_values_for_key_with_prefix("start.");
     let named_values1 = get_values_for_key_with_prefix("end.");
-    let n_steps = q.get("num-steps");
+    let num_steps = q.get("num-steps");
 
     if !headers.contains_key("HX-Request") {
-        return StateChangesPage::Input(
-            get_state_changes_input(
-                app_state,
-                state_rt,
-                named_values0,
-                named_values1,
-                n_steps.map(|s| s.parse::<i32>().unwrap_or(0)).unwrap_or(0),
-            )
-            .await,
-        );
-    } else {
-        return StateChangesPage::Output(
-            get_state_changes_output(app_state, state_rt, named_values0, named_values1, n_steps)
+        StateChangesPage::Input(
+            get_state_changes_input(app_state, state_rt, named_values0, named_values1, num_steps)
                 .await,
-        );
+        )
+    } else {
+        StateChangesPage::Output(
+            match app_state
+                .state_changes
+                .find_paths(&state_rt, named_values0, named_values1, num_steps)
+                .await
+            {
+                Ok(paths) => StateChangesPageOutput {
+                    error_message: None,
+                    paths,
+                },
+                Err(e) => StateChangesPageOutput {
+                    error_message: Some(format!("Failed to get paths: {}", e)),
+                    paths: vec![],
+                },
+            },
+        )
     }
 }
 
 async fn get_state_changes_input(
     app_state: AppState,
-    state_rt: String,
-    named_values0: HashMap<String, String>,
-    named_values1: HashMap<String, String>,
-    num_steps: i32,
-) -> StateChangesPageInput {
-    let state_rt = app_state.facts.get_record_type(&state_rt).await.unwrap();
-    let state_fields = state_rt.data_fields.clone();
-
-    let start_state_values = state_fields
-        .iter()
-        .map(|field_name| {
-            let value = named_values0
-                .get(field_name)
-                .map(|v| v.trim_matches('"').to_string())
-                .unwrap_or("".to_string());
-            (field_name.clone(), value)
-        })
-        .collect::<Vec<_>>();
-    let end_state_values = state_fields
-        .iter()
-        .map(|field_name| {
-            let value = named_values1
-                .get(field_name)
-                .map(|v| v.trim_matches('"').to_string())
-                .unwrap_or("".to_string());
-            (field_name.clone(), value)
-        })
-        .collect::<Vec<_>>();
-
-    StateChangesPageInput {
-        fact_type: state_rt.name.clone(),
-        start_state_values,
-        end_state_values,
-        num_steps,
-    }
-}
-
-async fn get_state_changes_output(
-    app_state: AppState,
-    state_rt: String,
+    state_rt_name: String,
     named_values0: HashMap<String, String>,
     named_values1: HashMap<String, String>,
     num_steps: Option<&String>,
-) -> StateChangesPageOutput {
-    let parse_n_steps = || -> Result<i32, Box<dyn Error>> {
-        let n_steps = num_steps
-            .ok_or("Query parameter 'num-steps' not found")?
-            .parse::<i32>()
-            .map_err(|e| format!("Invalid num-steps argument: {}", e))?;
-        Ok(n_steps)
-    };
-
-    let n_steps = match parse_n_steps() {
-        Ok(i) => i,
-        Err(e) => {
-            return StateChangesPageOutput {
-                error_message: Some(format!("Failed to parse 'num-steps': {}", e)),
-                paths: vec![],
-            };
+) -> StateChangesPageInput {
+    let state_rt = match app_state.facts.get_record_type(&state_rt_name).await {
+        Ok(rt) => rt,
+        Err(_) => {
+            return StateChangesPageInput {
+                fact_type: "".to_string(),
+                start_state_values: vec![],
+                end_state_values: vec![],
+                num_steps: 0,
+            }
         }
     };
 
-    let named_values0 = named_values0
-        .into_iter()
-        .map(|(k, v)| (k.clone(), GoalTerm::String(v)))
-        .collect::<HashMap<_, _>>();
-    let named_values1 = named_values1
-        .into_iter()
-        .map(|(k, v)| (k.clone(), GoalTerm::String(v)))
-        .collect::<HashMap<_, _>>();
+    let num_steps = num_steps
+        .map(|s| s.parse::<i32>().unwrap_or(0))
+        .unwrap_or(0);
 
-    match app_state
-        .state_changes
-        .get_paths(&state_rt, named_values0, named_values1, n_steps)
-        .await
-    {
-        Ok(paths) => StateChangesPageOutput {
-            error_message: None,
-            paths,
-        },
-        Err(e) => StateChangesPageOutput {
-            error_message: Some(format!("Failed to get paths: {}", e)),
-            paths: vec![],
-        },
+    let populate_all_state_values = |named_values: &HashMap<String, String>| {
+        state_rt
+            .data_fields
+            .iter()
+            .map(|field_name| {
+                (
+                    field_name.clone(),
+                    named_values.get(field_name).cloned().unwrap_or_default(),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+
+    StateChangesPageInput {
+        fact_type: state_rt_name,
+        start_state_values: populate_all_state_values(&named_values0),
+        end_state_values: populate_all_state_values(&named_values1),
+        num_steps,
     }
 }
 
