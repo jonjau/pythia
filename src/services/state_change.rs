@@ -53,6 +53,11 @@ pub struct ChangePath {
     pub steps: Vec<ChangeStep>,
 }
 
+pub struct StateValues {
+    pub start_state_values: Vec<(String, String)>,
+    pub end_state_values: Vec<(String, String)>,
+}
+
 impl fmt::Display for ChangePath {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -112,10 +117,7 @@ impl StateChangeService {
             .map(|diffs| diffs.into_iter().flatten().collect())
     }
 
-    fn to_change_path(
-        rt: &Arc<RecordType>,
-        path: &Fact,
-    ) -> Result<ChangePath, StateChangeError> {
+    fn to_change_path(rt: &Arc<RecordType>, path: &Fact) -> Result<ChangePath, StateChangeError> {
         let (ctx, id, steps_term) = (
             path.get("Ctx")?.to_string(),
             path.get("Id")?.to_string(),
@@ -164,6 +166,32 @@ impl StateChangeService {
         })
     }
 
+    pub async fn populate_all_state_values(
+        &self,
+        state_rt_name: &str,
+        named_values0: HashMap<String, String>,
+        named_values1: HashMap<String, String>,
+    ) -> Result<StateValues, StateChangeError> {
+        let state_rt = self.facts.get_record_type(state_rt_name).await?;
+        let populate_all_state_values = |named_values: &HashMap<String, String>| {
+            state_rt
+                .data_fields
+                .iter()
+                .map(|field_name| {
+                    (
+                        field_name.clone(),
+                        named_values.get(field_name).cloned().unwrap_or_default(),
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+
+        Ok(StateValues {
+            start_state_values: populate_all_state_values(&named_values0),
+            end_state_values: populate_all_state_values(&named_values1),
+        })
+    }
+
     pub async fn find_paths(
         &self,
         state_rt_name: &str,
@@ -184,7 +212,8 @@ impl StateChangeService {
             .ok_or(StateChangeError::ParameterNotFound("num-steps".to_string()))?
             .parse::<i32>()?;
 
-        self.find_paths_(state_rt, start_state, end_state, num_steps).await
+        self.find_paths_(state_rt, start_state, end_state, num_steps)
+            .await
     }
 
     async fn find_paths_(
@@ -238,9 +267,7 @@ impl StateChangeService {
 
         Ok(change_paths
             .iter()
-            .map(|path| {
-                Self::to_change_path(&state_rt, &path)
-            })
+            .map(|path| Self::to_change_path(&state_rt, &path))
             .collect::<Result<Vec<_>, _>>()?)
     }
 }
