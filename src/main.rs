@@ -42,6 +42,7 @@ async fn main() {
         .route("/", get(|| async { Redirect::permanent("/facts") }))
         .route("/state-changes/:state_record_type", get(get_state_changes))
         .route("/facts", post(create_fact))
+        .route("/facts/:fact_type", get(get_facts))
         .route(
             "/states/:state_id/:fact_type/:field_name/specified",
             post(set_field_to_specified).delete(set_field_to_unspecified),
@@ -54,7 +55,7 @@ async fn main() {
 }
 
 #[derive(Template)]
-#[template(path = "layout.html", ext = "html")]
+#[template(path = "state-changes.html", ext = "html")]
 struct StateChangesPageInput {
     fact_type: String,
     start_state_values: Vec<(String, String)>,
@@ -146,13 +147,24 @@ async fn get_state_changes(
     }
 }
 
+#[derive(Template)]
+#[template(path = "facts.html", ext = "html")]
+struct GetFactsTemplate {
+    facts: Vec<String>,
+}
+
+async fn get_facts(State(_state): State<AppState>, Path(rt_name): Path<String>) -> GetFactsTemplate {
+    GetFactsTemplate {
+        facts: vec![rt_name.to_string(), 'b'.to_string()],
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 struct CreateFact {
     typename: String,
     values: Vec<String>,
 }
 
-// #[debug_handler]
 async fn create_fact(State(_state): State<AppState>, Json(_cf): Json<CreateFact>) -> String {
     "".to_string()
 }

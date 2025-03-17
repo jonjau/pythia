@@ -1,9 +1,9 @@
 {% extends "layout.html" %} {% block content %}
-<table>
+<table style="border: 1px solid black">
   <tbody>
     {% for fact in facts %}
-    <tr>
-      <td>{{ fact }}</td>
+    <tr style="border: 1px solid black">
+      <td style="border: 1px solid black">{{ fact }}</td>
     </tr>
     {% endfor %}
   </tbody>
