@@ -1,0 +1,15 @@
+{% extends "layout.html" %} {% block content %}
+<table style="border: 1px solid black">
+  <tbody>
+    {% for record_type in record_types %}
+    <tr style="border: 1px solid black">
+      <td style="border: 1px solid black">
+        {{ record_type }}
+        <a href="/facts/{{ record_type }}">F</a>
+        <a href="/state-changes/{{ record_type }}">SC</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

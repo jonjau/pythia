@@ -64,6 +64,12 @@ impl FactService {
             .await
     }
 
+    pub async fn get_all_record_types(&self) -> LogicMachineResult<Vec<Arc<RecordType>>> {
+        self.lm_actor
+            .send_query(GetAllRecordTypesQuery)
+            .await
+    }
+
     pub async fn get_all_facts(&self, fact_type: String) -> LogicMachineResult<Vec<Fact>> {
         self.lm_actor
             .send_query(GetAllFactsQuery { fact_type })
@@ -102,6 +108,8 @@ struct GetRecordTypeQuery {
     fact_type: String,
 }
 
+struct GetAllRecordTypesQuery;
+
 struct Message<Query, Response> {
     query: Query,
     respond_to: oneshot::Sender<Response>,
@@ -112,12 +120,14 @@ enum ActorMessage {
     GetAllFacts(GetAllFactsMessage),
     GetFacts(GetFactsMessage),
     GetRecordType(GetRecordTypeMessage),
+    GetAllRecordTypes(GetAllRecordTypesMessage)
 }
 
 type AddFactMessage = Message<AddFactQuery, LogicMachineResult<Vec<Fact>>>;
 type GetAllFactsMessage = Message<GetAllFactsQuery, LogicMachineResult<Vec<Fact>>>;
 type GetFactsMessage = Message<GetFactsQuery, LogicMachineResult<Vec<Fact>>>;
 type GetRecordTypeMessage = Message<GetRecordTypeQuery, LogicMachineResult<Arc<RecordType>>>;
+type GetAllRecordTypesMessage = Message<GetAllRecordTypesQuery, LogicMachineResult<Vec<Arc<RecordType>>>>;
 
 impl From<AddFactMessage> for ActorMessage {
     fn from(msg: AddFactMessage) -> Self {
@@ -140,6 +150,12 @@ impl From<GetFactsMessage> for ActorMessage {
 impl From<GetRecordTypeMessage> for ActorMessage {
     fn from(msg: GetRecordTypeMessage) -> Self {
         ActorMessage::GetRecordType(msg)
+    }
+}
+
+impl From<GetAllRecordTypesMessage> for ActorMessage {
+    fn from(msg: GetAllRecordTypesMessage) -> Self {
+        ActorMessage::GetAllRecordTypes(msg)
     }
 }
 
@@ -200,6 +216,10 @@ impl Actor {
             }
             ActorMessage::GetRecordType(Message { query, respond_to }) => {
                 let r = self.lm.get_record_type(&query.fact_type);
+                let _ = respond_to.send(r);
+            }
+            ActorMessage::GetAllRecordTypes(Message { respond_to, .. }) => {
+                let r = self.lm.get_all_record_types();
                 let _ = respond_to.send(r);
             }
         }

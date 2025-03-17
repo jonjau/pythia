@@ -39,7 +39,7 @@ async fn main() {
     };
 
     let r = Router::new()
-        .route("/", get(|| async { Redirect::permanent("/facts") }))
+        .route("/", get(get_inquiries))
         .route("/state-changes/:state_record_type", get(get_state_changes))
         .route("/facts", post(create_fact))
         .route("/facts/:fact_type", get(get_facts))
@@ -52,6 +52,20 @@ async fn main() {
     // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     axum::serve(listener, r).await.unwrap();
+}
+
+#[derive(Template)]
+#[template(path = "index.html", ext = "html")]
+struct GetInquiriesTemplate {
+    record_types: Vec<String>,
+}
+
+async fn get_inquiries(State(app_state): State<AppState>) -> GetInquiriesTemplate {
+    let rts = app_state.facts.get_all_record_types().await.unwrap();
+
+    GetInquiriesTemplate {
+        record_types: rts.iter().map(|rt| rt.name.clone()).collect(),
+    }
 }
 
 #[derive(Template)]

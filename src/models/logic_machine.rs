@@ -67,6 +67,14 @@ impl LogicMachine {
             .ok_or(LogicMachineError::RecordTypeNotFound(name.to_string()))
     }
 
+    pub fn get_all_record_types(&self) -> LogicMachineResult<Vec<Arc<RecordType>>> {
+        Ok(self
+            .record_types
+            .values()
+            .map(|record| Arc::new(record.clone()))
+            .collect())
+    }
+
     pub fn define_types(&mut self, types: Vec<RecordType>) {
         for t in types {
             self.record_types.insert(t.name.clone(), t);
