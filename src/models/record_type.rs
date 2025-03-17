@@ -1,5 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
+use serde::Deserialize;
+
 use crate::utils::tracking::IdContext;
 
 use crate::models::fact::{Fact, FactTerm};
@@ -32,6 +34,15 @@ pub enum RecordTypeError {
 #[derive(Clone, Debug, PartialEq)]
 pub struct RecordType {
     term_id_ctx: IdContext,
+    pub name: String,
+    pub display_name: String,
+    pub id_fields: Vec<String>,
+    pub data_fields: Vec<String>,
+    pub metadata_fields: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RecordTypeJson {
     pub name: String,
     pub display_name: String,
     pub id_fields: Vec<String>,

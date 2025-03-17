@@ -1,0 +1,23 @@
+[
+  {
+    "name": "edge",
+    "display_name": "edge",
+    "id_fields": [],
+    "data_fields": ["X", "Y"],
+    "metadata_fields": []
+  },
+  {
+    "name": "arc",
+    "display_name": "arc",
+    "id_fields": [],
+    "data_fields": ["X", "Y"],
+    "metadata_fields": []
+  },
+  {
+    "name": "dimlink",
+    "display_name": "dimlink",
+    "id_fields": ["Id"],
+    "data_fields": ["DRef", "IRef", "BegPeriod", "EndPeriod"],
+    "metadata_fields": ["Context", "EditTime", "RecStatus", "SeqNum"]
+  }
+]
