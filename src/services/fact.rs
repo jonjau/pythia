@@ -1,10 +1,12 @@
+use std::fs::File;
+use std::io::BufReader;
 use std::sync::Arc;
 use std::vec;
 
 use crate::models::fact::Fact;
 use crate::models::goal::Goal;
 use crate::models::logic_machine::{LogicMachine, LogicMachineResult};
-use crate::models::record_type::{RecordType, RecordTypeBuilder};
+use crate::models::record_type::{RecordType, RecordTypeBuilder, RecordTypeError, RecordTypeJson};
 
 use tokio::sync::{mpsc, oneshot};
 use tokio::{runtime::Builder, task::LocalSet};
@@ -14,11 +16,41 @@ pub struct FactService {
     lm_actor: ActorHandle,
 }
 
+#[derive(thiserror::Error, Debug)]
+enum ReadRecordTypesError {
+    #[error("Failed to open file: {0}")]
+    CouldNotOpenFile(#[from] std::io::Error),
+    #[error("Failed to parse JSON: {0}")]
+    CouldNotParseJson(#[from] serde_json::Error),
+    #[error("Failed to build record type: {0}")]
+    CouldNotBuildRecordType(#[from] RecordTypeError),
+}
+
 impl FactService {
-    pub fn new(program: &str) -> Self {
+    pub fn new(program: &str, record_types_file_path: &str) -> Self {
         FactService {
-            lm_actor: ActorHandle::new(program.to_owned()),
+            lm_actor: ActorHandle::new(
+                program.to_owned(),
+                FactService::read_record_types_from_json(record_types_file_path).unwrap(),
+            ),
         }
+    }
+    
+    fn read_record_types_from_json(
+        file_path: &str,
+    ) -> Result<Vec<RecordType>, ReadRecordTypesError> {
+        let reader = BufReader::new(File::open(file_path)?);
+        let rts: Vec<RecordTypeJson> = serde_json::from_reader(reader)?;
+        Ok(rts
+            .into_iter()
+            .map(|rt| {
+                RecordTypeBuilder::new(rt.name, rt.data_fields)
+                    .display_name(rt.display_name)
+                    .id_fields(rt.id_fields)
+                    .metadata_fields(rt.metadata_fields)
+                    .build()
+            })
+            .collect::<Result<Vec<_>, RecordTypeError>>()?)
     }
 
     pub async fn get_record_type(
@@ -117,20 +149,12 @@ struct Actor {
 }
 
 impl Actor {
-    fn new(program: &str, receiver: mpsc::Receiver<ActorMessage>) -> Self {
-        let mut lm = LogicMachine::new(program);
-        lm.define_types(vec![
-            RecordTypeBuilder::new("edge", vec!["X", "Y"])
-                .build()
-                .unwrap(),
-            RecordTypeBuilder::new("arc", vec!["X", "Y"])
-                .build()
-                .unwrap(),
-            RecordTypeBuilder::new("dimlink", vec!["DRef", "IRef", "BegPeriod", "EndPeriod"])
-                .id_fields(vec!["Id"])
-                .metadata_fields(vec!["Context", "EditTime", "RecStatus", "SeqNum"])
-                .build()
-                .unwrap(),
+    fn new(
+        program: &str,
+        record_types: Vec<RecordType>,
+        receiver: mpsc::Receiver<ActorMessage>,
+    ) -> Self {
+        let mut rts = vec![
             RecordTypeBuilder::new("change_step", vec!["Ctx", "Id", "Vals1", "Vals2"])
                 .build()
                 .unwrap(),
@@ -144,7 +168,11 @@ impl Actor {
             RecordTypeBuilder::new("length", vec!["X", "Length"])
                 .build()
                 .unwrap(),
-        ]);
+        ];
+        rts.extend(record_types);
+
+        let mut lm = LogicMachine::new(program);
+        lm.define_types(rts);
 
         Actor { receiver, lm }
     }
@@ -190,13 +218,13 @@ struct ActorHandle {
 }
 
 impl ActorHandle {
-    fn new(program: String) -> Self {
+    fn new(program: String, record_types: Vec<RecordType>) -> Self {
         let (send, recv) = mpsc::channel(16);
 
         let rt = Builder::new_current_thread().enable_all().build().unwrap();
 
         std::thread::spawn(move || {
-            let actor = Actor::new(&program, recv);
+            let actor = Actor::new(&program, record_types, recv);
             let local = LocalSet::new();
 
             // Spawn a task on this thread which is a loop that ends when all

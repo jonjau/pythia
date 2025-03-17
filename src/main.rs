@@ -30,8 +30,7 @@ struct AppState {
 #[tokio::main]
 async fn main() {
     let db = include_str!("../data/db.pl");
-
-    let facts = FactService::new(db);
+    let facts = FactService::new(db, "data/types.json");
 
     // TODO: graceful shutdown of actor
     let state = AppState {
