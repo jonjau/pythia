@@ -5,8 +5,8 @@
     <tr style="border: 1px solid black">
       <td style="border: 1px solid black">
         {{ record_type }}
-        <a href="/facts/{{ record_type }}">F</a>
-        <a href="/state-changes/{{ record_type }}">SC</a>
+        <a href="/{{ record_type }}/facts">F</a>
+        <a href="/{{ record_type }}/state-changes">SC</a>
       </td>
     </tr>
     {% endfor %}

@@ -40,9 +40,9 @@ async fn main() {
 
     let r = Router::new()
         .route("/", get(get_inquiries))
-        .route("/state-changes/:state_record_type", get(get_state_changes))
+        .route("/:state_record_type/state-changes", get(get_state_changes))
         .route("/facts", post(create_fact))
-        .route("/facts/:fact_type", get(get_facts))
+        .route("/:fact_type/facts", get(get_facts))
         .route(
             "/states/:state_id/:fact_type/:field_name/specified",
             post(set_field_to_specified).delete(set_field_to_unspecified),
