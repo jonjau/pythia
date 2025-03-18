@@ -17,12 +17,12 @@ mod services;
 mod utils;
 
 use services::{
-    fact::FactService,
-    state_change::{ChangePath, StateChangeService},
+    fact::FactService, logic_machine::LogicMachineService, state_change::{ChangePath, StateChangeService}
 };
 
 #[derive(Clone)]
 struct AppState {
+    lm: LogicMachineService,
     facts: FactService,
     state_changes: StateChangeService,
 }
@@ -30,12 +30,13 @@ struct AppState {
 #[tokio::main]
 async fn main() {
     let db = include_str!("../data/db.pl");
-    let facts = FactService::new(db, "data/types.json");
+    let lm = LogicMachineService::new(db, "data/types.json");
 
     // TODO: graceful shutdown of actor
     let state = AppState {
-        facts: facts.clone(),
-        state_changes: StateChangeService::new(facts.clone()),
+        lm: lm.clone(),
+        facts: FactService::new(lm.clone()),
+        state_changes: StateChangeService::new(lm.clone()),
     };
 
     let r = Router::new()
@@ -61,7 +62,7 @@ struct GetInquiriesTemplate {
 }
 
 async fn get_inquiries(State(app_state): State<AppState>) -> GetInquiriesTemplate {
-    let rts = app_state.facts.get_all_record_types().await.unwrap();
+    let rts = app_state.lm.get_all_record_types().await.unwrap();
 
     GetInquiriesTemplate {
         record_types: rts.iter().map(|rt| rt.name.clone()).collect(),
@@ -167,9 +168,11 @@ struct GetFactsTemplate {
     facts: Vec<String>,
 }
 
-async fn get_facts(State(_state): State<AppState>, Path(rt_name): Path<String>) -> GetFactsTemplate {
+async fn get_facts(State(state): State<AppState>, Path(rt_name): Path<String>) -> GetFactsTemplate {
+    let facts = state.facts.get_facts(rt_name).await.unwrap();
+
     GetFactsTemplate {
-        facts: vec![rt_name.to_string(), 'b'.to_string()],
+        facts
     }
 }
 
