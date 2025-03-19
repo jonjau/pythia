@@ -170,28 +170,9 @@ impl Actor {
         record_types: Vec<RecordType>,
         receiver: mpsc::Receiver<ActorMessage>,
     ) -> Self {
-        let mut rts = vec![
-            RecordTypeBuilder::new("change_step", vec!["Ctx", "Id", "Vals1", "Vals2"])
-                .build()
-                .unwrap(),
-            RecordTypeBuilder::new("change_path", vec!["Ctx", "Id", "Vals1", "Vals2", "Steps"])
-                .build()
-                .unwrap(),
-            RecordTypeBuilder::new("=", vec!["A", "B"])
-                .display_name("equal")
-                .build()
-                .unwrap(),
-            RecordTypeBuilder::new("length", vec!["X", "Length"])
-                .build()
-                .unwrap(),
-        ];
-        rts.extend(record_types);
-
-        let mut lm = LogicMachine::new(program);
-        lm.define_types(rts);
-
-        Actor { receiver, lm }
+        Actor { receiver, lm: LogicMachine::new(program, record_types) }
     }
+
     fn handle_message(&mut self, msg: ActorMessage) {
         match msg {
             ActorMessage::AddFact(Message { query, respond_to }) => {
