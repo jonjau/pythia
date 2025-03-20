@@ -5,7 +5,6 @@ use askama_axum::IntoResponse;
 use axum::{
     extract::{Path, Query, State},
     http::HeaderMap,
-    response::Redirect,
     routing::{get, post},
     Json, Router,
 };
@@ -44,6 +43,7 @@ async fn main() {
         .route("/:state_record_type/state-changes", get(get_state_changes))
         .route("/facts", post(create_fact))
         .route("/:fact_type/facts", get(get_facts))
+        .route("/:fact_type/facts/new", get(get_new_fact_form).delete(get_add_fact_button))
         .route(
             "/states/:state_id/:fact_type/:field_name/specified",
             post(set_field_to_specified).delete(set_field_to_unspecified),
@@ -165,14 +165,45 @@ async fn get_state_changes(
 #[derive(Template)]
 #[template(path = "facts.html", ext = "html")]
 struct GetFactsTemplate {
+    fact_type: String,
     facts: Vec<String>,
 }
 
 async fn get_facts(State(state): State<AppState>, Path(rt_name): Path<String>) -> GetFactsTemplate {
-    let facts = state.facts.get_facts(rt_name).await.unwrap();
+    let facts = state.facts.get_facts(rt_name.clone()).await.unwrap();
 
     GetFactsTemplate {
+        fact_type: rt_name,
         facts
+    }
+}
+
+#[derive(Template)]
+#[template(path = "new-fact.html", ext = "html")]
+struct GetNewFactFormTemplate {
+    fact_type: String,
+    data_fields: Vec<String>
+}
+
+async fn get_new_fact_form(State(state): State<AppState>, Path(rt_name): Path<String>) -> GetNewFactFormTemplate {
+    let rt = (*state.lm.get_record_type(rt_name).await.unwrap()).clone();
+    
+    GetNewFactFormTemplate {
+        fact_type: rt.display_name,
+        data_fields: rt.data_fields
+    }
+}
+
+
+#[derive(Template)]
+#[template(path = "add-new-fact-button.html", ext = "html")]
+struct GetAddFactButtonTemplate {
+    fact_type: String
+}
+
+async fn get_add_fact_button(Path(rt_name): Path<String>) -> GetAddFactButtonTemplate {
+    GetAddFactButtonTemplate {
+        fact_type: rt_name
     }
 }
 
