@@ -6,7 +6,7 @@ use axum::{
     extract::{Path, Query, State},
     http::HeaderMap,
     routing::{get, post},
-    Json, Router,
+    Form, Router,
 };
 
 use serde::{Deserialize, Serialize};
@@ -41,8 +41,7 @@ async fn main() {
     let r = Router::new()
         .route("/", get(get_inquiries))
         .route("/:state_record_type/state-changes", get(get_state_changes))
-        .route("/facts", post(create_fact))
-        .route("/:fact_type/facts", get(get_facts))
+        .route("/:fact_type/facts", get(get_facts).post(create_fact))
         .route("/:fact_type/facts/new", get(get_new_fact_form).delete(get_add_fact_button))
         .route(
             "/states/:state_id/:fact_type/:field_name/specified",
@@ -182,18 +181,17 @@ async fn get_facts(State(state): State<AppState>, Path(rt_name): Path<String>) -
 #[template(path = "new-fact.html", ext = "html")]
 struct GetNewFactFormTemplate {
     fact_type: String,
-    data_fields: Vec<String>
+    fields: Vec<String>
 }
 
 async fn get_new_fact_form(State(state): State<AppState>, Path(rt_name): Path<String>) -> GetNewFactFormTemplate {
-    let rt = (*state.lm.get_record_type(rt_name).await.unwrap()).clone();
+    let rt = state.lm.get_record_type(rt_name).await.unwrap();
     
     GetNewFactFormTemplate {
-        fact_type: rt.display_name,
-        data_fields: rt.data_fields
+        fact_type: rt.clone().display_name.clone(),
+        fields: rt.clone().all_fields()
     }
 }
-
 
 #[derive(Template)]
 #[template(path = "add-new-fact-button.html", ext = "html")]
@@ -207,14 +205,20 @@ async fn get_add_fact_button(Path(rt_name): Path<String>) -> GetAddFactButtonTem
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-struct CreateFact {
-    typename: String,
-    values: Vec<String>,
+#[derive(Template)]
+#[template(path = "facts-table.html", ext = "html")]
+struct FactsTableTemplate {
+    facts: Vec<String>
 }
 
-async fn create_fact(State(_state): State<AppState>, Json(_cf): Json<CreateFact>) -> String {
-    "".to_string()
+async fn create_fact(State(state): State<AppState>, Path(rt_name): Path<String>, Form(f): Form<HashMap<String, String>>) -> FactsTableTemplate {
+    dbg!(&f);
+
+    let facts = state.facts.add_fact(&rt_name, f).await.unwrap();
+
+    FactsTableTemplate {
+        facts
+    }
 }
 
 #[derive(Template)]

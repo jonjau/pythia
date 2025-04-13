@@ -1,14 +1,6 @@
 {% extends "layout.html" %} {% block content %}
 <a href="/">Back to home</a>
-<table style="border: 1px solid black">
-  <tbody>
-    {% for fact in facts %}
-    <tr style="border: 1px solid black">
-      <td style="border: 1px solid black">{{ fact }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+  {% include "facts-table.html" %}
 <div>
   {% include "add-new-fact-button.html" %}
 </div>
