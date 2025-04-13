@@ -38,7 +38,7 @@ impl FactService {
 
         let named_values = named_values
             .into_iter()
-            .map(|(k, v)| (format!("DIMLINK70_{}", k), FactTerm::String(v)))
+            .map(|(k, v)| (format!("{}0_{}", rt.name.to_uppercase(), k), FactTerm::String(v)))
             .collect::<HashMap<_, _>>();
 
         dbg!(&named_values);
