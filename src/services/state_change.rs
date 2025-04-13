@@ -4,7 +4,7 @@ use crate::models::fact::{Fact, FactTerm, FieldNotFound};
 use crate::models::goal::GoalTerm;
 use crate::models::logic_machine::LogicMachineError;
 use crate::models::record_type::{RecordType, RecordTypeError};
-use crate::services::fact::FactService;
+use crate::services::logic_machine::LogicMachineService;
 
 // TODO: to display a path:
 // detailed view: show a table with the columns being the field names of the state_rt
@@ -90,12 +90,12 @@ pub enum StateChangeError {
 
 #[derive(Clone)]
 pub struct StateChangeService {
-    facts: FactService,
+    lm: LogicMachineService,
 }
 
 impl StateChangeService {
-    pub fn new(facts: FactService) -> Self {
-        StateChangeService { facts }
+    pub fn new(lm: LogicMachineService) -> Self {
+        StateChangeService { lm }
     }
 
     fn difference(f1: &Fact, f2: &Fact) -> Result<Vec<FieldDiff>, StateChangeError> {
@@ -172,7 +172,7 @@ impl StateChangeService {
         named_values0: HashMap<String, String>,
         named_values1: HashMap<String, String>,
     ) -> Result<StateValues, StateChangeError> {
-        let state_rt = self.facts.get_record_type(state_rt_name).await?;
+        let state_rt = self.lm.get_record_type(state_rt_name).await?;
         let populate_all_state_values = |named_values: &HashMap<String, String>| {
             state_rt
                 .data_fields
@@ -199,7 +199,7 @@ impl StateChangeService {
         end_state: HashMap<String, String>,
         num_steps: Option<&String>,
     ) -> Result<Vec<ChangePath>, StateChangeError> {
-        let state_rt = self.facts.get_record_type(state_rt_name).await?;
+        let state_rt = self.lm.get_record_type(state_rt_name).await?;
         let start_state = start_state
             .into_iter()
             .map(|(k, v)| (k.clone(), GoalTerm::String(v)))
@@ -223,7 +223,7 @@ impl StateChangeService {
         end_state: HashMap<String, GoalTerm>,
         num_steps: i32,
     ) -> Result<Vec<ChangePath>, StateChangeError> {
-        let change_path_rt = self.facts.get_record_type("change_path").await?;
+        let change_path_rt = self.lm.get_record_type("change_path").await?;
         let change_path_goal = change_path_rt.to_goal_from_named_values(
             &[
                 ("Vals1".to_string(), GoalTerm::Variable("Vals1".to_string())),
@@ -233,7 +233,7 @@ impl StateChangeService {
             .into(),
         )?;
 
-        let binding_goal_rt = self.facts.get_record_type("=".to_string()).await?;
+        let binding_goal_rt = self.lm.get_record_type("=".to_string()).await?;
         let binding_goal1 = Arc::clone(&binding_goal_rt).to_goal(vec![
             GoalTerm::Variable("Vals1".to_string()),
             Arc::clone(&state_rt)
@@ -247,14 +247,14 @@ impl StateChangeService {
                 .to_data_value_list(),
         ])?;
 
-        let length_rt = self.facts.get_record_type("length").await?;
+        let length_rt = self.lm.get_record_type("length").await?;
         let length_goal = length_rt.to_goal(vec![
             GoalTerm::Variable("Steps".to_string()),
             GoalTerm::Integer(num_steps),
         ])?;
 
         let change_paths = self
-            .facts
+            .lm
             .get_facts(
                 change_path_goal
                     .clone()

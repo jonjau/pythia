@@ -1,0 +1,21 @@
+<form id="add-fact-form" autocomplete="on">
+  {{ fact_type }}
+  <table style="border: 1px solid black">
+    {% for field in fields %}
+    <tr>
+      <td>
+        <label for="{{ field }}" style="text-align: right; margin-right: 10px;">{{ field }}</label>
+      </td>
+      <td>
+        <input type="text" id="{{ field }}" name="{{ field }}" />
+      </td>
+    </tr>
+    {% endfor %}
+    <tr>
+      <td>
+        <button hx-delete="/{{ fact_type }}/facts/new" hx-target="#add-fact-form" hx-swap="outerHTML">Cancel</button>
+        <button hx-post="/{{ fact_type }}/facts" hx-include="#add-fact-form" hx-target="#fact-table" hx-swap="outerHTML">Submit</button>
+      </td>
+    </tr>
+  </table>
+</form>

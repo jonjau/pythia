@@ -5,9 +5,8 @@ use askama_axum::IntoResponse;
 use axum::{
     extract::{Path, Query, State},
     http::HeaderMap,
-    response::Redirect,
     routing::{get, post},
-    Json, Router,
+    Form, Router,
 };
 
 use serde::{Deserialize, Serialize};
@@ -17,12 +16,12 @@ mod services;
 mod utils;
 
 use services::{
-    fact::FactService,
-    state_change::{ChangePath, StateChangeService},
+    fact::FactService, logic_machine::LogicMachineService, state_change::{ChangePath, StateChangeService}
 };
 
 #[derive(Clone)]
 struct AppState {
+    lm: LogicMachineService,
     facts: FactService,
     state_changes: StateChangeService,
 }
@@ -30,18 +29,20 @@ struct AppState {
 #[tokio::main]
 async fn main() {
     let db = include_str!("../data/db.pl");
-    let facts = FactService::new(db, "data/types.json");
+    let lm = LogicMachineService::new(db, "data/types.json");
 
     // TODO: graceful shutdown of actor
     let state = AppState {
-        facts: facts.clone(),
-        state_changes: StateChangeService::new(facts.clone()),
+        lm: lm.clone(),
+        facts: FactService::new(lm.clone()),
+        state_changes: StateChangeService::new(lm.clone()),
     };
 
     let r = Router::new()
-        .route("/", get(|| async { Redirect::permanent("/facts") }))
-        .route("/state-changes/:state_record_type", get(get_state_changes))
-        .route("/facts", post(create_fact))
+        .route("/", get(get_inquiries))
+        .route("/:state_record_type/state-changes", get(get_state_changes))
+        .route("/:fact_type/facts", get(get_facts).post(create_fact))
+        .route("/:fact_type/facts/new", get(get_new_fact_form).delete(get_add_fact_button))
         .route(
             "/states/:state_id/:fact_type/:field_name/specified",
             post(set_field_to_specified).delete(set_field_to_unspecified),
@@ -54,7 +55,21 @@ async fn main() {
 }
 
 #[derive(Template)]
-#[template(path = "layout.html", ext = "html")]
+#[template(path = "index.html", ext = "html")]
+struct GetInquiriesTemplate {
+    record_types: Vec<String>,
+}
+
+async fn get_inquiries(State(app_state): State<AppState>) -> GetInquiriesTemplate {
+    let rts = app_state.lm.get_all_record_types().await.unwrap();
+
+    GetInquiriesTemplate {
+        record_types: rts.iter().map(|rt| rt.name.clone()).collect(),
+    }
+}
+
+#[derive(Template)]
+#[template(path = "state-changes.html", ext = "html")]
 struct StateChangesPageInput {
     fact_type: String,
     start_state_values: Vec<(String, String)>,
@@ -146,15 +161,64 @@ async fn get_state_changes(
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-struct CreateFact {
-    typename: String,
-    values: Vec<String>,
+#[derive(Template)]
+#[template(path = "facts.html", ext = "html")]
+struct GetFactsTemplate {
+    fact_type: String,
+    facts: Vec<String>,
 }
 
-// #[debug_handler]
-async fn create_fact(State(_state): State<AppState>, Json(_cf): Json<CreateFact>) -> String {
-    "".to_string()
+async fn get_facts(State(state): State<AppState>, Path(rt_name): Path<String>) -> GetFactsTemplate {
+    let facts = state.facts.get_facts(rt_name.clone()).await.unwrap();
+
+    GetFactsTemplate {
+        fact_type: rt_name,
+        facts
+    }
+}
+
+#[derive(Template)]
+#[template(path = "new-fact.html", ext = "html")]
+struct GetNewFactFormTemplate {
+    fact_type: String,
+    fields: Vec<String>
+}
+
+async fn get_new_fact_form(State(state): State<AppState>, Path(rt_name): Path<String>) -> GetNewFactFormTemplate {
+    let rt = state.lm.get_record_type(rt_name).await.unwrap();
+    
+    GetNewFactFormTemplate {
+        fact_type: rt.clone().display_name.clone(),
+        fields: rt.clone().all_fields()
+    }
+}
+
+#[derive(Template)]
+#[template(path = "add-new-fact-button.html", ext = "html")]
+struct GetAddFactButtonTemplate {
+    fact_type: String
+}
+
+async fn get_add_fact_button(Path(rt_name): Path<String>) -> GetAddFactButtonTemplate {
+    GetAddFactButtonTemplate {
+        fact_type: rt_name
+    }
+}
+
+#[derive(Template)]
+#[template(path = "facts-table.html", ext = "html")]
+struct FactsTableTemplate {
+    facts: Vec<String>
+}
+
+async fn create_fact(State(state): State<AppState>, Path(rt_name): Path<String>, Form(f): Form<HashMap<String, String>>) -> FactsTableTemplate {
+    dbg!(&f);
+
+    let facts = state.facts.add_fact(&rt_name, f).await.unwrap();
+
+    FactsTableTemplate {
+        facts
+    }
 }
 
 #[derive(Template)]

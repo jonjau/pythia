@@ -1,12 +1,7 @@
 {% extends "layout.html" %} {% block content %}
-<table>
-  <tbody>
-    {% for fact in facts %}
-    <tr>
-      <td>{{ fact }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-<p><a href="/facts/new">Add fact</a></p>
+<a href="/">Back to home</a>
+  {% include "facts-table.html" %}
+<div>
+  {% include "add-new-fact-button.html" %}
+</div>
 {% endblock %}
