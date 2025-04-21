@@ -16,21 +16,19 @@ use crate::services::logic_machine::LogicMachineService;
 // Maybe we should also allow showing/hiding some fields
 
 pub struct FieldDiff {
-    pub field: String,
     pub before: FactTerm,
-    pub after: FactTerm,
+    pub after: FactTerm
 }
 
 impl fmt::Display for FieldDiff {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}: {} → {}", self.field, self.before, self.after)
+        write!(f, "{} → {}", self.before, self.after)
     }
 }
 
 pub struct ChangeStep {
-    before: Fact,
-    after: Fact,
-    pub diffs: Vec<FieldDiff>,
+    result: Fact,
+    pub diffs: HashMap<String, FieldDiff>,
 }
 
 impl fmt::Display for ChangeStep {
@@ -40,7 +38,7 @@ impl fmt::Display for ChangeStep {
             "{}",
             self.diffs
                 .iter()
-                .map(|d| d.to_string())
+                .map(|(field, d)| format!("{}: {}", field, d.to_string()))
                 .collect::<Vec<_>>()
                 .join(", ")
         )
@@ -98,17 +96,16 @@ impl StateChangeService {
         StateChangeService { lm }
     }
 
-    fn difference(f1: &Fact, f2: &Fact) -> Result<Vec<FieldDiff>, StateChangeError> {
+    fn difference(f1: &Fact, f2: &Fact) -> Result<HashMap<String, FieldDiff>, StateChangeError> {
         f1.data_fields()
-            .iter()
+            .into_iter()
             .map(|field_name| {
-                let (term1, term2) = (f1.get(field_name)?, f2.get(field_name)?);
+                let (term1, term2) = (f1.get(&field_name)?, f2.get(&field_name)?);
                 Ok(if term1 != term2 {
-                    Some(FieldDiff {
-                        field: field_name.to_string(),
+                    Some((field_name, FieldDiff {
                         before: term1,
                         after: term2,
-                    })
+                    }))
                 } else {
                     None
                 })
@@ -160,8 +157,7 @@ impl StateChangeService {
         let diffs = Self::difference(&before, &after)?;
 
         Ok(ChangeStep {
-            before,
-            after,
+            result: after,
             diffs,
         })
     }
