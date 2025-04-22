@@ -21,7 +21,7 @@ use crate::models::record_type::{RecordType, RecordTypeBuilder};
 #[derive(Debug, Clone, PartialEq)]
 pub struct Fact {
     pub type_: Arc<RecordType>,
-    values: Vec<FactTerm>,
+    pub values: Vec<FactTerm>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

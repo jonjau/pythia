@@ -15,9 +15,11 @@ use crate::services::logic_machine::LogicMachineService;
 // the table of paths should be sortable and filterable.
 // Maybe we should also allow showing/hiding some fields
 
+#[derive(Clone)]
 pub struct FieldDiff {
+    pub field_name: String,
     pub before: FactTerm,
-    pub after: FactTerm
+    pub after: FactTerm,
 }
 
 impl fmt::Display for FieldDiff {
@@ -27,8 +29,9 @@ impl fmt::Display for FieldDiff {
 }
 
 pub struct ChangeStep {
-    result: Fact,
-    pub diffs: HashMap<String, FieldDiff>,
+    pub before: Fact,
+    pub after: Fact,
+    pub diffs: Vec<Option<FieldDiff>>,
 }
 
 impl fmt::Display for ChangeStep {
@@ -36,9 +39,12 @@ impl fmt::Display for ChangeStep {
         write!(
             f,
             "{}",
-            self.diffs
-                .iter()
-                .map(|(field, d)| format!("{}: {}", field, d.to_string()))
+            self.after
+                .data_fields()
+                .into_iter()
+                .zip(self.diffs.iter())
+                .filter_map(|(f, d)| d.clone().and_then(|diff| Some((f, diff))))
+                .map(|(f, d)| format!("{}: {}", f, d))
                 .collect::<Vec<_>>()
                 .join(", ")
         )
@@ -48,6 +54,7 @@ impl fmt::Display for ChangeStep {
 pub struct ChangePath {
     pub context: String,
     pub id: String,
+    pub initial_state: Fact,
     pub steps: Vec<ChangeStep>,
 }
 
@@ -96,22 +103,22 @@ impl StateChangeService {
         StateChangeService { lm }
     }
 
-    fn difference(f1: &Fact, f2: &Fact) -> Result<HashMap<String, FieldDiff>, StateChangeError> {
+    fn difference(f1: &Fact, f2: &Fact) -> Result<Vec<Option<FieldDiff>>, StateChangeError> {
         f1.data_fields()
             .into_iter()
             .map(|field_name| {
                 let (term1, term2) = (f1.get(&field_name)?, f2.get(&field_name)?);
                 Ok(if term1 != term2 {
-                    Some((field_name, FieldDiff {
+                    Some(FieldDiff {
+                        field_name,
                         before: term1,
                         after: term2,
-                    }))
+                    })
                 } else {
                     None
                 })
             })
             .collect::<Result<Vec<_>, _>>()
-            .map(|diffs| diffs.into_iter().flatten().collect())
     }
 
     fn to_change_path(rt: &Arc<RecordType>, path: &Fact) -> Result<ChangePath, StateChangeError> {
@@ -134,6 +141,7 @@ impl StateChangeService {
         Ok(ChangePath {
             context: ctx,
             id,
+            initial_state: change_steps[0].before.clone(),
             steps: change_steps,
         })
     }
@@ -157,7 +165,8 @@ impl StateChangeService {
         let diffs = Self::difference(&before, &after)?;
 
         Ok(ChangeStep {
-            result: after,
+            before,
+            after,
             diffs,
         })
     }

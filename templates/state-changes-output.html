@@ -16,19 +16,54 @@
         <ol>
           {% for step in path.steps %}
           <li>
-            {% for (field, diff) in step.diffs %}
+            {% for diff in step.diffs %}
+            {% if let Some(diff) = diff %}
             <table style="display: inline-table; border: 1px solid black">
               <tr>
-                <td style="border: 1px solid black">{{ field }}</td>
+                <td style="border: 1px solid black">{{ diff.field_name }}</td>
                 <td style="border: 1px solid black">
                   {{diff.before}} → {{diff.after}}
                 </td>
               </tr>
             </table>
+            {% endif %}
             {% endfor %}
           </li>
           {% endfor %}
         </ol>
+        <table style="border: 1px solid black">
+          <thead>
+            <tr style="border: 1px solid black">
+              {% for field in path.initial_state.type_.data_fields %}
+              <td style="border: 1px solid black">
+                {{ field }}
+              </td>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border: 1px solid black">
+              {% for value in path.initial_state.values %}
+              <td style="border: 1px solid black">
+                {{ value }}
+              </td>
+              {% endfor %}
+            </tr>
+            {% for step in path.steps %}
+            <tr style="border: 1px solid black">
+              {% for value in step.after.values %}
+              {% if let Some(x) = step.diffs[loop.index0] %}
+              <td style="border: 1px solid black; background-color: khaki;">
+              {% else %}
+              <td style="border: 1px solid black">
+              {% endif %}
+                {{ value }}
+              </td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </td>
     </tr>
     {% endfor %}
