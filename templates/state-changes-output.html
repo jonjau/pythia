@@ -1,37 +1,38 @@
-{% if let Some(message) = error_message %}
-<details>
-  <summary>There was an error in calculating paths</summary>
-  {{message}}
-</details>
-{% else %}
-<table style="border: 1px solid black">
-  <tbody>
-    {% for path in paths %}
-    <tr style="border: 1px solid black">
-      <td style="border: 1px solid black">
-        <div>
-          <p>Context: {{path.context}}</p>
-          <p>ID: {{path.id}}</p>
-        </div>
-        <ol>
-          {% for step in path.steps %}
-          <li>
-            {% for diff in step.diffs %}
-            <table style="display: inline-table; border: 1px solid black">
-              <tr>
-                <td style="border: 1px solid black">{{ diff.field }}</td>
-                <td style="border: 1px solid black">
-                  {{diff.before}} → {{diff.after}}
-                </td>
-              </tr>
-            </table>
-            {% endfor %}
-          </li>
-          {% endfor %}
-        </ol>
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-{% endif %}
+<div x-data="{ viewType: 'list' }">
+  {% if let Some(message) = error_message %}
+  <details>
+    <summary>There was an error in calculating paths</summary>
+    {{message}}
+  </details>
+  {% else %}
+  <div>
+    <input type="radio" id="table-view" value="table" x-model="viewType"">
+    <label for="table-view">Table view</label>
+    <input type="radio" id="list-view" value="list" x-model="viewType">
+    <label for="list-view">List view</label>
+  </div>
+  <table style="border: 1px solid black">
+    <tbody>
+      {% for path in paths %}
+      <tr style="border: 1px solid black">
+        <td style="border: 1px solid black">
+          <div>
+            <p>Context: {{path.context}}</p>
+            <p>ID: {{path.id}}</p>
+          </div>
+
+          <div x-show="viewType === 'list'">
+            {% include "change-path-list-view.html" %}
+          </div>
+
+          <div x-show="viewType === 'table'">
+            {% include "change-path-table-view.html" %}
+          </div>
+
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>

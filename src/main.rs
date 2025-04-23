@@ -9,7 +9,6 @@ use axum::{
     Form, Json, Router,
 };
 
-use models::fact::Fact;
 use serde::{Deserialize, Serialize};
 
 mod models;

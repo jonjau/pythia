@@ -1,0 +1,18 @@
+<ol>
+  {% for step in path.steps %}
+  <li>
+    {% for diff in step.diffs %}
+    {% if let Some(diff) = diff %}
+    <table style="display: inline-table; border: 1px solid black">
+      <tr>
+        <td style="border: 1px solid black">{{ diff.field_name }}</td>
+        <td style="border: 1px solid black">
+          {{diff.before}} → {{diff.after}}
+        </td>
+      </tr>
+    </table>
+    {% endif %}
+    {% endfor %}
+  </li>
+  {% endfor %}
+</ol>
