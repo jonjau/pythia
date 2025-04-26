@@ -32,9 +32,8 @@ struct AppState {
 #[tokio::main]
 async fn main() {
     // let db = include_str!("../data/pythia.pl");
-    let db = std::fs::read_to_string(std::path::Path::new(env!("OUT_DIR")).join("pythia.pl"))
-        .expect("Failed to read pythia.pl");
-    let lm = LogicMachineService::new(&db, "data/types.json");
+    let data = std::fs::read_to_string("data/internal/pythia.pl").expect("Failed to read pythia.pl");
+    let lm = LogicMachineService::new(&data, "data/types.json");
 
     // TODO: graceful shutdown of actor
     let state = AppState {
