@@ -31,8 +31,10 @@ struct AppState {
 
 #[tokio::main]
 async fn main() {
-    let db = include_str!("../data/db.pl");
-    let lm = LogicMachineService::new(db, "data/types.json");
+    // let db = include_str!("../data/pythia.pl");
+    let db = std::fs::read_to_string(std::path::Path::new(env!("OUT_DIR")).join("pythia.pl"))
+        .expect("Failed to read pythia.pl");
+    let lm = LogicMachineService::new(&db, "data/types.json");
 
     // TODO: graceful shutdown of actor
     let state = AppState {
@@ -260,10 +262,11 @@ async fn create_fact_json(
 
                 named_valuess.push(map);
             }
-            None =>
+            None => {
                 return Json(json!({
                     "error": "One or more facts is not a JSON object"
                 }))
+            }
         }
     }
 
