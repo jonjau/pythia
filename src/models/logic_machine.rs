@@ -29,11 +29,11 @@ pub struct LogicMachine {
 impl LogicMachine {
     pub fn new<T: Into<String>>(program: T, record_types: Vec<RecordType>) -> LogicMachine {
         let mut machine = Machine::new_lib();
-        machine.consult_module_string("module0", program.into());
+        machine.load_module_string("module0", program.into());
 
         let system_rts = vec![
-            RecordTypeBuilder::new("change_step", vec!["Ctx", "Id", "Vals1", "Vals2"]),
-            RecordTypeBuilder::new("change_path", vec!["Ctx", "Id", "Vals1", "Vals2", "Steps"]),
+            RecordTypeBuilder::new("change_step", vec!["RType", "Ctx", "Id", "Vals1", "Vals2"]),
+            RecordTypeBuilder::new("change_path", vec!["RType", "Ctx", "Id", "Vals1", "Vals2", "Steps"]),
             RecordTypeBuilder::new("=", vec!["A", "B"]).display_name("equal"),
             RecordTypeBuilder::new("length", vec!["X", "Length"]),
         ]
