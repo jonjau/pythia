@@ -1,7 +1,6 @@
-:- use_module('./data/dimlink.pl').
-:- use_module('./data/transaction.pl').
-:- use_module('./data/edge.pl').
-:- use_module('./data/arc.pl').
+{% for import_path in import_paths -%}
+:- use_module({{import_path}}).
+{% endfor -%}
 :- use_module(library(clpz)).
 :- use_module(library(lists)).
 
@@ -22,20 +21,16 @@ change_path(RType, Ctx, Id, Vals1, Vals2, [Step|Steps]) :-
     Step = [Vals1, ValsMid],
     change_path(RType, Ctx, Id, ValsMid, Vals2, Steps).
 
+{#~ % If we try to get scryer-prolog to return an object like values(DRef, IRef, BegPeriod, EndPeriod)
+% it will not work, so I've opted to use the built-in prolog list. ~#}
 
+{% for record in record_types -%}
 record(
-    "dimlink",
-    Context, EditTime, RecStatus, SeqNum,
-    Id,
-    [DRef, IRef, BegPeriod, EndPeriod]
+    "{{record.name}}",
+    {{record.metadata_fields}},
+    {{record.id_fields}},
+    [{{record.data_fields}}]
 ) :-
-dimlink(Id, DRef, IRef, BegPeriod, EndPeriod, Context, EditTime, RecStatus, SeqNum).
+{{record.name}}({{record.id_fields}}, {{record.data_fields}}, {{record.metadata_fields}}).
 
-record(
-    "transaction",
-    Context, EditTime, RecStatus, SeqNum,
-    Id,
-    [DRef, IRef, BegPeriod, EndPeriod]
-) :-
-transaction(Id, DRef, IRef, BegPeriod, EndPeriod, Context, EditTime, RecStatus, SeqNum).
-
+{% endfor -%}

@@ -231,6 +231,7 @@ impl StateChangeService {
         let change_path_rt = self.lm.get_record_type("change_path").await?;
         let change_path_goal = change_path_rt.to_goal_from_named_values(
             &[
+                ("RType".to_string(), GoalTerm::Variable("RType".to_string())),
                 ("Vals1".to_string(), GoalTerm::Variable("Vals1".to_string())),
                 ("Vals2".to_string(), GoalTerm::Variable("Vals2".to_string())),
                 ("Steps".to_string(), GoalTerm::Variable("Steps".to_string())),
@@ -239,6 +240,11 @@ impl StateChangeService {
         )?;
 
         let binding_goal_rt = self.lm.get_record_type("=".to_string()).await?;
+        // TODO JCJ: this binding should be unnecessary, but we have to do this now because parse_to_facts errors out with UngroundedValues
+        let binding_goal0 = Arc::clone(&binding_goal_rt).to_goal(vec![
+            GoalTerm::Variable("RType".to_string()),
+            GoalTerm::String(state_rt.name.clone())
+        ])?;
         let binding_goal1 = Arc::clone(&binding_goal_rt).to_goal(vec![
             GoalTerm::Variable("Vals1".to_string()),
             Arc::clone(&state_rt)
@@ -264,6 +270,7 @@ impl StateChangeService {
                 change_path_goal
                     .clone()
                     .and(length_goal)
+                    .and(binding_goal0)
                     .and(binding_goal1)
                     .and(binding_goal2),
                 change_path_goal.type_,

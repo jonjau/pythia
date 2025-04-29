@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fs, path};
 
 use askama::Template;
 use askama_axum::IntoResponse;
@@ -31,8 +31,11 @@ struct AppState {
 
 #[tokio::main]
 async fn main() {
-    // let db = include_str!("../data/pythia.pl");
-    let data = std::fs::read_to_string("data/internal/pythia.pl").expect("Failed to read pythia.pl");
+    let p = generate_main_prolog_program();
+    fs::write("data/internal/pythia.pl", p).unwrap();
+
+    let data =
+        std::fs::read_to_string("data/internal/pythia.pl").expect("Failed to read pythia.pl");
     let lm = LogicMachineService::new(&data, "data/types.json");
 
     // TODO: graceful shutdown of actor
@@ -62,8 +65,102 @@ async fn main() {
     axum::serve(listener, r).await.unwrap();
 }
 
+struct RecordType {
+    name: String,
+    id_fields: String,
+    data_fields: String,
+    metadata_fields: String
+}
+
 #[derive(Template)]
-#[template(path = "index.html", ext = "html")]
+#[template(path = "pythia.pl")]
+struct PythiaTemplate {
+    import_paths: Vec<String>,
+    record_types: Vec<RecordType>,
+}
+
+fn generate_main_prolog_program() -> String {
+    let json_data =
+        fs::read_to_string(path::Path::new("data/types.json")).expect("Failed to read JSON file");
+    let objects: Vec<serde_json::Value> =
+        serde_json::from_str(&json_data).expect("Invalid JSON format");
+
+    let import_paths = objects
+        .iter()
+        .filter_map(|o| {
+            o.get("name")
+                .and_then(|v| v.as_str())
+                .and_then(|name| Some(format!("'./data/{}.pl'", name)))
+        })
+        .collect::<Vec<_>>();
+
+    let record_types = objects
+        .iter()
+        .map(|o| {
+            let name = o.get("name").and_then(|v| v.as_str()).map(|s| s.to_owned());
+
+            // TODO JCJ: prolog file implicitly assumes that id_fields is one field 
+            let id_fields = o
+                .get("id_fields")
+                .and_then(|vs| vs.as_array())
+                .and_then(|vs| {
+                    Some(
+                        vs.iter()
+                            .filter_map(|v| v.as_str())
+                            .map(|s| s.to_owned())
+                            .collect::<Vec<_>>(),
+                    )
+                });
+
+            let data_fields = o
+                .get("data_fields")
+                .and_then(|vs| vs.as_array())
+                .and_then(|vs| {
+                    Some(
+                        vs.iter()
+                            .filter_map(|v| v.as_str())
+                            .map(|s| s.to_owned())
+                            .collect::<Vec<_>>(),
+                    )
+                });
+
+            let metadata_fields = o
+                .get("metadata_fields")
+                .and_then(|vs| vs.as_array())
+                .and_then(|vs| {
+                    Some(
+                        vs.iter()
+                            .filter_map(|v| v.as_str())
+                            .map(|s| s.to_owned())
+                            .collect::<Vec<_>>(),
+                    )
+                });
+
+            if let (Some(name), Some(id_fields), Some(data_fields), Some(metadata_fields)) =
+                (name, id_fields, data_fields, metadata_fields)
+            {
+                if id_fields.is_empty() || metadata_fields.is_empty() {
+                    None
+                } else {
+                    Some(RecordType {
+                        name,
+                        id_fields: id_fields.join(", "),
+                        data_fields: data_fields.join(", "),
+                        metadata_fields: metadata_fields.join(", "),
+                    })
+                }
+            } else {
+                None
+            }
+        })
+        .flatten()
+        .collect::<Vec<_>>();
+
+    PythiaTemplate { import_paths, record_types }.render().unwrap()
+}
+
+#[derive(Template)]
+#[template(path = "index.html")]
 struct GetInquiriesTemplate {
     record_types: Vec<String>,
 }
@@ -77,7 +174,7 @@ async fn get_inquiries(State(app_state): State<AppState>) -> GetInquiriesTemplat
 }
 
 #[derive(Template)]
-#[template(path = "state-changes.html", ext = "html")]
+#[template(path = "state-changes.html")]
 struct StateChangesPageInput {
     fact_type: String,
     start_state_values: Vec<(String, String)>,
@@ -86,7 +183,7 @@ struct StateChangesPageInput {
 }
 
 #[derive(Template)]
-#[template(path = "state-changes-output.html", ext = "html")]
+#[template(path = "state-changes-output.html")]
 struct StateChangesPageOutput {
     error_message: Option<String>,
     paths: Vec<ChangePath>,
@@ -170,7 +267,7 @@ async fn get_state_changes(
 }
 
 #[derive(Template)]
-#[template(path = "facts.html", ext = "html")]
+#[template(path = "facts.html")]
 struct GetFactsTemplate {
     fact_type: String,
     facts: Vec<String>,
@@ -186,7 +283,7 @@ async fn get_facts(State(state): State<AppState>, Path(rt_name): Path<String>) -
 }
 
 #[derive(Template)]
-#[template(path = "new-fact.html", ext = "html")]
+#[template(path = "new-fact.html")]
 struct GetNewFactFormTemplate {
     fact_type: String,
     fields: Vec<String>,
@@ -205,7 +302,7 @@ async fn get_new_fact_form(
 }
 
 #[derive(Template)]
-#[template(path = "add-new-fact-button.html", ext = "html")]
+#[template(path = "add-new-fact-button.html")]
 struct GetAddFactButtonTemplate {
     fact_type: String,
 }
@@ -215,7 +312,7 @@ async fn get_add_fact_button(Path(rt_name): Path<String>) -> GetAddFactButtonTem
 }
 
 #[derive(Template)]
-#[template(path = "facts-table.html", ext = "html")]
+#[template(path = "facts-table.html")]
 struct FactsTableTemplate {
     facts: Vec<String>,
 }
@@ -277,7 +374,7 @@ async fn create_fact_json(
 }
 
 #[derive(Template)]
-#[template(path = "set-field-to-specified.html", ext = "html")]
+#[template(path = "set-field-to-specified.html")]
 struct SetFieldToSpecifiedTemplate {
     state_id: String,
     fact_type: String,
@@ -297,7 +394,7 @@ async fn set_field_to_specified(
 }
 
 #[derive(Template)]
-#[template(path = "set-field-to-unspecified.html", ext = "html")]
+#[template(path = "set-field-to-unspecified.html")]
 struct SetFieldToUnspecifiedTemplate {
     state_id: String,
     fact_type: String,
