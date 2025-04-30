@@ -99,7 +99,6 @@ fn generate_main_prolog_program() -> String {
         .map(|o| {
             let name = o.get("name").and_then(|v| v.as_str()).map(|s| s.to_owned());
 
-            // TODO JCJ: prolog file implicitly assumes that id_fields is one field 
             let id_fields = o
                 .get("id_fields")
                 .and_then(|vs| vs.as_array())

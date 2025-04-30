@@ -9,7 +9,7 @@
   {
     "name": "transaction",
     "display_name": "transaction",
-    "id_fields": ["Id"],
+    "id_fields": ["Id1", "Id2"],
     "data_fields": ["DRef", "IRef", "BegPeriod", "EndPeriod"],
     "metadata_fields": ["Context", "EditTime", "RecStatus", "SeqNum"]
   },
