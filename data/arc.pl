@@ -1,5 +1,3 @@
-:- module(arc, [arc/2]).
-
 :- use_module('./edge.pl').
 
 arc(A, C) :-
