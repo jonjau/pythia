@@ -39,3 +39,19 @@ record(
 ) :-
 transaction(Id1, Id2, DRef, IRef, BegPeriod, EndPeriod, Context, EditTime, RecStatus, SeqNum).
 
+record(
+    "edge",
+    "NONE",
+    ["NONE"],
+    [X, Y]
+) :-
+edge("NONE", X, Y, "NONE").
+
+record(
+    "arc",
+    "NONE",
+    ["NONE"],
+    [X, Y]
+) :-
+arc("NONE", X, Y, "NONE").
+
