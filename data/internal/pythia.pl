@@ -26,7 +26,7 @@ change_path(RType, Ctx, Id, Vals1, Vals2, [Step|Steps]) :-
 record(
     "dimlink",
     Context, EditTime, RecStatus, SeqNum,
-    Id,
+    [Id],
     [DRef, IRef, BegPeriod, EndPeriod]
 ) :-
 dimlink(Id, DRef, IRef, BegPeriod, EndPeriod, Context, EditTime, RecStatus, SeqNum).
@@ -34,8 +34,24 @@ dimlink(Id, DRef, IRef, BegPeriod, EndPeriod, Context, EditTime, RecStatus, SeqN
 record(
     "transaction",
     Context, EditTime, RecStatus, SeqNum,
-    Id,
+    [Id1, Id2],
     [DRef, IRef, BegPeriod, EndPeriod]
 ) :-
-transaction(Id, DRef, IRef, BegPeriod, EndPeriod, Context, EditTime, RecStatus, SeqNum).
+transaction(Id1, Id2, DRef, IRef, BegPeriod, EndPeriod, Context, EditTime, RecStatus, SeqNum).
+
+record(
+    "edge",
+    "NONE",
+    ["NONE"],
+    [X, Y]
+) :-
+edge("NONE", X, Y, "NONE").
+
+record(
+    "arc",
+    "NONE",
+    ["NONE"],
+    [X, Y]
+) :-
+arc("NONE", X, Y, "NONE").
 

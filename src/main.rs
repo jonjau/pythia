@@ -21,6 +21,7 @@ use services::{
     logic_machine::LogicMachineService,
     state_change::{ChangePath, StateChangeService},
 };
+use utils::codegen::generate_main_prolog_program;
 
 #[derive(Clone)]
 struct AppState {
@@ -31,7 +32,7 @@ struct AppState {
 
 #[tokio::main]
 async fn main() {
-    let p = generate_main_prolog_program();
+    let p = generate_main_prolog_program().unwrap();
     fs::write("data/internal/pythia.pl", p).unwrap();
 
     let data =
@@ -63,100 +64,6 @@ async fn main() {
     // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     axum::serve(listener, r).await.unwrap();
-}
-
-struct RecordType {
-    name: String,
-    id_fields: String,
-    data_fields: String,
-    metadata_fields: String
-}
-
-#[derive(Template)]
-#[template(path = "pythia.pl")]
-struct PythiaTemplate {
-    import_paths: Vec<String>,
-    record_types: Vec<RecordType>,
-}
-
-fn generate_main_prolog_program() -> String {
-    let json_data =
-        fs::read_to_string(path::Path::new("data/types.json")).expect("Failed to read JSON file");
-    let objects: Vec<serde_json::Value> =
-        serde_json::from_str(&json_data).expect("Invalid JSON format");
-
-    let import_paths = objects
-        .iter()
-        .filter_map(|o| {
-            o.get("name")
-                .and_then(|v| v.as_str())
-                .and_then(|name| Some(format!("'./data/{}.pl'", name)))
-        })
-        .collect::<Vec<_>>();
-
-    let record_types = objects
-        .iter()
-        .map(|o| {
-            let name = o.get("name").and_then(|v| v.as_str()).map(|s| s.to_owned());
-
-            // TODO JCJ: prolog file implicitly assumes that id_fields is one field 
-            let id_fields = o
-                .get("id_fields")
-                .and_then(|vs| vs.as_array())
-                .and_then(|vs| {
-                    Some(
-                        vs.iter()
-                            .filter_map(|v| v.as_str())
-                            .map(|s| s.to_owned())
-                            .collect::<Vec<_>>(),
-                    )
-                });
-
-            let data_fields = o
-                .get("data_fields")
-                .and_then(|vs| vs.as_array())
-                .and_then(|vs| {
-                    Some(
-                        vs.iter()
-                            .filter_map(|v| v.as_str())
-                            .map(|s| s.to_owned())
-                            .collect::<Vec<_>>(),
-                    )
-                });
-
-            let metadata_fields = o
-                .get("metadata_fields")
-                .and_then(|vs| vs.as_array())
-                .and_then(|vs| {
-                    Some(
-                        vs.iter()
-                            .filter_map(|v| v.as_str())
-                            .map(|s| s.to_owned())
-                            .collect::<Vec<_>>(),
-                    )
-                });
-
-            if let (Some(name), Some(id_fields), Some(data_fields), Some(metadata_fields)) =
-                (name, id_fields, data_fields, metadata_fields)
-            {
-                if id_fields.is_empty() || metadata_fields.is_empty() {
-                    None
-                } else {
-                    Some(RecordType {
-                        name,
-                        id_fields: id_fields.join(", "),
-                        data_fields: data_fields.join(", "),
-                        metadata_fields: metadata_fields.join(", "),
-                    })
-                }
-            } else {
-                None
-            }
-        })
-        .flatten()
-        .collect::<Vec<_>>();
-
-    PythiaTemplate { import_paths, record_types }.render().unwrap()
 }
 
 #[derive(Template)]

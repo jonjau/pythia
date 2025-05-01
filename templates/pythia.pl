@@ -28,7 +28,7 @@ change_path(RType, Ctx, Id, Vals1, Vals2, [Step|Steps]) :-
 record(
     "{{record.name}}",
     {{record.metadata_fields}},
-    {{record.id_fields}},
+    [{{record.id_fields}}],
     [{{record.data_fields}}]
 ) :-
 {{record.name}}({{record.id_fields}}, {{record.data_fields}}, {{record.metadata_fields}}).
