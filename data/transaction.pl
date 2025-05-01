@@ -1,5 +1,3 @@
-:- module(transaction, [transaction/10]).
-
 :- dynamic(transaction/10).
 transaction("T1", "M1", "ID1", "J1", "2023-02-08", "2023-02-10", "Test1", "2024-02-18 08:16:11", "D", "0"). 
 transaction("T1", "M2", "ID1", "J1", "2023-02-09", "2023-02-10", "Test1", "2024-02-18 08:17:11", "E", "1"). 
