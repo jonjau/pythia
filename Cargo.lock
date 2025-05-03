@@ -1879,7 +1879,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pythias"
+name = "pythia"
 version = "0.1.0"
 dependencies = [
  "askama",
