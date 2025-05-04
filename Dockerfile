@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM rust:1.86 as builder
+FROM rust:1.86-bullseye as builder
 
 WORKDIR /pythia
 
@@ -18,5 +18,7 @@ FROM debian:bullseye-slim
 
 WORKDIR /pythia
 COPY --from=builder /pythia/target/release/pythia .
+
+COPY --from=builder /pythia/data ./data
 
 CMD ["./pythia"]
