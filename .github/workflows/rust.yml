@@ -87,7 +87,6 @@ jobs:
         run: |
           mkdir -p "$ARCHIVE"
           cp "$BIN" "$ARCHIVE"/
-          cp {README.md,LICENSE.txt,NOTICE.txt} "$ARCHIVE"/
       - name: Build archive (Windows)
         shell: bash
         if: matrix.os == 'windows-latest'
