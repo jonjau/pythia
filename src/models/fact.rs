@@ -3,7 +3,7 @@ use nom::{
     branch::alt,
     bytes::complete::escaped,
     character::complete::{char, digit1, multispace0, none_of, one_of},
-    combinator::{map, map_res, recognize},
+    combinator::{map, map_res, opt, recognize},
     error::ParseError,
     multi::separated_list0,
     sequence::{delimited, separated_pair},
@@ -26,10 +26,12 @@ pub struct Fact {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum FactTerm {
-    String(String),
+    // Atomic terms
     Integer(i32),
     Float(f64),
+    // Compound terms
     List(Vec<FactTerm>),
+    String(String),
     SubTerm(Fact),
 }
 
@@ -104,14 +106,16 @@ impl fmt::Display for FactTerm {
             FactTerm::String(s) => write!(f, "\"{}\"", s),
             FactTerm::Integer(i) => write!(f, "{}", i),
             FactTerm::Float(flt) => write!(f, "{}", flt),
-            FactTerm::List(ss) => write!(
+            FactTerm::List(fts) => write!(
                 f,
                 "[{}]",
-                ss.iter()
-                    .map(|s| s.to_string())
+                fts.iter()
+                    .map(|ft| ft.to_string())
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
+            FactTerm::String(s) if s.len() == 0 => write!(f, "'{}'", s),
+            FactTerm::String(s) => write!(f, "\"{}\"", s),
             FactTerm::SubTerm(st) => write!(f, "{}", st),
         }
     }
@@ -132,6 +136,7 @@ fn parse_fact_term(input: &str) -> IResult<&str, FactTerm> {
         map(parse_float, FactTerm::Float),
         map(parse_integer, FactTerm::Integer),
         map(parse_list, FactTerm::List),
+        map(parse_string, FactTerm::String),
         map(parse_subterm, FactTerm::SubTerm),
     ))
     .parse(input)
@@ -140,11 +145,11 @@ fn parse_fact_term(input: &str) -> IResult<&str, FactTerm> {
 fn parse_string(input: &str) -> IResult<&str, String> {
     ws(delimited(
         char('"'),
-        escaped(none_of(r#"\""#), '\\', one_of(r#""\"#)),
+        opt(escaped(none_of(r#"\""#), '\\', one_of(r#""\"#))),
         char('"'),
     ))
     .parse(input)
-    .map(|(rest, s)| (rest, s.to_string()))
+    .map(|(rest, s)| (rest, s.unwrap_or("").to_string()))
 }
 
 fn parse_atom(input: &str) -> IResult<&str, String> {
