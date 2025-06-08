@@ -122,6 +122,16 @@ mod tests {
     use crate::models::logic_machine::LogicMachine;
 
     #[test]
+    fn empty_list() {
+        let mut lm = scryer_prolog::machine::Machine::new_lib();
+        let _ = lm.run_query(r#"assertz(a(''))."#.to_owned()).unwrap();
+        let qr = lm.run_query("a(X).".to_owned()).unwrap();
+        
+        // this is why it's better to use '' to represent empty string
+        // qr here will show the binding X = String("")
+    }
+
+    #[test]
     fn term_list() {
         // let mut lm = LogicMachine::new(String::from(
         //     r#"
