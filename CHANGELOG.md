@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-dev.2] - 2025-06-08
+
+### Fixed
+
+- Prevent app crashing when there is an empty string in Fact value
+
 ## [0.1.0-dev] - 2025-05-20
 
 ### Added
