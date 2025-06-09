@@ -1,7 +1,6 @@
 use std::fs::File;
 use std::io::BufReader;
 use std::sync::Arc;
-use std::vec;
 
 use crate::models::fact::Fact;
 use crate::models::goal::Goal;
