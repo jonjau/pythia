@@ -99,7 +99,6 @@ impl fmt::Display for Fact {
 impl fmt::Display for FactTerm {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            FactTerm::String(s) => write!(f, "\"{}\"", s),
             FactTerm::Integer(i) => write!(f, "{}", i),
             FactTerm::Float(flt) => write!(f, "{}", flt),
             FactTerm::List(fts) => write!(
