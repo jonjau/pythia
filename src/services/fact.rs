@@ -31,19 +31,23 @@ impl FactService {
         Ok(facts.iter().map(|f| f.to_string()).collect())
     }
 
-    pub async fn add_fact(
+    async fn add_fact_to_lm(
         &self,
         rt_name: &str,
         named_values: HashMap<String, String>,
     ) -> Result<Fact, FactServiceError> {
-        let rt: std::sync::Arc<crate::models::record_type::RecordType> = self.lm.get_record_type(rt_name).await?;
+        let rt: std::sync::Arc<crate::models::record_type::RecordType> =
+            self.lm.get_record_type(rt_name).await?;
 
         let named_values = named_values
             .into_iter()
-            .map(|(k, v)| (format!("{}0_{}", rt.name.to_uppercase(), k), FactTerm::String(v)))
+            .map(|(k, v)| {
+                (
+                    format!("{}0_{}", rt.name.to_uppercase(), k),
+                    FactTerm::String(v),
+                )
+            })
             .collect::<HashMap<_, _>>();
-
-        dbg!(&named_values);
 
         let fact = rt.to_fact(&named_values.into())?;
 
@@ -55,44 +59,33 @@ impl FactService {
         &self,
         rt_name: &str,
         named_valuess: Vec<HashMap<String, String>>,
-    ) -> Result<(), FactServiceError> {
+    ) -> Result<Vec<Fact>, FactServiceError> {
         let mut file = OpenOptions::new()
             .append(true)
             .create(true)
-            .open(format!("data/{}.pl", &rt_name)).unwrap();
+            .open(format!("data/{}.pl", &rt_name))
+            .unwrap();
 
         let iso_time = chrono::Utc::now().to_rfc3339();
         writeln!(file, "\n% [{}]", iso_time).unwrap();
-    
+
+        let mut facts = Vec::new();
+
         for values in named_valuess {
-            let f = self.add_fact(&rt_name, values).await?;
+            let f = self.add_fact_to_lm(&rt_name, values).await?;
             writeln!(file, "{}.", f.to_string()).unwrap();
+            facts.push(f);
         }
 
-        Ok(())
+        Ok(facts)
     }
 
-
-    pub async fn persist_fact(
+    pub async fn add_fact(
         &self,
         rt_name: &str,
         named_values: HashMap<String, String>,
-    ) {
-        let rt: std::sync::Arc<crate::models::record_type::RecordType> = self.lm.get_record_type(rt_name).await.unwrap();
-
-        let named_values = named_values
-            .into_iter()
-            .map(|(k, v)| (format!("{}0_{}", rt.name.to_uppercase(), k), FactTerm::String(v)))
-            .collect::<HashMap<_, _>>();
-
-        
-        let fact = rt.to_fact(&named_values.into()).unwrap();
-
-        let mut file = OpenOptions::new()
-            .append(true)
-            .create(true)
-            .open(format!("data/{}.pl", &rt_name)).unwrap();
-
-        writeln!(file, "{}.", fact.to_string()).unwrap();
+    ) -> Result<Fact, FactServiceError> {
+        let f = self.add_facts(rt_name, vec![named_values]).await?[0].clone();
+        Ok(f)
     }
 }
