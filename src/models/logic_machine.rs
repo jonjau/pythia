@@ -94,12 +94,12 @@ impl LogicMachine {
             .collect())
     }
 
-    pub fn add_fact(&mut self, f: Fact) -> LogicMachineResult<Vec<Fact>> {
+    pub fn add_fact(&mut self, f: Fact) -> LogicMachineResult<Fact> {
         self.machine
             .run_query(format!(r#"assertz({})."#, f.to_string()))
             .map_err(LogicMachineError::PrologError)?;
 
-        self.fetch_all(f.type_)
+        Ok(f)
     }
 
     pub fn fetch_all(&mut self, rt: Arc<RecordType>) -> LogicMachineResult<Vec<Fact>> {

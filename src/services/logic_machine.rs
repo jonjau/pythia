@@ -85,7 +85,7 @@ impl LogicMachineService {
             .await
     }
 
-    pub async fn add_fact(&self, fact: Fact) -> LogicMachineResult<Vec<Fact>> {
+    pub async fn add_fact(&self, fact: Fact) -> LogicMachineResult<Fact> {
         self.lm_actor.send_query(AddFactQuery { fact }).await
     }
 }
@@ -122,7 +122,7 @@ enum ActorMessage {
     GetAllRecordTypes(GetAllRecordTypesMessage)
 }
 
-type AddFactMessage = Message<AddFactQuery, LogicMachineResult<Vec<Fact>>>;
+type AddFactMessage = Message<AddFactQuery, LogicMachineResult<Fact>>;
 type GetAllFactsMessage = Message<GetAllFactsQuery, LogicMachineResult<Vec<Fact>>>;
 type GetFactsMessage = Message<GetFactsQuery, LogicMachineResult<Vec<Fact>>>;
 type GetRecordTypeMessage = Message<GetRecordTypeQuery, LogicMachineResult<Arc<RecordType>>>;
