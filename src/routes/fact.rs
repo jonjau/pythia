@@ -79,7 +79,8 @@ async fn create_fact(
 ) -> FactsTableTemplate {
     dbg!(&f);
 
-    let facts = state.facts.add_fact(&rt_name, f).await.unwrap();
+    state.facts.add_fact(&rt_name, f).await.unwrap();
+    let facts = state.facts.get_facts(rt_name).await.unwrap();
 
     FactsTableTemplate { facts }
 }
@@ -121,9 +122,12 @@ async fn create_fact_json(
         }
     }
 
-    for named_values in named_valuess {
-        state.facts.add_fact(&rt_name, named_values).await.unwrap();
-    }
+    // for named_values in named_valuess {
+    //     state.facts.add_fact(&rt_name, named_values.clone()).await.unwrap();
+    //     state.facts.persist_fact(&rt_name, named_values.clone()).await;
+    // }
+
+    state.facts.add_facts(&rt_name, named_valuess).await.unwrap();
 
     Json(serde_json::to_value(payload).unwrap())
 }

@@ -1,6 +1,8 @@
 use std::collections::HashMap;
+use std::fs::OpenOptions;
+use std::io::Write;
 
-use crate::models::fact::FactTerm;
+use crate::models::fact::{Fact, FactTerm};
 use crate::models::logic_machine::LogicMachineError;
 use crate::models::record_type::RecordTypeError;
 use crate::services::logic_machine::LogicMachineService;
@@ -33,8 +35,8 @@ impl FactService {
         &self,
         rt_name: &str,
         named_values: HashMap<String, String>,
-    ) -> Result<Vec<String>, FactServiceError> {
-        let rt = self.lm.get_record_type(rt_name).await?;
+    ) -> Result<Fact, FactServiceError> {
+        let rt: std::sync::Arc<crate::models::record_type::RecordType> = self.lm.get_record_type(rt_name).await?;
 
         let named_values = named_values
             .into_iter()
@@ -46,6 +48,51 @@ impl FactService {
         let fact = rt.to_fact(&named_values.into())?;
 
         let res = self.lm.add_fact(fact).await?;
-        Ok(res.iter().map(|f| f.to_string()).collect::<Vec<_>>())
+        Ok(res)
+    }
+
+    pub async fn add_facts(
+        &self,
+        rt_name: &str,
+        named_valuess: Vec<HashMap<String, String>>,
+    ) -> Result<(), FactServiceError> {
+        let mut file = OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(format!("data/{}.pl", &rt_name)).unwrap();
+
+        let iso_time = chrono::Utc::now().to_rfc3339();
+        writeln!(file, "\n% [{}]", iso_time).unwrap();
+    
+        for values in named_valuess {
+            let f = self.add_fact(&rt_name, values).await?;
+            writeln!(file, "{}.", f.to_string()).unwrap();
+        }
+
+        Ok(())
+    }
+
+
+    pub async fn persist_fact(
+        &self,
+        rt_name: &str,
+        named_values: HashMap<String, String>,
+    ) {
+        let rt: std::sync::Arc<crate::models::record_type::RecordType> = self.lm.get_record_type(rt_name).await.unwrap();
+
+        let named_values = named_values
+            .into_iter()
+            .map(|(k, v)| (format!("{}0_{}", rt.name.to_uppercase(), k), FactTerm::String(v)))
+            .collect::<HashMap<_, _>>();
+
+        
+        let fact = rt.to_fact(&named_values.into()).unwrap();
+
+        let mut file = OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(format!("data/{}.pl", &rt_name)).unwrap();
+
+        writeln!(file, "{}.", fact.to_string()).unwrap();
     }
 }
