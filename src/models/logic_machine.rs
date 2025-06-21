@@ -54,7 +54,7 @@ impl LogicMachine {
         }
     }
 
-    fn parse_to_facts<'a>(
+    fn parse_to_facts(
         qr: QueryResolution,
         rt: Arc<RecordType>,
     ) -> LogicMachineResult<Vec<Fact>> {
@@ -73,7 +73,8 @@ impl LogicMachine {
                     Arc::clone(&rt).to_fact(&map).unwrap()
                 })
                 .collect::<Vec<_>>()),
-            _ => Err(LogicMachineError::UnexpectedQueryResolution),
+            QueryResolution::False => Ok(vec![]),
+            QueryResolution::True => Err(LogicMachineError::UnexpectedQueryResolution)
         }
     }
 
@@ -119,8 +120,6 @@ impl LogicMachine {
 
 #[cfg(test)]
 mod tests {
-    use crate::models::logic_machine::LogicMachine;
-
     #[test]
     fn empty_list() {
         let mut lm = scryer_prolog::machine::Machine::new_lib();
