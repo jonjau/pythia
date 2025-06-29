@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs::OpenOptions;
-use std::io::Write;
+use std::io::{self, Write};
 
 use crate::models::fact::{Fact, FactTerm};
 use crate::models::logic_machine::LogicMachineError;
@@ -13,6 +13,8 @@ pub enum FactServiceError {
     FactError(#[from] LogicMachineError),
     #[error("RecordType error: {0}")]
     RecordTypeError(#[from] RecordTypeError),
+    #[error("File error: {0}")]
+    IoError(#[from] io::Error),
 }
 
 #[derive(Clone)]
@@ -63,17 +65,16 @@ impl FactService {
         let mut file = OpenOptions::new()
             .append(true)
             .create(true)
-            .open(format!("data/{}.pl", &rt_name))
-            .unwrap();
+            .open(format!("data/{}.pl", &rt_name))?;
 
         let iso_time = chrono::Utc::now().to_rfc3339();
-        writeln!(file, "\n% [{}]", iso_time).unwrap();
+        writeln!(file, "\n% [{}]", iso_time)?;
 
         let mut facts = Vec::new();
 
         for values in named_valuess {
             let f = self.add_fact_to_lm(&rt_name, values).await?;
-            writeln!(file, "{}.", f.to_string()).unwrap();
+            writeln!(file, "{}.", f.to_string())?;
             facts.push(f);
         }
 

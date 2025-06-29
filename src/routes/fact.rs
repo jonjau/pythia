@@ -29,7 +29,11 @@ struct GetFactsTemplate {
 }
 
 async fn get_facts(State(state): State<AppState>, Path(rt_name): Path<String>) -> GetFactsTemplate {
-    let facts = state.facts.get_facts(rt_name.clone()).await.unwrap();
+    let facts = state
+        .facts
+        .get_facts(rt_name.clone())
+        .await
+        .unwrap_or_default();
 
     GetFactsTemplate {
         fact_type: rt_name,
@@ -48,11 +52,15 @@ async fn get_new_fact_form(
     State(state): State<AppState>,
     Path(rt_name): Path<String>,
 ) -> GetNewFactFormTemplate {
-    let rt = state.lm.get_record_type(rt_name).await.unwrap();
-
-    GetNewFactFormTemplate {
-        fact_type: rt.clone().display_name.clone(),
-        fields: rt.clone().all_fields(),
+    match state.lm.get_record_type(rt_name).await {
+        Ok(rt) => GetNewFactFormTemplate {
+            fact_type: rt.clone().display_name.clone(),
+            fields: rt.clone().all_fields(),
+        },
+        Err(_) => GetNewFactFormTemplate {
+            fact_type: "".to_string(),
+            fields: vec![],
+        },
     }
 }
 
@@ -77,10 +85,12 @@ async fn create_fact(
     Path(rt_name): Path<String>,
     Form(f): Form<HashMap<String, String>>,
 ) -> FactsTableTemplate {
-    dbg!(&f);
-
-    state.facts.add_fact(&rt_name, f).await.unwrap();
-    let facts = state.facts.get_facts(rt_name).await.unwrap();
+    state
+        .facts
+        .add_fact(&rt_name, f.clone())
+        .await
+        .expect(&format!("Failed to add fact for {}, {:?}", rt_name, f));
+    let facts = state.facts.get_facts(rt_name).await.unwrap_or_default();
 
     FactsTableTemplate { facts }
 }
@@ -99,7 +109,6 @@ async fn create_fact_json(
 
     for fact in &payload.facts {
         match fact.as_object() {
-            // TODO JCJ: accept other serde value types!
             Some(obj) => {
                 let map = obj
                     .iter()
@@ -122,7 +131,17 @@ async fn create_fact_json(
         }
     }
 
-    state.facts.add_facts(&rt_name, named_valuess).await.unwrap();
+    state
+        .facts
+        .add_facts(&rt_name, named_valuess.clone())
+        .await
+        .expect(&format!(
+            "Failed to add facts for {}, {:?}",
+            rt_name, named_valuess
+        ));
 
-    Json(serde_json::to_value(payload).unwrap())
+    Json(
+        serde_json::to_value(payload)
+            .expect("Failed to deserialise payload JSON in echo response."),
+    )
 }

@@ -16,7 +16,7 @@ pub struct LogicMachineService {
 }
 
 #[derive(thiserror::Error, Debug)]
-enum ReadRecordTypesError {
+pub enum ReadRecordTypesError {
     #[error("Failed to open file: {0}")]
     CouldNotOpenFile(#[from] std::io::Error),
     #[error("Failed to parse JSON: {0}")]
@@ -26,15 +26,15 @@ enum ReadRecordTypesError {
 }
 
 impl LogicMachineService {
-    pub fn new(program: &str, record_types_file_path: &str) -> Self {
-        LogicMachineService {
+    pub fn new(program: &str, record_types_file_path: &str) -> Result<Self, ReadRecordTypesError> {
+        Ok(LogicMachineService {
             lm_actor: ActorHandle::new(
                 program.to_owned(),
-                LogicMachineService::read_record_types_from_json(record_types_file_path).unwrap(),
+                LogicMachineService::read_record_types_from_json(record_types_file_path)?,
             ),
-        }
+        })
     }
-    
+
     fn read_record_types_from_json(
         file_path: &str,
     ) -> Result<Vec<RecordType>, ReadRecordTypesError> {
@@ -64,9 +64,7 @@ impl LogicMachineService {
     }
 
     pub async fn get_all_record_types(&self) -> LogicMachineResult<Vec<Arc<RecordType>>> {
-        self.lm_actor
-            .send_query(GetAllRecordTypesQuery)
-            .await
+        self.lm_actor.send_query(GetAllRecordTypesQuery).await
     }
 
     pub async fn get_all_facts(&self, fact_type: String) -> LogicMachineResult<Vec<Fact>> {
@@ -119,14 +117,15 @@ enum ActorMessage {
     GetAllFacts(GetAllFactsMessage),
     GetFacts(GetFactsMessage),
     GetRecordType(GetRecordTypeMessage),
-    GetAllRecordTypes(GetAllRecordTypesMessage)
+    GetAllRecordTypes(GetAllRecordTypesMessage),
 }
 
 type AddFactMessage = Message<AddFactQuery, LogicMachineResult<Fact>>;
 type GetAllFactsMessage = Message<GetAllFactsQuery, LogicMachineResult<Vec<Fact>>>;
 type GetFactsMessage = Message<GetFactsQuery, LogicMachineResult<Vec<Fact>>>;
 type GetRecordTypeMessage = Message<GetRecordTypeQuery, LogicMachineResult<Arc<RecordType>>>;
-type GetAllRecordTypesMessage = Message<GetAllRecordTypesQuery, LogicMachineResult<Vec<Arc<RecordType>>>>;
+type GetAllRecordTypesMessage =
+    Message<GetAllRecordTypesQuery, LogicMachineResult<Vec<Arc<RecordType>>>>;
 
 impl From<AddFactMessage> for ActorMessage {
     fn from(msg: AddFactMessage) -> Self {
@@ -169,7 +168,10 @@ impl Actor {
         record_types: Vec<RecordType>,
         receiver: mpsc::Receiver<ActorMessage>,
     ) -> Self {
-        Actor { receiver, lm: LogicMachine::new(program, record_types) }
+        Actor {
+            receiver,
+            lm: LogicMachine::new(program, record_types),
+        }
     }
 
     fn handle_message(&mut self, msg: ActorMessage) {
@@ -191,7 +193,6 @@ impl Actor {
                 let _ = respond_to.send(r);
             }
             ActorMessage::GetFacts(Message { query, respond_to }) => {
-                dbg!(&query.goal);
                 let _ = respond_to.send(self.lm.fetch(query.goal, query.target_rt));
             }
             ActorMessage::GetRecordType(Message { query, respond_to }) => {
@@ -221,7 +222,10 @@ impl ActorHandle {
     fn new(program: String, record_types: Vec<RecordType>) -> Self {
         let (send, recv) = mpsc::channel(16);
 
-        let rt = Builder::new_current_thread().enable_all().build().unwrap();
+        let rt = Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to create new thread");
 
         std::thread::spawn(move || {
             let actor = Actor::new(&program, record_types, recv);

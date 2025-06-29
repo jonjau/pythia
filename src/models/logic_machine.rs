@@ -1,3 +1,4 @@
+use log::info;
 use scryer_prolog::machine::{
     parsed_results::{prolog_value_to_json_string, QueryMatch, QueryResolution},
     Machine,
@@ -10,12 +11,14 @@ use crate::models::record_type::{RecordType, RecordTypeBuilder};
 
 #[derive(thiserror::Error, Debug)]
 pub enum LogicMachineError {
-    #[error("unexpected query resolution")]
+    #[error("Unexpected query resolution")]
     UnexpectedQueryResolution,
-    #[error("prolog error: {0}")]
+    #[error("Prolog error: {0}")]
     PrologError(String),
-    #[error("RecordType not found: {}", .0)]
+    #[error("RecordType not found: {0}")]
     RecordTypeNotFound(String),
+    #[error("Failed to parse: {0}")]
+    FactParsingError(String),
 }
 
 pub type LogicMachineResult<T> = Result<T, LogicMachineError>;
@@ -33,7 +36,10 @@ impl LogicMachine {
 
         let system_rts = vec![
             RecordTypeBuilder::new("change_step", vec!["RType", "Ctx", "Id", "Vals1", "Vals2"]),
-            RecordTypeBuilder::new("change_path", vec!["RType", "Ctx", "Id", "Vals1", "Vals2", "Steps"]),
+            RecordTypeBuilder::new(
+                "change_path",
+                vec!["RType", "Ctx", "Id", "Vals1", "Vals2", "Steps"],
+            ),
             RecordTypeBuilder::new("=", vec!["A", "B"]).display_name("equal"),
             RecordTypeBuilder::new("length", vec!["X", "Length"]),
         ]
@@ -54,27 +60,39 @@ impl LogicMachine {
         }
     }
 
-    fn parse_to_facts(
-        qr: QueryResolution,
-        rt: Arc<RecordType>,
-    ) -> LogicMachineResult<Vec<Fact>> {
+    fn parse_to_facts(qr: QueryResolution, rt: Arc<RecordType>) -> LogicMachineResult<Vec<Fact>> {
         match qr {
-            QueryResolution::Matches(m) => Ok(m
-                .iter()
-                .map(|QueryMatch { bindings: b }| {
-                    let map = b
-                        .into_iter()
-                        .map(|(k, v)| {
-                            let to_parse = prolog_value_to_json_string(v.clone());
-                            (k.clone(), to_parse.parse::<FactTerm>().unwrap())
-                        })
-                        .collect::<HashMap<_, _>>();
+            QueryResolution::Matches(m) => {
+                let rs = m
+                    .iter()
+                    .map(|QueryMatch { bindings: b }| {
+                        let parsed = b
+                            .into_iter()
+                            .map(|(k, v)| {
+                                let to_parse = prolog_value_to_json_string(v.clone());
+                                (
+                                    k.clone(),
+                                    to_parse
+                                        .parse::<FactTerm>()
+                                        .map_err(|s| LogicMachineError::FactParsingError(s)),
+                                )
+                            })
+                            .map(|(k, v)| v.map(|val| (k, val)))
+                            .collect::<LogicMachineResult<HashMap<_, _>>>();
 
-                    Arc::clone(&rt).to_fact(&map).unwrap()
-                })
-                .collect::<Vec<_>>()),
+                        parsed.and_then(|map| {
+                            Arc::clone(&rt)
+                                .to_fact(&map)
+                                .map_err(|e| LogicMachineError::FactParsingError(e.to_string()))
+                        })
+                        // Arc::clone(&rt).to_fact(&map)
+                    })
+                    .collect::<LogicMachineResult<Vec<Fact>>>();
+
+                rs
+            }
             QueryResolution::False => Ok(vec![]),
-            QueryResolution::True => Err(LogicMachineError::UnexpectedQueryResolution)
+            QueryResolution::True => Err(LogicMachineError::UnexpectedQueryResolution),
         }
     }
 
@@ -96,6 +114,7 @@ impl LogicMachine {
     }
 
     pub fn add_fact(&mut self, f: Fact) -> LogicMachineResult<Fact> {
+        info!("Asserting fact: {}", f);
         self.machine
             .run_query(format!(r#"assertz({})."#, f.to_string()))
             .map_err(LogicMachineError::PrologError)?;
@@ -108,7 +127,7 @@ impl LogicMachine {
     }
 
     pub fn fetch(&mut self, g: Goal, target_rt: Arc<RecordType>) -> LogicMachineResult<Vec<Fact>> {
-        dbg!(&g.to_string());
+        info!("Fetching goal: {}", g);
         let qr = self
             .machine
             .run_query(format!(r#"{}."#, g.to_string()))
@@ -125,7 +144,7 @@ mod tests {
         let mut lm = scryer_prolog::machine::Machine::new_lib();
         let _ = lm.run_query(r#"assertz(a(''))."#.to_owned()).unwrap();
         let qr = lm.run_query("a(X).".to_owned()).unwrap();
-        
+
         // this is why it's better to use '' to represent empty string
         // qr here will show the binding X = String("")
     }
@@ -139,14 +158,14 @@ mod tests {
 
         //         :- dynamic(dimlink/9).
 
-        //         dimlink("Test1", "M1", "ID1", "J1", "2023-02-08", "2023-02-10", "2024-02-18 08:16:11", "D", "0"). 
-        //         dimlink("Test1", "M1", "ID1", "J1", "2023-02-09", "2023-02-10", "2024-02-18 08:17:11", "E", "1"). 
+        //         dimlink("Test1", "M1", "ID1", "J1", "2023-02-08", "2023-02-10", "2024-02-18 08:16:11", "D", "0").
+        //         dimlink("Test1", "M1", "ID1", "J1", "2023-02-09", "2023-02-10", "2024-02-18 08:17:11", "E", "1").
         //         dimlink("Test1", "M2", "ID2", "J1", "2023-02-08", "2023-02-11", "2024-02-18 08:20:11", "D", "0").
-        //         dimlink("Test1", "M2", "ID2", "J1", "2023-02-08", "2023-02-11", "2024-02-18 08:20:12", "D", "1"). 
-        //         dimlink("Test1", "M2", "ID2", "J1", "2023-02-08", "2023-02-11", "2024-02-18 08:20:13", "D", "2"). 
-        //         dimlink("Test1", "M2", "ID2", "J2", "2023-02-09", "2023-02-11", "2024-02-18 08:20:14", "D", "3"). 
-        //         dimlink("Test1", "M2", "ID2", "J3", "2023-02-08", "2023-02-11", "2024-02-18 08:20:15", "E", "4"). 
-        //         dimlink("Test1", "M3", "ID2", "J2", "2023-02-08", "2023-02-09", "2024-02-18 08:20:14", "O", "0"). 
+        //         dimlink("Test1", "M2", "ID2", "J1", "2023-02-08", "2023-02-11", "2024-02-18 08:20:12", "D", "1").
+        //         dimlink("Test1", "M2", "ID2", "J1", "2023-02-08", "2023-02-11", "2024-02-18 08:20:13", "D", "2").
+        //         dimlink("Test1", "M2", "ID2", "J2", "2023-02-09", "2023-02-11", "2024-02-18 08:20:14", "D", "3").
+        //         dimlink("Test1", "M2", "ID2", "J3", "2023-02-08", "2023-02-11", "2024-02-18 08:20:15", "E", "4").
+        //         dimlink("Test1", "M3", "ID2", "J2", "2023-02-08", "2023-02-09", "2024-02-18 08:20:14", "O", "0").
         //         dimlink("Test1", "M4", "ID1", "J2", "2023-02-08", "2023-02-09", "2024-02-18 09:17:11", "O", "0").
         //         dimlink("Test1", "M5", "ID1", "J3", "2023-02-08", "2023-02-09", "2024-02-18 09:17:11", "D", "0").
         //         dimlink("Test1", "M5", "ID1", "J3", "2023-02-08", "2023-02-09", "2024-02-18 09:17:11", "V", "1").
