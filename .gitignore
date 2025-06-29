@@ -1,5 +1,18 @@
-/target
+# Pythia
 /unused
+
+# Rust/cargo
+/target
+
+# Vagrant
 /.vagrant
+
+# VS Code
 *.code-workspace
 *.devcontainer
+
+# Node/npm
+/node_modules
+
+# Tailwind build output
+/static/output.css
