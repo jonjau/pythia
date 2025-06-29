@@ -240,7 +240,6 @@ impl StateChangeService {
         )?;
 
         let binding_goal_rt = self.lm.get_record_type("=".to_string()).await?;
-        // TODO JCJ: this binding should be unnecessary, but we have to do this now because parse_to_facts errors out with UngroundedValues
         let binding_goal0 = Arc::clone(&binding_goal_rt).to_goal(vec![
             GoalTerm::Variable("RType".to_string()),
             GoalTerm::String(state_rt.name.clone())
