@@ -4,6 +4,8 @@
     <summary>There was an error in calculating paths</summary>
     {{message}}
   </details>
+  {% else if paths.is_empty() %}
+  <div>No state changes found.</div>
   {% else %}
   <div>
     <input type="radio" id="table-view" value="table" x-model="viewType"">
