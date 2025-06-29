@@ -18,7 +18,8 @@ use services::{
     logic_machine::LogicMachineService,
     state_change::StateChangeService,
 };
-use utils::codegen::generate_main_prolog_program;
+
+use crate::utils::codegen:: generate_prolog_programs;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -30,8 +31,8 @@ pub struct AppState {
 #[tokio::main]
 async fn main() {
     println!("Starting pythia...");
-    let p = generate_main_prolog_program().unwrap();
-    fs::write("data/internal/pythia.pl", p).unwrap();
+
+    generate_prolog_programs().expect("Failed to generate prolog programs");
 
     let data =
         std::fs::read_to_string("data/internal/pythia.pl").expect("Failed to read pythia.pl");
