@@ -48,7 +48,7 @@ impl Goal {
             RecordTypeBuilder::new(",", vec!["Term1", "Term2"])
                 .display_name("comma")
                 .build()
-                .unwrap(),
+                .expect("Failed to create built-in goal ','"),
         );
 
         let res = conjunction
@@ -56,7 +56,7 @@ impl Goal {
                 ("Term1".to_string(), GoalTerm::SubTerm(self)),
                 ("Term2".to_string(), GoalTerm::SubTerm(goal2)),
             ]))
-            .unwrap();
+            .expect("Failed to create built-in goal, ','");
 
         res
     }

@@ -197,7 +197,7 @@ fn parse_subterm(input: &str) -> IResult<&str, Fact> {
                 .collect::<Vec<_>>(),
         )
         .build()
-        .unwrap(),
+        .expect("Failed to parse subterm"),
     );
 
     Ok((

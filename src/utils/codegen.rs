@@ -36,7 +36,7 @@ pub enum CodeGenError {
     #[error("Field is of invalid type: {0}")]
     InvalidFieldType(String),
     #[error("IO Error: {0}")]
-    FailedToReadJsonFile(#[from] io::Error),
+    IoError(#[from] io::Error),
     #[error("Invalid JSON format: {0}")]
     InvalidJsonFormat(#[from] serde_json::Error),
     #[error("Failed to render prolog template: {0}")]
@@ -52,14 +52,14 @@ pub fn generate_prolog_programs() -> Result<(), CodeGenError> {
     }
     .render()?;
 
-    fs::write("data/internal/pythia.pl", pythia_program).unwrap();
+    fs::write("data/internal/pythia.pl", pythia_program)?;
 
-    let record_types_with_no_prolog_file = record_types
-        .iter()
-        .filter(|record_type| !fs::exists(get_fact_program_file_path(record_type)).is_ok_and(|e| e));
+    let record_types_with_no_prolog_file = record_types.iter().filter(|record_type| {
+        !fs::exists(get_fact_program_file_path(record_type)).is_ok_and(|e| e)
+    });
 
     for record_type in record_types_with_no_prolog_file {
-        let mut file = fs::File::create(get_fact_program_file_path(record_type)).unwrap();
+        let mut file = fs::File::create(get_fact_program_file_path(record_type))?;
 
         let fact_program = (FactTemplate {
             record_type: record_type.clone(),
