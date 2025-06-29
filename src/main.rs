@@ -1,6 +1,7 @@
 use askama::Template;
 use axum::{extract::State, routing::get, Router};
 
+use log::info;
 use routes::{fact::fact_routes, state_change::state_change_routes};
 
 mod models;
@@ -22,7 +23,8 @@ pub struct AppState {
 
 #[tokio::main]
 async fn main() {
-    println!("Starting pythia...");
+    env_logger::init();
+    info!("Starting pythia...");
 
     generate_prolog_programs().expect("Failed to generate prolog programs");
 
@@ -48,11 +50,10 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind(addr)
         .await
         .expect(&format!("Failed to create TCPListener on {}.", addr));
+    info!("Listening on {}...", addr);
     axum::serve(listener, r)
         .await
         .expect(&format!("Failed to start axum server on {}.", addr));
-
-    println!("Listening on {}...", addr);
 }
 
 #[derive(Template)]

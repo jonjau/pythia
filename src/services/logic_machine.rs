@@ -193,7 +193,6 @@ impl Actor {
                 let _ = respond_to.send(r);
             }
             ActorMessage::GetFacts(Message { query, respond_to }) => {
-                dbg!(&query.goal);
                 let _ = respond_to.send(self.lm.fetch(query.goal, query.target_rt));
             }
             ActorMessage::GetRecordType(Message { query, respond_to }) => {

@@ -1,3 +1,4 @@
+use log::info;
 use scryer_prolog::machine::{
     parsed_results::{prolog_value_to_json_string, QueryMatch, QueryResolution},
     Machine,
@@ -113,6 +114,7 @@ impl LogicMachine {
     }
 
     pub fn add_fact(&mut self, f: Fact) -> LogicMachineResult<Fact> {
+        info!("Asserting fact: {}", f);
         self.machine
             .run_query(format!(r#"assertz({})."#, f.to_string()))
             .map_err(LogicMachineError::PrologError)?;
@@ -125,7 +127,7 @@ impl LogicMachine {
     }
 
     pub fn fetch(&mut self, g: Goal, target_rt: Arc<RecordType>) -> LogicMachineResult<Vec<Fact>> {
-        dbg!(&g.to_string());
+        info!("Fetching goal: {}", g);
         let qr = self
             .machine
             .run_query(format!(r#"{}."#, g.to_string()))
