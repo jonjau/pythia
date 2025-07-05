@@ -1,4 +1,4 @@
 <form id="{{state_id}}-{{field}}" autocomplete="on" hx-post="/states/{{state_id}}/{{fact_type}}/{{field}}/specified" hx-swap="innerHTML" hx-target="#{{state_id}}-{{field}}-cell">
-  <input type="text" name="{{state_id}}.{{field}}" value="{{value}}" disabled />
+  <input type="text" name="{{state_id}}.{{field}}" value="{{value}}" disabled class="border rounded-lg p-3 leading-tight" />
 </form>
-<button type="submit" form="{{state_id}}-{{field}}">Specify</button>
+<button type="submit" form="{{state_id}}-{{field}}" class="button">Specify</button>

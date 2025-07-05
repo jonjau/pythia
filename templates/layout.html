@@ -10,12 +10,13 @@
   <title>Pythia</title>
 </head>
 
-<body>
-  <header>
-    <h1 class="text-3xl font-bold underline"">Pythia</h1>
+<body class="bg-stone-900 text-amber-100 font-monospace">
+  <header class="px-10 py-6 bg-stone-800">
+    <h1 class="text-3xl font-bold hover:border-dotted hover:border-b-amber-700 hover:text-amber-400 focus:border-solid focus:border-b-amber-700">
+      Pythia
+    </h1>
   </header>
-  <hr />
-  <main style="display: flex">
+  <main class="flex" id="main-content">
     {% block content %} {% endblock %}
   </main>
 </body>

@@ -1,12 +1,20 @@
 {% extends "layout.html" %} {% block content %}
-<table style="border: 1px solid black">
+<table class="table">
   <tbody>
     {% for record_type in record_types %}
-    <tr style="border: 1px solid black">
-      <td style="border: 1px solid black">
+    <tr>
+      <td class="p-6 border-b border-stone-900">
         {{ record_type }}
-        <a href="/{{ record_type }}/facts">F</a>
-        <a href="/{{ record_type }}/state-changes">SC</a>
+      </td>
+      <td class="p-6 border-b border-stone-900">
+        <a href="/{{ record_type }}/facts" class="link">
+          Facts
+        </a>
+      </td>
+      <td class="p-6 border-b border-stone-900">
+        <a href="/{{ record_type }}/state-changes" class="link">
+          State changes
+        </a>
       </td>
     </tr>
     {% endfor %}

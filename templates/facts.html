@@ -1,7 +1,7 @@
 {% extends "layout.html" %} {% block content %}
-<a href="/">Back to home</a>
-  {% include "facts-table.html" %}
-<div>
+<a href="/" class="link">Back to home</a>
+<div class="p-6">
   {% include "add-new-fact-button.html" %}
 </div>
+  {% include "facts-table.html" %}
 {% endblock %}
