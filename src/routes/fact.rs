@@ -22,7 +22,7 @@ pub fn fact_routes() -> Router<AppState> {
 }
 
 #[derive(Template)]
-#[template(path = "facts.html")]
+#[template(path = "fact/facts.html")]
 struct GetFactsTemplate {
     fact_type: String,
     facts: Vec<String>,
@@ -42,7 +42,7 @@ async fn get_facts(State(state): State<AppState>, Path(rt_name): Path<String>) -
 }
 
 #[derive(Template)]
-#[template(path = "new-fact.html")]
+#[template(path = "fact/new-fact.html")]
 struct GetNewFactFormTemplate {
     fact_type: String,
     fields: Vec<String>,
@@ -65,7 +65,7 @@ async fn get_new_fact_form(
 }
 
 #[derive(Template)]
-#[template(path = "add-new-fact-button.html")]
+#[template(path = "fact/add-new-fact-button.html")]
 struct GetAddFactButtonTemplate {
     fact_type: String,
 }
@@ -75,7 +75,7 @@ async fn get_add_fact_button(Path(rt_name): Path<String>) -> GetAddFactButtonTem
 }
 
 #[derive(Template)]
-#[template(path = "facts-table.html")]
+#[template(path = "fact/facts-table.html")]
 struct FactsTableTemplate {
     facts: Vec<String>,
 }
