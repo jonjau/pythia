@@ -5,10 +5,16 @@
     --font-monospace: "Iosevka Web", monospace, sans-serif;
 }
 
+@layer base {
+    p {
+        @apply m-4
+    }
+}
+
 /* Add this part below your imports */
 @layer components {
     .table {
-        @apply m-10 border-b border-stone-900 bg-stone-800 table-auto rounded-lg overflow-scroll;
+        @apply border-b border-stone-900 bg-stone-800 table-auto rounded-lg overflow-scroll;
     }
 
     .link {

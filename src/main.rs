@@ -59,7 +59,7 @@ async fn main() {
 }
 
 #[derive(Template)]
-#[template(path = "index.html")]
+#[template(path = "inquiries.html")]
 struct GetInquiriesTemplate {
     record_types: Vec<String>,
 }
