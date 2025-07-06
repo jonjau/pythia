@@ -14,7 +14,7 @@
 /* Add this part below your imports */
 @layer components {
     .table {
-        @apply border-b border-stone-900 bg-stone-800 table-auto rounded-lg overflow-scroll;
+        @apply table-auto rounded-lg overflow-scroll;
     }
 
     .link {

@@ -1,8 +1,21 @@
-<table id="fact-table" class="m-10 table">
-  <tbody>
-    {% for fact in facts %}
+<table id="fact-table" class="table">
+  <thead class="bg-stone-800">
     <tr>
-      <td class="p-6 border-b border-stone-900">{{ fact }}</td>
+      <td class="p-3 border-b border-stone-700" />
+      {% for value in fact_table_data.columns %}
+      <th class="p-3 border-b border-stone-700">{{ value }}</th>
+      {% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in fact_table_data.rows %}
+    <tr>
+      <td class="bg-stone-800 p-3 border-b border-stone-700">
+        {{ loop.index }}
+      </td>
+      {% for value in row %}
+      <td class="p-3 border-b border-stone-700">{{ value }}</td>
+      {% endfor %}
     </tr>
     {% endfor %}
   </tbody>

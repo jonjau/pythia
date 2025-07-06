@@ -17,6 +17,12 @@ pub enum FactServiceError {
     IoError(#[from] io::Error),
 }
 
+#[derive(Default)]
+pub struct FactTableData {
+    pub columns: Vec<String>,
+    pub rows: Vec<Vec<String>>,
+}
+
 #[derive(Clone)]
 pub struct FactService {
     lm: LogicMachineService,
@@ -27,10 +33,23 @@ impl FactService {
         FactService { lm }
     }
 
-    pub async fn get_facts(&self, rt_name: String) -> Result<Vec<String>, FactServiceError> {
-        let facts = self.lm.get_all_facts(rt_name).await?;
+    pub async fn get_facts(&self, rt_name: String) -> Result<FactTableData, FactServiceError> {
+        let facts = self.lm.get_all_facts(rt_name.clone()).await?;
 
-        Ok(facts.iter().map(|f| f.to_string()).collect())
+        let rt = self.lm.get_record_type(rt_name).await?;
+        let columns = rt.all_fields();
+
+        let rows = facts
+            .iter()
+            .map(|f| {
+                f.to_all_values()
+                    .into_iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+
+        Ok(FactTableData { columns, rows })
     }
 
     async fn add_fact_to_lm(
