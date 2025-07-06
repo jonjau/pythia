@@ -11,10 +11,10 @@
     }
 }
 
-/* Add this part below your imports */
+/* TODO JCJ: use border/outline instead of ring */
 @layer components {
     .table {
-        @apply table-auto rounded-lg overflow-scroll;
+        @apply table-auto rounded-sm overflow-scroll;
     }
 
     .link {
@@ -22,6 +22,6 @@
     }
 
     .button {
-        @apply bg-teal-700 hover:bg-teal-600 focus:ring-4 focus:ring-amber-700 rounded-lg px-5 py-2.5 me-2 mb-2;
+        @apply bg-teal-800 hover:bg-teal-600 focus:outline-none focus:ring-4 focus:ring-amber-700 rounded-sm px-5 py-2.5 me-2 mb-2;
     }
 }
