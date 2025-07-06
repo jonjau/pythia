@@ -17,13 +17,13 @@ struct RecordType {
 }
 
 #[derive(Template)]
-#[template(path = "fact.pl")]
+#[template(path = "prolog/fact.pl")]
 struct FactTemplate {
     record_type: RecordType,
 }
 
 #[derive(Template)]
-#[template(path = "pythia.pl")]
+#[template(path = "prolog/pythia.pl")]
 struct PythiaTemplate {
     import_paths: Vec<String>,
     record_types: Vec<RecordType>,
