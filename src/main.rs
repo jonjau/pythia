@@ -1,5 +1,6 @@
 use askama::Template;
 use axum::{extract::State, routing::get, Router};
+use tower_http::services::ServeDir;
 
 use log::info;
 use routes::{fact::fact_routes, state_change::state_change_routes};
@@ -40,6 +41,7 @@ async fn main() {
     };
 
     let r = Router::new()
+        .nest_service("/static", axum::routing::get_service(ServeDir::new("src/static")))
         .route("/", get(get_inquiries))
         .merge(state_change_routes())
         .merge(fact_routes())
@@ -57,7 +59,7 @@ async fn main() {
 }
 
 #[derive(Template)]
-#[template(path = "index.html")]
+#[template(path = "inquiries.html")]
 struct GetInquiriesTemplate {
     record_types: Vec<String>,
 }

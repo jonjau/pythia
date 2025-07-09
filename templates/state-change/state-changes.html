@@ -1,0 +1,118 @@
+{% extends "layout.html" %}
+{% block content %}
+<nav class="flex">
+  <a href="/" class="link w-fit">
+    <div class="flex justify-between items-center">
+      <svg class="mr-2 w-5 h-5 text-amber-100" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 5l-7 7 7 7" />
+      </svg>
+      <span>Back to Home</span>
+    </div>
+  </a>
+</nav>
+
+<div class="mt-8 flex-1 flex flex-col">
+  <h1 class="text-4xl font-bold mb-4">{{ fact_type }}</h1>
+
+  <nav class="mb-6 border-b border-stone-700">
+    <ul class="flex space-x-4" role="tablist">
+      <li>
+        <a href="/{{ fact_type }}/facts" class="inline-block px-3 py-2
+                  hover:text-amber-400
+                  border-transparent
+                  border-b-4
+                  hover:border-dotted hover:border-b-amber-700
+                  focus:border-solid focus:border-b-amber-700
+                  aria-[current=page]:border-b-amber-700">
+          Facts
+        </a>
+      </li>
+      <li>
+        <a href="/{{ fact_type }}/state-changes" class="inline-block px-4 py-2
+                  hover:text-amber-400
+                  border-transparent
+                  border-b-5
+                  hover:border-dotted hover:border-b-amber-700
+                  focus:border-solid focus:border-b-amber-700
+                  aria-[current=page]:border-b-amber-700
+                  aria-[current=page]:border-solid
+                  aria-[current=page]:hover:border-solid" aria-current="page">
+          State changes
+        </a>
+      </li>
+    </ul>
+  </nav>
+
+  <div class="flex-1 h-100 flex">
+    <div class="flex flex-col pr-8 border-r-1 border-stone-700">
+      <div class="border border-stone-700 rounded-sm p-6">
+        <h2 class="font-bold text-lg mb-4">Starting with state:</h2>
+        <div id="start-state-inputs">
+          <table>
+            {% let state_id = "start" %}
+            {% for (field, value) in start_state_values %}
+            <tr>
+              <td>
+                <label for="start-{{field}}" class="pr-6">{{field}}</label>
+              </td>
+              <td id="start-{{field}}-cell" class="flex items-center">
+                {% if value == "" %}
+                {% include "set-field-to-unspecified.html" %}
+                {% else %}
+                {% include "set-field-to-specified.html" %}
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </table>
+        </div>
+      </div>
+
+      <div class="font-bold text-center">·</div>
+      <div class="font-bold text-center">·</div>
+      <div class="font-bold text-center">·</div>
+
+      <div class="border border-stone-700 rounded-sm p-6">
+        <h2 class="font-bold text-lg mb-4">Ending with state:</h2>
+        <div id="end-state-inputs">
+          <table>
+            {% let state_id = "end" %}
+            {% for (field, value) in end_state_values %}
+            <tr>
+              <td>
+                <label for="end-{{field}}" class="pr-6">{{field}}</label>
+              </td>
+              <td id="end-{{field}}-cell" class="flex items-center">
+                {% if value == "" %}
+                {% include "set-field-to-unspecified.html" %}
+                {% else %}
+                {% include "set-field-to-specified.html" %}
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </table>
+        </div>
+      </div>
+
+      <form hx-get="/{{fact_type}}/state-changes" hx-push-url="true" hx-target="#state-change-paths"
+        hx-include="#start-state-inputs :not([disabled]), #end-state-inputs :not([disabled])" class="mt-8 p-6">
+        <div>
+          <label for="steps" class="font-bold">Number of Steps:</label>
+          <input type="number" id="steps" name="num-steps" min="1" max="100" value="{{num_steps}}"
+            class="p-2 border rounded-sm focus:outline-amber-700 focus:outline-4" />
+        </div>
+        <div class="flex justify-center mt-8">
+          <button type="submit" class="button bg-green-800 hover:bg-green-700 font-bold text-2xl">
+            Calculate paths
+          </button>
+        </div>
+      </form>
+
+    </div>
+    <div class="pl-10">
+      <h2 class="text-2xl font-bold mb-6">State change paths</h2>
+      <div id="state-change-paths" />
+    </div>
+  </div>
+  {% endblock %}

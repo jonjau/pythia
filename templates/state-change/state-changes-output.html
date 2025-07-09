@@ -1,0 +1,57 @@
+<div x-data="{ viewType: 'list' }">
+
+  {% if let Some(message) = error_message %}
+  <details class="p-10 border border-stone-700 rounded-sm">
+    <summary class="text-xl">There was an error in calculating paths.</summary>
+    <span class="text-xl">{{ message }}</span>
+  </details>
+  {% else if paths.is_empty() %}
+  <div class="p-10 font-xl border border-stone-700 rounded-sm">No state changes found.</div>
+  {% else %}
+  <div class="mb-2">
+    <input type="radio" id="table-view" value="table" x-model="viewType">
+    <label for="table-view">Table view</label>
+    <input type="radio" id="list-view" value="list" x-model="viewType">
+    <label for="list-view">List view</label>
+  </div>
+  <table class="m-3 table">
+    <tbody>
+      {% for path in paths %}
+      <tr>
+        <td class="p-3 border border-stone-700">
+          <table>
+            <tbody>
+              <tr>
+                <td class="bg-stone-800 p-3 border border-stone-700">
+                  Context
+                </td>
+                <td class="p-3 border border-stone-700">
+                  {{path.context}}
+                </td>
+              </tr>
+              <tr>
+                <td class="bg-stone-800 p-3 border border-stone-700">
+                  ID
+                </td>
+                <td class="p-3 border border-stone-700">
+                  {{path.id}}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div x-show="viewType === 'list'">
+            {% include "change-path-list-view.html" %}
+          </div>
+
+          <div x-show="viewType === 'table'">
+            {% include "change-path-table-view.html" %}
+          </div>
+
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>

@@ -1,0 +1,51 @@
+{% extends "layout.html" %}
+{% block content %}
+<nav class="flex">
+  <a href="/" class="link w-fit">
+    <div class="flex justify-between items-center">
+      <svg class="mr-2 w-5 h-5 text-amber-100" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 5l-7 7 7 7" />
+      </svg>
+      <span>Back to Home</span>
+    </div>
+  </a>
+</nav>
+
+<div class="mt-8">
+  <h1 class="text-4xl font-bold mb-4">{{ fact_type }}</h1>
+
+  <nav class="mb-6 border-b border-stone-700">
+    <ul class="flex space-x-4" role="tablist">
+      <li>
+        <a href="/{{ fact_type }}/facts" class="inline-block px-3 py-2
+                  hover:text-amber-400
+                  border-transparent
+                  border-b-4
+                  hover:border-dotted hover:border-b-amber-700
+                  focus:border-solid focus:border-b-amber-700
+                  aria-[current=page]:border-b-amber-700
+                  aria-[current=page]:border-solid
+                  aria-[current=page]:hover:border-solid" aria-current="page">
+          Facts
+        </a>
+      </li>
+      <li>
+        <a href="/{{ fact_type }}/state-changes" class="inline-block px-3 py-2
+                  hover:text-amber-400
+                  border-transparent
+                  border-b-4
+                  hover:border-dotted hover:border-b-amber-700
+                  focus:border-solid focus:border-b-amber-700">
+          State changes
+        </a>
+      </li>
+    </ul>
+  </nav>
+
+  {% include "facts-table.html" %}
+  <div class="mt-8">
+    {% include "add-new-fact-button.html" %}
+  </div>
+
+</div>
+{% endblock %}

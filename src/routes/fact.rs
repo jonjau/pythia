@@ -9,7 +9,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use crate::AppState;
+use crate::{services::fact::FactTableData, AppState};
 
 pub fn fact_routes() -> Router<AppState> {
     Router::new()
@@ -22,14 +22,14 @@ pub fn fact_routes() -> Router<AppState> {
 }
 
 #[derive(Template)]
-#[template(path = "facts.html")]
+#[template(path = "fact/facts.html")]
 struct GetFactsTemplate {
     fact_type: String,
-    facts: Vec<String>,
+    fact_table_data: FactTableData,
 }
 
 async fn get_facts(State(state): State<AppState>, Path(rt_name): Path<String>) -> GetFactsTemplate {
-    let facts = state
+    let fact_table_data = state
         .facts
         .get_facts(rt_name.clone())
         .await
@@ -37,12 +37,12 @@ async fn get_facts(State(state): State<AppState>, Path(rt_name): Path<String>) -
 
     GetFactsTemplate {
         fact_type: rt_name,
-        facts,
+        fact_table_data,
     }
 }
 
 #[derive(Template)]
-#[template(path = "new-fact.html")]
+#[template(path = "fact/new-fact.html")]
 struct GetNewFactFormTemplate {
     fact_type: String,
     fields: Vec<String>,
@@ -65,7 +65,7 @@ async fn get_new_fact_form(
 }
 
 #[derive(Template)]
-#[template(path = "add-new-fact-button.html")]
+#[template(path = "fact/add-new-fact-button.html")]
 struct GetAddFactButtonTemplate {
     fact_type: String,
 }
@@ -75,9 +75,9 @@ async fn get_add_fact_button(Path(rt_name): Path<String>) -> GetAddFactButtonTem
 }
 
 #[derive(Template)]
-#[template(path = "facts-table.html")]
+#[template(path = "fact/facts-table.html")]
 struct FactsTableTemplate {
-    facts: Vec<String>,
+    fact_table_data: FactTableData,
 }
 
 async fn create_fact(
@@ -90,9 +90,9 @@ async fn create_fact(
         .add_fact(&rt_name, f.clone())
         .await
         .expect(&format!("Failed to add fact for {}, {:?}", rt_name, f));
-    let facts = state.facts.get_facts(rt_name).await.unwrap_or_default();
+    let fact_table_data = state.facts.get_facts(rt_name).await.unwrap_or_default();
 
-    FactsTableTemplate { facts }
+    FactsTableTemplate { fact_table_data }
 }
 
 #[derive(Debug, Deserialize, Serialize)]

@@ -1,0 +1,23 @@
+{% extends "layout.html" %} {% block content %}
+<div class="w-80">
+  <p>
+    Inquire about:
+  </p>
+  <ul>
+    {% for record_type in record_types %}
+    <li>
+      <a href="/{{ record_type }}/facts"
+        class="block p-4 border-b-2 border-stone-700 hover:bg-stone-950 text-teal-400 underline underline-offset-4 decoration-2 decoration-dotted decoration-teal-600 hover:decoration-amber-700 hover:text-teal-100 focus:decoration-solid focus:decoration-amber-700 focus:text-teal-100">
+        <div class="flex justify-between items-center">
+          <span class="text-lg">{{ record_type }}</span>
+          <svg class="ml-5 w-5 h-5 text-amber-100" fill="none" stroke="currentColor" stroke-width="2"
+            viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}

@@ -6,15 +6,18 @@
     integrity="sha384-0gxUXCCR8yv9FM2b+U3FDbsKthCI66oH5IA9fHppQq9DDMHuMauqq1ZHBpJxQ0J0"
     crossorigin="anonymous"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <link href="/static/style.css" rel="stylesheet">
   <title>Pythia</title>
 </head>
 
-<body>
-  <header>
-    <h1>Pythia</h1>
+<body class="bg-stone-900 text-amber-100 font-monospace h-screen flex flex-col">
+  <header class="px-10 py-4 bg-stone-800">
+    <a href="/"
+      class="text-2xl font-bold border-b-4 border-transparent hover:border-dotted hover:border-b-amber-700 hover:text-amber-400 focus:border-solid focus:border-b-amber-700">
+      Pythia
+    </a>
   </header>
-  <hr />
-  <main style="display: flex">
+  <main class="mx-10 my-5 flex-1 h-100 flex flex-col" id="main-content">
     {% block content %} {% endblock %}
   </main>
 </body>

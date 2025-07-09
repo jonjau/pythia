@@ -21,7 +21,7 @@ pub fn state_change_routes() -> Router<AppState> {
 }
 
 #[derive(Template)]
-#[template(path = "state-changes.html")]
+#[template(path = "state-change/state-changes.html")]
 struct StateChangesPageInput {
     fact_type: String,
     start_state_values: Vec<(String, String)>,
@@ -30,7 +30,7 @@ struct StateChangesPageInput {
 }
 
 #[derive(Template)]
-#[template(path = "state-changes-output.html")]
+#[template(path = "state-change/state-changes-output.html")]
 struct StateChangesPageOutput {
     error_message: Option<String>,
     paths: Vec<ChangePath>,
@@ -114,7 +114,7 @@ async fn get_state_changes(
 }
 
 #[derive(Template)]
-#[template(path = "set-field-to-specified.html")]
+#[template(path = "state-change/set-field-to-specified.html")]
 struct SetFieldToSpecifiedTemplate {
     state_id: String,
     fact_type: String,
@@ -134,12 +134,11 @@ async fn set_field_to_specified(
 }
 
 #[derive(Template)]
-#[template(path = "set-field-to-unspecified.html")]
+#[template(path = "state-change/set-field-to-unspecified.html")]
 struct SetFieldToUnspecifiedTemplate {
     state_id: String,
     fact_type: String,
     field: String,
-    value: String,
 }
 
 async fn set_field_to_unspecified(
@@ -149,6 +148,5 @@ async fn set_field_to_unspecified(
         state_id,
         fact_type,
         field: field_name,
-        value: "".to_string(),
     }
 }

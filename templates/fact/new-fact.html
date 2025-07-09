@@ -1,0 +1,23 @@
+<form id="add-fact-form" autocomplete="on" class="border border-stone-700 rounded-sm p-6 w-fit">
+  <h3 class="text-xl">
+    Add a new <span class="font-bold underline underline-offset-4">{{ fact_type }}</span> with values:
+  </h3>
+  <table class="mt-4"> 
+    {% for field in fields %}
+    <tr>
+      <td class="pr-6">
+        <label for="{{ field }}" class="font-bold">{{ field }}</label>
+      </td>
+      <td class="py-2">
+        <input type="text" id="{{ field }}" name="{{ field }}" class="border rounded-sm p-2 leading-tight focus:outline-amber-700 focus:outline-4" />
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  <div class="flex mt-4">
+    <button hx-delete="/{{ fact_type }}/facts/new" hx-target="#add-fact-form" hx-swap="outerHTML"
+      class="button bg-red-800 hover:bg-red-700">Cancel</button>
+    <button hx-post="/{{ fact_type }}/facts" hx-include="#add-fact-form" hx-target="#fact-table" hx-swap="outerHTML"
+      class="button bg-green-800 hover:bg-green-700">Submit</button>
+  </div>
+</form>

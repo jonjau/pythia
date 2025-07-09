@@ -1,0 +1,26 @@
+@import url('https://cdnjs.cloudflare.com/ajax/libs/Iosevka/6.0.0/iosevka/iosevka.min.css');
+@import "tailwindcss";
+
+@theme {
+    --font-monospace: "Iosevka Web", monospace, sans-serif;
+}
+
+@layer base {
+    p {
+        @apply m-4
+    }
+}
+
+@layer components {
+    .table {
+        @apply table-auto rounded-sm overflow-scroll;
+    }
+
+    .link {
+        @apply text-teal-400 underline underline-offset-4 decoration-2 decoration-dotted decoration-teal-600 hover:decoration-amber-700 hover:text-teal-100 focus:decoration-solid focus:decoration-amber-700 focus:text-teal-100;
+    }
+
+    .button {
+        @apply bg-teal-800 hover:bg-teal-600 focus:outline-4 focus:outline-amber-700 rounded-sm px-5 py-2.5 m-2;
+    }
+}

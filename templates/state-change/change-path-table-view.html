@@ -1,28 +1,28 @@
-<table style="border: 1px solid black">
+<table class="mt-4 table">
   <thead>
-    <tr style="border: 1px solid black">
+    <tr>
       {% for field in path.initial_state.type_.data_fields %}
-      <td style="border: 1px solid black">
+      <td class="bg-stone-800 font-bold p-3 border-b border-stone-700">
         {{ field }}
       </td>
       {% endfor %}
     </tr>
   </thead>
   <tbody>
-    <tr style="border: 1px solid black">
+    <tr>
       {% for value in path.initial_state.values %}
-      <td style="border: 1px solid black">
+      <td class="p-3 border-b border-stone-700">
         {{ value }}
       </td>
       {% endfor %}
     </tr>
     {% for step in path.steps %}
-    <tr style="border: 1px solid black">
+    <tr>
       {% for value in step.after.values %}
       {% if let Some(x) = step.diffs[loop.index0] %}
-      <td style="border: 1px solid black; background-color: khaki;">
+      <td class="p-3 border-b border-stone-700 bg-amber-900">
         {% else %}
-      <td style="border: 1px solid black">
+      <td class="p-3 border-b border-stone-700">
         {% endif %}
         {{ value }}
       </td>
