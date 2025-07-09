@@ -139,7 +139,6 @@ struct SetFieldToUnspecifiedTemplate {
     state_id: String,
     fact_type: String,
     field: String,
-    value: String,
 }
 
 async fn set_field_to_unspecified(
@@ -149,6 +148,5 @@ async fn set_field_to_unspecified(
         state_id,
         fact_type,
         field: field_name,
-        value: "".to_string(),
     }
 }

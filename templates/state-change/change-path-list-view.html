@@ -3,10 +3,10 @@
   <li>
     {% for diff in step.diffs %}
     {% if let Some(diff) = diff %}
-    <table class="m-10 table">
+    <table class="mt-4 table">
       <tr>
-        <td class="p-6 border-b border-stone-900">{{ diff.field_name }}</td>
-        <td class="p-6 border-b border-stone-900">
+        <td class="bg-stone-800 font-bold p-3 border border-stone-700">{{ diff.field_name }}</td>
+        <td class="p-3 border border-stone-700">
           {{diff.before}} → {{diff.after}}
         </td>
       </tr>

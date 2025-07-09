@@ -11,7 +11,6 @@
     }
 }
 
-/* TODO JCJ: use border/outline instead of ring */
 @layer components {
     .table {
         @apply table-auto rounded-sm overflow-scroll;
@@ -22,6 +21,6 @@
     }
 
     .button {
-        @apply bg-teal-800 hover:bg-teal-600 focus:outline-none focus:ring-4 focus:ring-amber-700 rounded-sm px-5 py-2.5 m-2;
+        @apply bg-teal-800 hover:bg-teal-600 focus:outline-4 focus:outline-amber-700 rounded-sm px-5 py-2.5 m-2;
     }
 }

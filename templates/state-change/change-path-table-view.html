@@ -1,8 +1,8 @@
-<table class="m-10 table">
+<table class="mt-4 table">
   <thead>
     <tr>
       {% for field in path.initial_state.type_.data_fields %}
-      <td class="p-6 border-b border-stone-900">
+      <td class="bg-stone-800 font-bold p-3 border-b border-stone-700">
         {{ field }}
       </td>
       {% endfor %}
@@ -11,7 +11,7 @@
   <tbody>
     <tr>
       {% for value in path.initial_state.values %}
-      <td class="p-6 border-b border-stone-900">
+      <td class="p-3 border-b border-stone-700">
         {{ value }}
       </td>
       {% endfor %}
@@ -20,9 +20,9 @@
     <tr>
       {% for value in step.after.values %}
       {% if let Some(x) = step.diffs[loop.index0] %}
-      <td class="p-6 border-b border-stone-900 bg-red">
+      <td class="p-3 border-b border-stone-700 bg-amber-900">
         {% else %}
-      <td class="p-6 border-b border-stone-900">
+      <td class="p-3 border-b border-stone-700">
         {% endif %}
         {{ value }}
       </td>
