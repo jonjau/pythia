@@ -7,6 +7,7 @@ use crate::models::logic_machine::LogicMachineError;
 use crate::models::record_type::RecordTypeError;
 use crate::services::logic_machine::LogicMachineService;
 
+/// Errors that can occur during getting and fetching facts from the LogicMachine.
 #[derive(thiserror::Error, Debug)]
 pub enum FactServiceError {
     #[error("LogicMachine error: {0}")]
@@ -17,22 +18,58 @@ pub enum FactServiceError {
     IoError(#[from] io::Error),
 }
 
+/// Represents a simple in-memory fact table, with columns and row data.
+///
+/// This structure holds tabular data where each row is a list of strings,
+/// and each string in `rows[i]` corresponds to the column defined in `columns[i]`.
 #[derive(Default)]
 pub struct FactTableData {
+    /// The names of the columns in the fact table.
+    ///
+    /// Each entry corresponds to a field in the row vectors.
     pub columns: Vec<String>,
+
+    /// The rows of the fact table, stored as a vector of string vectors.
+    ///
+    /// Each inner vector should have the same length as `columns`, where
+    /// `rows[i][j]` is the value for column `columns[j]` in row `i`.
     pub rows: Vec<Vec<String>>,
 }
 
+/// A high-level wrapper around the [`LogicMachineService`] for working with fact tables.
+///
+/// This service provides utilities for adding and fetching facts
+/// through the underlying logic engine.
+///
+/// Cloneable for convenience in concurrent or async contexts.
 #[derive(Clone)]
 pub struct FactService {
     lm: LogicMachineService,
 }
 
 impl FactService {
+    /// Creates a new `FactService` from a given [`LogicMachineService`] instance.
+    ///
+    /// # Arguments
+    ///
+    /// * `lm` - The logic machine service used for fact storage and querying.
     pub fn new(lm: LogicMachineService) -> Self {
         FactService { lm }
     }
 
+    /// Retrieves all facts for a given record type name.
+    ///
+    /// # Arguments
+    ///
+    /// * `rt_name` - The name of the record type to retrieve facts for.
+    ///
+    /// # Returns
+    ///
+    /// A `FactTableData` containing the column names and all row data for the record type.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the record type does not exist or if fact retrieval fails.
     pub async fn get_facts(&self, rt_name: String) -> Result<FactTableData, FactServiceError> {
         let facts = self.lm.get_all_facts(rt_name.clone()).await?;
 
@@ -52,30 +89,23 @@ impl FactService {
         Ok(FactTableData { columns, rows })
     }
 
-    async fn add_fact_to_lm(
-        &self,
-        rt_name: &str,
-        named_values: HashMap<String, String>,
-    ) -> Result<Fact, FactServiceError> {
-        let rt: std::sync::Arc<crate::models::record_type::RecordType> =
-            self.lm.get_record_type(rt_name).await?;
-
-        let named_values = named_values
-            .into_iter()
-            .map(|(k, v)| {
-                (
-                    format!("{}0_{}", rt.name.to_uppercase(), k),
-                    FactTerm::String(v),
-                )
-            })
-            .collect::<HashMap<_, _>>();
-
-        let fact = rt.to_fact(&named_values.into())?;
-
-        let res = self.lm.add_fact(fact).await?;
-        Ok(res)
-    }
-
+    /// Adds multiple facts to a given record type.
+    ///
+    /// Each fact is also written to a `.pl` file under `data/{rt_name}.pl`
+    /// along with a timestamped comment.
+    ///
+    /// # Arguments
+    ///
+    /// * `rt_name` - The name of the record type.
+    /// * `named_valuess` - A list of field-value maps, one per fact to add.
+    ///
+    /// # Returns
+    ///
+    /// A list of added [`Fact`]s.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if file I/O, record type lookup, or fact creation fails.
     pub async fn add_facts(
         &self,
         rt_name: &str,
@@ -100,6 +130,20 @@ impl FactService {
         Ok(facts)
     }
 
+    /// Adds a single fact for the given record type, without file output.
+    ///
+    /// # Arguments
+    ///
+    /// * `rt_name` - The name of the record type to add a fact for.
+    /// * `named_values` - A mapping of field names to values as strings.
+    ///
+    /// # Returns
+    ///
+    /// The newly created [`Fact`] on success.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if record type lookup, fact creation, or persistence fails.
     pub async fn add_fact(
         &self,
         rt_name: &str,
@@ -107,5 +151,30 @@ impl FactService {
     ) -> Result<Fact, FactServiceError> {
         let f = self.add_facts(rt_name, vec![named_values]).await?[0].clone();
         Ok(f)
+    }
+
+    /// Adds a single fact to the logic machine, without file output.
+    async fn add_fact_to_lm(
+        &self,
+        rt_name: &str,
+        named_values: HashMap<String, String>,
+    ) -> Result<Fact, FactServiceError> {
+        let rt: std::sync::Arc<crate::models::record_type::RecordType> =
+            self.lm.get_record_type(rt_name).await?;
+
+        let named_values = named_values
+            .into_iter()
+            .map(|(k, v)| {
+                (
+                    format!("{}0_{}", rt.name.to_uppercase(), k),
+                    FactTerm::String(v),
+                )
+            })
+            .collect::<HashMap<_, _>>();
+
+        let fact = rt.to_fact(&named_values.into())?;
+
+        let res = self.lm.add_fact(fact).await?;
+        Ok(res)
     }
 }

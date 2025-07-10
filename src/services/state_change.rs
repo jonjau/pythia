@@ -6,15 +6,9 @@ use crate::models::logic_machine::LogicMachineError;
 use crate::models::record_type::{RecordType, RecordTypeError};
 use crate::services::logic_machine::LogicMachineService;
 
-// TODO: to display a path:
-// detailed view: show a table with the columns being the field names of the state_rt
-//   one row per change_step, the rows in the table will show the state after each change
-//   the change field being highlighted in a different color
-// simple view: show an unordered list, each item being in this format:
-//    field: before -> after
-// the table of paths should be sortable and filterable.
-// Maybe we should also allow showing/hiding some fields
-
+/// Represents the difference in a single field between two facts.
+///
+/// Holds the field name and the value before and after the change.
 #[derive(Clone)]
 pub struct FieldDiff {
     pub field_name: String,
@@ -28,9 +22,20 @@ impl fmt::Display for FieldDiff {
     }
 }
 
+/// Represents a single state transition between two facts.
+///
+/// Each `ChangeStep` contains the facts before and after the step,
+/// and a list of optional `FieldDiff`s.
 pub struct ChangeStep {
+    /// The fact representing the state before the change.
     pub before: Fact,
+
+    /// The fact representing the state after the change.
     pub after: Fact,
+
+    /// Differences in field values between `before` and `after`.
+    ///
+    /// If a field did not change, its entry is `None`.
     pub diffs: Vec<Option<FieldDiff>>,
 }
 
@@ -51,15 +56,31 @@ impl fmt::Display for ChangeStep {
     }
 }
 
+/// Represents a full path of state changes for a given context and ID.
+///
+/// Tracks the initial state and each transition step (diff).
 pub struct ChangePath {
+    /// The context this path belongs to (e.g. scenario or namespace).
     pub context: String,
+
+    /// The identifier of the entity being tracked.
     pub id: String,
+
+    /// The starting fact (initial state) of the path.
     pub initial_state: Fact,
+
+    /// A series of changes leading from the initial state to the final state.
     pub steps: Vec<ChangeStep>,
 }
 
+/// Holds the stringified values of a record at the start and end of a state transition.
+///
+/// Used for UI or logging purposes when comparing two states.
 pub struct StateValues {
+    /// Field values at the beginning of the transition.
     pub start_state_values: Vec<(String, String)>,
+
+    /// Field values at the end of the transition.
     pub end_state_values: Vec<(String, String)>,
 }
 
@@ -77,6 +98,7 @@ impl fmt::Display for ChangePath {
     }
 }
 
+/// Errors that can occur when processing state changes.
 #[derive(thiserror::Error, Debug)]
 pub enum StateChangeError {
     #[error("Parameter not found: {0}")]
@@ -93,16 +115,24 @@ pub enum StateChangeError {
     CouldNotMatchList,
 }
 
+/// A high-level wrapper around the [`LogicMachineService`] for working with state change paths.
+///
+/// This service provides utilities for calculating state change paths
+/// through the underlying logic engine.
+///
+/// Cloneable for convenience in concurrent or async contexts.
 #[derive(Clone)]
 pub struct StateChangeService {
     lm: LogicMachineService,
 }
 
 impl StateChangeService {
+    /// Creates a new `StateChangeService` from the given logic machine.
     pub fn new(lm: LogicMachineService) -> Self {
         StateChangeService { lm }
     }
 
+    /// Computes field-level differences between two Facts which are assumed to describe the same `RecordType`.
     fn difference(f1: &Fact, f2: &Fact) -> Result<Vec<Option<FieldDiff>>, StateChangeError> {
         f1.data_fields()
             .into_iter()
@@ -121,6 +151,7 @@ impl StateChangeService {
             .collect::<Result<Vec<_>, _>>()
     }
 
+    /// Constructs a `ChangePath` from a Fact that describes a `change_path` Prolog term for the given `RecordType`.
     fn to_change_path(rt: &Arc<RecordType>, path: &Fact) -> Result<ChangePath, StateChangeError> {
         let (ctx, id, steps_term) = (
             path.get("Ctx")?.to_string(),
@@ -146,6 +177,7 @@ impl StateChangeService {
         })
     }
 
+    /// Constructs a `ChangeStep` from a Fact that describes a `change_step` Prolog term for the given `RecordType`.
     fn to_change_step(
         rt: &Arc<RecordType>,
         term: &FactTerm,
@@ -171,6 +203,22 @@ impl StateChangeService {
         })
     }
 
+    /// Populates field values from two name-value maps for the given record type.
+    ///
+    /// # Arguments
+    ///
+    /// * `state_rt_name` - Name of the record type that the states are for.
+    /// * `named_values0` - Field-values mappings for the initial state.
+    /// * `named_values1` - Field-value mappings for the end state.
+    /// 
+    /// # Returns
+    /// 
+    /// `StateValues` containing a vector of field-value pairs (with default values if absent in the input maps),
+    /// in the order as described in the `RecordType`. 
+    ///
+    /// # Errors
+    ///
+    /// If the record type cannot be loaded.
     pub async fn populate_all_state_values(
         &self,
         state_rt_name: &str,
@@ -197,6 +245,23 @@ impl StateChangeService {
         })
     }
 
+    /// Finds possible transition paths between a start and end state, with `num_steps` steps, by querying the LogicMachine.
+    ///
+    /// # Arguments
+    ///
+    /// * `state_rt_name` - Name of the record type that the states are for.
+    /// * `start_state` - Field-values mappings for the initial state.
+    /// * `end_state` - Field-value mappings for the end state.
+    /// * `num_steps` - The number of steps in the path.
+    ///
+    /// # Returns
+    ///
+    /// A vector of `ChangePath`s if successful.
+    ///
+    /// # Errors
+    ///
+    /// - If any parameter is missing or invalid.
+    /// - If the logic engine fails to resolve the facts or any intermediate prolog goals.
     pub async fn find_paths(
         &self,
         state_rt_name: &str,
@@ -221,6 +286,8 @@ impl StateChangeService {
             .await
     }
 
+    /// Finds possible transition paths between a start and end state, with `num_steps` steps, by querying the LogicMachine.
+    /// Takes in String-GoalTerm mappings for the start and end states.
     async fn find_paths_(
         &self,
         state_rt: Arc<RecordType>,
@@ -242,7 +309,7 @@ impl StateChangeService {
         let binding_goal_rt = self.lm.get_record_type("=".to_string()).await?;
         let binding_goal0 = Arc::clone(&binding_goal_rt).to_goal(vec![
             GoalTerm::Variable("RType".to_string()),
-            GoalTerm::String(state_rt.name.clone())
+            GoalTerm::String(state_rt.name.clone()),
         ])?;
         let binding_goal1 = Arc::clone(&binding_goal_rt).to_goal(vec![
             GoalTerm::Variable("Vals1".to_string()),
