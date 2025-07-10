@@ -16,30 +16,48 @@ use std::{clone::Clone, collections::HashMap, sync::Arc};
 
 use crate::models::record_type::{RecordType, RecordTypeBuilder};
 
-/// A Fact is a compound term which has all its values grounded.
-/// It is meant to be asserted to or by the logic machine
+/// Represents a compound term which has all its values grounded.
+/// It is meant to be asserted to or by the logic machine.
+/// 
+/// A `Fact` is typed using a [`RecordType`] and contain a list of associated values.
+/// Typically corresponds to a logic assertion like: `'Person'("Alice", 30)`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Fact {
+    /// The type (functor) of the fact, e.g., `"Person"` or `"Purchase"`.
     pub type_: Arc<RecordType>,
+
+    /// The ordered list of values for this fact, e.g., `[String("Alice"), Integer(30)]`.
     pub values: Vec<FactTerm>,
 }
 
+/// Represents an individual term in a `Fact``.
+///
+/// A term can be atomic (integer, float, string) or compound (list or sub-fact).
 #[derive(Clone, Debug, PartialEq)]
 pub enum FactTerm {
-    // Atomic terms
+    /// An integer term, e.g., `42`.
     Integer(i32),
+
+    /// A floating point term, e.g., `3.14`.
     Float(f64),
-    // Compound terms
+
+    /// A list of nested terms, e.g., `[String("a"), Integer(1)]`.
     List(Vec<FactTerm>),
+
+    /// A string term, double-quoted in display output.
     String(String),
+
+    /// A nested fact term (subterm), e.g., `has_address("Sydney")`.
     SubTerm(Fact),
 }
 
+/// Error returned when a field is not found in a `Fact`.
 #[derive(thiserror::Error, Debug)]
-#[error("field not found: {0}")]
+#[error("Field not found: {0}")]
 pub struct FieldNotFound(String);
 
 impl Fact {
+    /// Constructs a new `Fact` from a type and a list of values.
     pub fn new(type_: Arc<RecordType>, values: Vec<FactTerm>) -> Self {
         Fact {
             type_: Arc::clone(&type_),
@@ -47,6 +65,7 @@ impl Fact {
         }
     }
 
+    /// Returns only the values associated with all defined fields in the record type.
     pub fn to_all_values(&self) -> Vec<FactTerm> {
         self.values
             .iter()
@@ -55,6 +74,7 @@ impl Fact {
             .collect::<Vec<_>>()
     }
 
+    /// Returns the names of the data fields associated with the fact.
     pub fn data_fields(&self) -> Vec<String> {
         self.type_
             .data_fields
@@ -63,6 +83,7 @@ impl Fact {
             .collect::<Vec<_>>()
     }
 
+    /// Returns a mapping from field names to their values (data fields only).
     fn to_data_values(&self) -> HashMap<String, FactTerm> {
         self.type_
             .data_fields
@@ -72,6 +93,7 @@ impl Fact {
             .collect::<HashMap<_, _>>()
     }
 
+    /// Retrieves the value of a field by name, or returns `FieldNotFound` if missing.
     pub fn get(&self, field: &str) -> Result<FactTerm, FieldNotFound> {
         self.to_data_values()
             .get(field)
@@ -168,7 +190,6 @@ fn parse_float(input: &str) -> IResult<&str, f64> {
     .parse(input)
 }
 
-// Parser for List
 fn parse_list(input: &str) -> IResult<&str, Vec<FactTerm>> {
     ws(delimited(
         char('['),
@@ -178,7 +199,6 @@ fn parse_list(input: &str) -> IResult<&str, Vec<FactTerm>> {
     .parse(input)
 }
 
-// Parser for SubTerm (Fact)
 fn parse_subterm(input: &str) -> IResult<&str, Fact> {
     let (input, (functor, args)) = separated_pair(
         parse_atom,
@@ -208,9 +228,6 @@ fn parse_subterm(input: &str) -> IResult<&str, Fact> {
         },
     ))
 }
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct ParseFactTermError;
 
 impl FromStr for FactTerm {
     type Err = String;

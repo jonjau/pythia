@@ -17,6 +17,7 @@ impl Goal {
     }
 }
 
+/// Validation errors when working with a `RecordType`.
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum RecordTypeError {
     #[error("unknown field names: {}", .0.join(", "))]
@@ -31,6 +32,12 @@ pub enum RecordTypeError {
     EmptyGoal,
 }
 
+/// A `RecordType` defines the schema for a fact or goal entity.
+///
+/// This includes its name, display label, and sets of fields categorized as:
+/// - `id_fields`: identifiers to distinguish instances
+/// - `data_fields`: main informational fields
+/// - `metadata_fields`: extra attributes including those used to calculate state change paths
 #[derive(Clone, Debug, PartialEq)]
 pub struct RecordType {
     term_id_ctx: IdContext,
@@ -41,6 +48,8 @@ pub struct RecordType {
     pub metadata_fields: Vec<String>,
 }
 
+/// Represents a deserializable version of a `RecordType`,
+/// used when loading from JSON config or data files.
 #[derive(Debug, Deserialize)]
 pub struct RecordTypeJson {
     pub name: String,
@@ -50,6 +59,8 @@ pub struct RecordTypeJson {
     pub metadata_fields: Vec<String>,
 }
 
+
+/// Builder pattern for constructing and validating `RecordType` instances.
 pub struct RecordTypeBuilder {
     name: String,
     display_name: Option<String>,
@@ -59,6 +70,7 @@ pub struct RecordTypeBuilder {
 }
 
 impl RecordTypeBuilder {
+    /// Starts a new `RecordTypeBuilder` with a name and data fields.
     pub fn new(
         name: impl Into<String>,
         data_fields: impl IntoIterator<Item = impl Into<String>>,
@@ -72,16 +84,19 @@ impl RecordTypeBuilder {
         }
     }
 
+    /// Sets the display name shown in user interfaces.
     pub fn display_name(mut self, display_name: impl Into<String>) -> Self {
         self.display_name = Some(display_name.into());
         self
     }
 
+    /// Defines the ID fields used to uniquely identify instances.
     pub fn id_fields(mut self, id_fields: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.id_fields = Some(id_fields.into_iter().map(Into::into).collect());
         self
     }
 
+    /// Defines metadata fields for extra attributes.
     pub fn metadata_fields(
         mut self,
         metadata_fields: impl IntoIterator<Item = impl Into<String>>,
@@ -90,6 +105,7 @@ impl RecordTypeBuilder {
         self
     }
 
+    /// Validates and builds the final `RecordType`, or returns a `RecordTypeError`.
     pub fn build(self) -> Result<RecordType, RecordTypeError> {
         let display_name = self.display_name.unwrap_or_else(|| self.name.clone());
         let id_fields = self.id_fields.unwrap_or_default();
@@ -119,6 +135,7 @@ impl RecordTypeBuilder {
 }
 
 impl RecordType {
+    /// Returns a list of all field names in this record type.
     pub fn all_fields(self: Arc<Self>) -> Vec<String> {
         self.id_fields
             .iter()
@@ -128,14 +145,19 @@ impl RecordType {
             .collect()
     }
 
+    /// Generates a unique term ID for this record type and ID number.
     pub fn get_term_id(&self, id_number: usize) -> String {
         self.display_name.clone().to_uppercase() + &id_number.to_string()
     }
 
+    /// Creates a local (i.e. scoped to the goal ID) variable term for a specific field and ID number.
     fn get_local_var(&self, id_number: usize, var_name: &str) -> GoalTerm {
         GoalTerm::Variable(format!("{}_{}", self.get_term_id(id_number), var_name))
     }
 
+    /// Returns the most general (uninstantiated) goal possible for this record type.
+    /// 
+    /// Relies on local variables, i.e. Goal terms with names scoped to the Goal
     pub fn to_most_general_goal(self: Arc<Self>) -> Goal {
         let id_number = self.term_id_ctx.next_id();
         let values = self
@@ -147,6 +169,7 @@ impl RecordType {
         Goal::new(self.term_id_ctx.next_id(), self, values)
     }
 
+    /// Constructs a goal using data field values in the order of `self.data_fields`.
     pub fn to_goal(self: Arc<Self>, data_values: Vec<GoalTerm>) -> Result<Goal, RecordTypeError> {
         Arc::clone(&self).to_goal_from_named_values(
             &Arc::clone(&self)
@@ -158,6 +181,9 @@ impl RecordType {
         )
     }
 
+    /// Constructs a goal from a mapping of field names to values.
+    ///
+    /// Returns an error if any fields are unknown or invalid.
     pub fn to_goal_from_named_values(
         self: Arc<Self>,
         data_values: &HashMap<String, GoalTerm>,
@@ -206,6 +232,7 @@ impl RecordType {
         Ok(g)
     }
 
+    /// Renames keys in a map by replacing a common prefix.
     fn change_prefix<T: Clone>(
         map: &HashMap<String, T>,
         from_prefix: &str,
@@ -223,6 +250,7 @@ impl RecordType {
             .collect()
     }
 
+    /// Filters a map to include only keys starting with a given prefix.
     fn filter_by_prefix<T: Clone>(map: &HashMap<String, T>, prefix: &str) -> HashMap<String, T> {
         map.iter()
             .filter(|(key, _)| key.starts_with(prefix))
@@ -230,6 +258,7 @@ impl RecordType {
             .collect()
     }
 
+    /// Finds the longest shared prefix among map keys.
     fn find_common_prefix<T>(map_pre: &HashMap<String, T>) -> Result<String, RecordTypeError> {
         let mut iter = map_pre.keys();
         let first_key = iter.next().ok_or(RecordTypeError::EmptyGoal)?;
@@ -249,6 +278,7 @@ impl RecordType {
         }
     }
 
+    /// Removes a known prefix from all keys in the map.
     fn strip_common_prefix<T: Clone>(
         common_prefix: String,
         map: &HashMap<String, T>,
@@ -258,6 +288,7 @@ impl RecordType {
             .collect()
     }
 
+    /// Converts a mapping of field names to `FactTerm`s into a `Fact` if valid.
     pub fn to_fact(
         self: Arc<Self>,
         all_values: &HashMap<String, FactTerm>,
