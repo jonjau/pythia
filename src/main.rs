@@ -10,11 +10,16 @@ mod routes;
 mod services;
 mod utils;
 
-use crate::utils::codegen::generate_prolog_programs;
 use services::{
     fact::FactService, logic_machine::LogicMachineService, state_change::StateChangeService,
 };
 
+/// Shared application state used by all handlers and services.
+///
+/// This includes:
+/// - `LogicMachineService`: The logic engine running Prolog programs.
+/// - `FactService`: Handles operations related to facts.
+/// - `StateChangeService`: Handles state change operations.
 #[derive(Clone)]
 pub struct AppState {
     lm: LogicMachineService,
@@ -22,24 +27,37 @@ pub struct AppState {
     state_changes: StateChangeService,
 }
 
+
+/// Main entry point of the Pythia application.
+///
+/// This function:
+/// - Initializes logging.
+/// - Generates necessary Prolog programs at start-up.
+/// - Initializes all core services.
+/// - Builds the Axum router and mounts static files, routes, and handlers.
+/// - Starts the HTTP server on port 3000.
 #[tokio::main]
 async fn main() {
     env_logger::init();
     info!("Starting pythia...");
 
-    generate_prolog_programs().expect("Failed to generate prolog programs");
+    // Generate logic programs (Prolog code) before launching
+    utils::codegen::generate_prolog_programs().expect("Failed to generate prolog programs");
 
+    // Load and initialize logic machine with Prolog code and type definitions
     let program_data =
         std::fs::read_to_string("data/internal/pythia.pl").expect("Failed to read pythia.pl");
     let lm = LogicMachineService::new(&program_data, "data/types.json")
         .expect("Failed to start LogicMachine service");
 
+    // Initialise Pythia application state and services
     let state = AppState {
         lm: lm.clone(),
         facts: FactService::new(lm.clone()),
         state_changes: StateChangeService::new(lm.clone()),
     };
 
+    // Build the Axum router
     let r = Router::new()
         .nest_service("/static", axum::routing::get_service(ServeDir::new("src/static")))
         .route("/", get(get_inquiries))
@@ -47,7 +65,7 @@ async fn main() {
         .merge(fact_routes())
         .with_state(state);
 
-    // run our app with hyper, listening globally on port 3000
+    // Run the HTTP server
     let addr = "0.0.0.0:3000";
     let listener = tokio::net::TcpListener::bind(addr)
         .await
@@ -64,6 +82,7 @@ struct GetInquiriesTemplate {
     record_types: Vec<String>,
 }
 
+/// Handler for GET requests to `/`.
 async fn get_inquiries(State(app_state): State<AppState>) -> GetInquiriesTemplate {
     let rts = app_state
         .lm

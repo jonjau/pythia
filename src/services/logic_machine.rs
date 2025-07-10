@@ -10,11 +10,16 @@ use crate::models::record_type::{RecordType, RecordTypeBuilder, RecordTypeError,
 use tokio::sync::{mpsc, oneshot};
 use tokio::{runtime::Builder, task::LocalSet};
 
+/// A high-level asynchronous interface for interacting with the logic machine.
+///
+/// It wraps an internal actor to perform fact and record type operations
+/// off the main thread using message-passing and Tokio's runtime.
 #[derive(Clone)]
 pub struct LogicMachineService {
     lm_actor: ActorHandle,
 }
 
+/// Errors that can occur while loading/building record types from a JSON file.
 #[derive(thiserror::Error, Debug)]
 pub enum ReadRecordTypesError {
     #[error("Failed to open file: {0}")]
@@ -26,6 +31,7 @@ pub enum ReadRecordTypesError {
 }
 
 impl LogicMachineService {
+    /// Creates a new logic machine service loading facts from the given Prolog program string and a JSON record types file path.
     pub fn new(program: &str, record_types_file_path: &str) -> Result<Self, ReadRecordTypesError> {
         Ok(LogicMachineService {
             lm_actor: ActorHandle::new(
@@ -35,6 +41,7 @@ impl LogicMachineService {
         })
     }
 
+    /// Loads record types from a JSON file into `RecordType` instances.
     fn read_record_types_from_json(
         file_path: &str,
     ) -> Result<Vec<RecordType>, ReadRecordTypesError> {
@@ -52,6 +59,7 @@ impl LogicMachineService {
             .collect::<Result<Vec<_>, RecordTypeError>>()?)
     }
 
+    /// Fetches a record type by its name.
     pub async fn get_record_type(
         &self,
         fact_type: impl Into<String>,
@@ -63,16 +71,19 @@ impl LogicMachineService {
             .await
     }
 
+    /// Retrieves all record types known by the logic machine.
     pub async fn get_all_record_types(&self) -> LogicMachineResult<Vec<Arc<RecordType>>> {
         self.lm_actor.send_query(GetAllRecordTypesQuery).await
     }
 
+    /// Gets all facts of a given record type.
     pub async fn get_all_facts(&self, fact_type: String) -> LogicMachineResult<Vec<Fact>> {
         self.lm_actor
             .send_query(GetAllFactsQuery { fact_type })
             .await
     }
 
+    /// Gets facts matching a goal for a specific target record type.
     pub async fn get_facts(
         &self,
         goal: Goal,
@@ -83,6 +94,7 @@ impl LogicMachineService {
             .await
     }
 
+    /// Adds a new fact to the logic machine.
     pub async fn add_fact(&self, fact: Fact) -> LogicMachineResult<Fact> {
         self.lm_actor.send_query(AddFactQuery { fact }).await
     }
@@ -107,11 +119,13 @@ struct GetRecordTypeQuery {
 
 struct GetAllRecordTypesQuery;
 
+/// Wraps a query and a one-shot channel to receive the result.
 struct Message<Query, Response> {
     query: Query,
     respond_to: oneshot::Sender<Response>,
 }
 
+/// Enum representing all supported actor messages.
 enum ActorMessage {
     AddFact(AddFactMessage),
     GetAllFacts(GetAllFactsMessage),
@@ -157,6 +171,7 @@ impl From<GetAllRecordTypesMessage> for ActorMessage {
     }
 }
 
+/// Receives messages and executes logic machine queries on a separate thread.
 struct Actor {
     receiver: mpsc::Receiver<ActorMessage>,
     lm: LogicMachine,
@@ -213,6 +228,7 @@ async fn run_actor(mut actor: Actor) {
     }
 }
 
+/// Handle for sending queries to the actor running in a separate Tokio thread.
 #[derive(Clone)]
 struct ActorHandle {
     sender: mpsc::Sender<ActorMessage>,

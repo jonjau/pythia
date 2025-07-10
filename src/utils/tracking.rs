@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-// Global tracker that manages instance counting
+/// Global tracker that manages instance counting
 #[derive(Debug)]
 struct GlobalTracker {
     counter: AtomicUsize,
@@ -21,7 +21,7 @@ impl PartialEq for GlobalTracker {
     }
 }
 
-// Tracking context to manage global tracking
+/// Tracking context to manage global tracking
 #[derive(Clone, Debug, PartialEq)]
 pub struct IdContext {
     tracker: Arc<GlobalTracker>,

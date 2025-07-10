@@ -9,27 +9,53 @@ use crate::models::fact::{Fact, FactTerm};
 use crate::models::goal::Goal;
 use crate::models::record_type::{RecordType, RecordTypeBuilder};
 
+/// Represents errors that may occur while interacting with the logic engine.
 #[derive(thiserror::Error, Debug)]
 pub enum LogicMachineError {
+    /// Query returned an unsupported resolution 
     #[error("Unexpected query resolution")]
     UnexpectedQueryResolution,
+
+    /// An error occurred internall in the scryer-prolog engine.
     #[error("Prolog error: {0}")]
     PrologError(String),
+
+    /// A record type was not found by name.
     #[error("RecordType not found: {0}")]
     RecordTypeNotFound(String),
+
+    /// A fact failed to parse from Prolog bindings.
     #[error("Failed to parse: {0}")]
     FactParsingError(String),
 }
 
+/// Convenience result type for logic machine operations.
 pub type LogicMachineResult<T> = Result<T, LogicMachineError>;
 
+/// A wrapper around the Scryer Prolog interpreter that allows loading facts,
+/// querying goals, and mapping Prolog terms to Rust data models.
 pub struct LogicMachine {
+    /// Built-in record types used internally (e.g., equality, length).
     system_record_types: HashMap<String, RecordType>,
+
+    /// User-defined record types loaded at run-time.
     record_types: HashMap<String, RecordType>,
+
+    /// The underlying Scryer Prolog engine.
     machine: Machine,
 }
 
 impl LogicMachine {
+    /// Constructs a new logic machine and loads a Prolog program string and user-defined record types.
+    ///
+    /// # Arguments
+    ///
+    /// - `program`: A Prolog program to load into the engine.
+    /// - `record_types`: A list of user-defined record types.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any system record type fails to build.
     pub fn new<T: Into<String>>(program: T, record_types: Vec<RecordType>) -> LogicMachine {
         let mut machine = Machine::new_lib();
         machine.load_module_string("module0", program.into());
@@ -60,6 +86,9 @@ impl LogicMachine {
         }
     }
 
+    /// Parses a `QueryResolution` into `Fact` instances for a given record type.
+    ///
+    /// This function handles extraction and conversion of Prolog bindings.
     fn parse_to_facts(qr: QueryResolution, rt: Arc<RecordType>) -> LogicMachineResult<Vec<Fact>> {
         match qr {
             QueryResolution::Matches(m) => {
@@ -96,7 +125,11 @@ impl LogicMachine {
         }
     }
 
-    // Get predicate which has the given name
+    /// Retrieves a record type by name, searching user-defined and built-in sets.
+    ///
+    /// # Errors
+    ///
+    /// Returns `RecordTypeNotFound` if no matching record type is found.
     pub fn get_record_type(&self, name: &str) -> LogicMachineResult<Arc<RecordType>> {
         self.record_types
             .get(name)
@@ -105,6 +138,7 @@ impl LogicMachine {
             .ok_or(LogicMachineError::RecordTypeNotFound(name.to_string()))
     }
 
+    /// Returns all user-defined record types.
     pub fn get_all_record_types(&self) -> LogicMachineResult<Vec<Arc<RecordType>>> {
         Ok(self
             .record_types
@@ -113,6 +147,11 @@ impl LogicMachine {
             .collect())
     }
 
+    /// Asserts a fact into the Prolog engine.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `PrologError` if the assertion fails.
     pub fn add_fact(&mut self, f: Fact) -> LogicMachineResult<Fact> {
         info!("Asserting fact: {}", f);
         self.machine
@@ -122,10 +161,21 @@ impl LogicMachine {
         Ok(f)
     }
 
+    /// Fetches all known facts of the given type from the engine.
     pub fn fetch_all(&mut self, rt: Arc<RecordType>) -> LogicMachineResult<Vec<Fact>> {
         self.fetch(Arc::clone(&rt).to_most_general_goal(), Arc::clone(&rt))
     }
 
+    /// Runs a Prolog query (goal) and parses the resulting bindings into facts.
+    ///
+    /// # Arguments
+    ///
+    /// - `g`: The goal to query.
+    /// - `target_rt`: The expected record type of matching facts.
+    ///
+    /// # Errors
+    ///
+    /// Returns `PrologError` or `FactParsingError` depending on failure mode.
     pub fn fetch(&mut self, g: Goal, target_rt: Arc<RecordType>) -> LogicMachineResult<Vec<Fact>> {
         info!("Fetching goal: {}", g);
         let qr = self
