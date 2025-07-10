@@ -1,6 +1,6 @@
 <form id="{{state_id}}-{{field}}" autocomplete="on" hx-delete="/states/{{state_id}}/{{fact_type}}/{{field}}/specified"
   hx-swap="innerHTML" hx-target="#{{state_id}}-{{field}}-cell" class="px-6">
-  <input type="text" name="{{state_id}}.{{field}}" value="{{value}}"
+  <input type="text" name="{{state_id}}.{{field}}"
     class="border rounded-sm p-2 leading-tight focus:outline-amber-700 focus:outline-4" />
 </form>
 <div class="w-42">

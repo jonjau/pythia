@@ -11,6 +11,7 @@ use axum::{
 
 use crate::{services::state_change::ChangePath, AppState};
 
+/// Returns the routes for calculating state change paths.
 pub fn state_change_routes() -> Router<AppState> {
     Router::new()
         .route("/:state_record_type/state-changes", get(get_state_changes))
@@ -70,6 +71,7 @@ async fn get_state_changes(
     let named_values1 = get_values_for_key_with_prefix("end.");
     let num_steps = q.get("num-steps");
 
+    // If request is coming from HTMX, just return the input section, prefilled, otherwise it's a request to calculate paths
     if !headers.contains_key("HX-Request") {
         StateChangesPage::Input(
             match app_state
@@ -119,7 +121,6 @@ struct SetFieldToSpecifiedTemplate {
     state_id: String,
     fact_type: String,
     field: String,
-    value: String,
 }
 
 async fn set_field_to_specified(
@@ -129,7 +130,6 @@ async fn set_field_to_specified(
         state_id,
         fact_type,
         field: field_name,
-        value: "".to_string(),
     }
 }
 

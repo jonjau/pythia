@@ -11,6 +11,7 @@ use serde_json::{json, Value};
 
 use crate::{services::fact::FactTableData, AppState};
 
+/// Returns the routes for getting and creating facts.
 pub fn fact_routes() -> Router<AppState> {
     Router::new()
         .route("/:fact_type/facts", get(get_facts).post(create_fact))
@@ -96,8 +97,8 @@ async fn create_fact(
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct CreateFacts {
-    pub facts: Vec<Value>,
+struct CreateFacts {
+    facts: Vec<Value>,
 }
 
 async fn create_fact_json(
