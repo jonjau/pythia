@@ -29,6 +29,7 @@ struct PythiaTemplate {
     record_types: Vec<RecordType>,
 }
 
+/// Errors that can occur during Prolog code generation.
 #[derive(thiserror::Error, Debug)]
 pub enum CodeGenError {
     #[error("Field not found in type definition: {0}")]
@@ -43,6 +44,16 @@ pub enum CodeGenError {
     FailedToRender(#[from] askama::Error),
 }
 
+/// Generates and writes to Prolog files for each well-defined record type in `data/types.json`:
+///
+/// - `data/<record type>.pl` for the facts of each record type.
+/// - `data/internal/pythia.pl` for state change predicates.
+///
+/// Both kinds of Prolog files are described by Askama templates.
+///
+/// # Errors
+/// Returns an error if this fails to read/create files, could not render the Prolog template, or
+/// finds a malformed record type or a non-string field definition in the JSON.
 pub fn generate_prolog_programs() -> Result<(), CodeGenError> {
     let record_types = read_record_types_from_json("data/types.json")?;
 
