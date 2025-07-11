@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-dev.3] - 2025-07-11
+
+### Added
+
+- New web interface styling
+- Facts added by API are now persisted in the corresponding Prolog files
+
 ## [0.1.0-dev.2] - 2025-06-08
 
 ### Fixed
