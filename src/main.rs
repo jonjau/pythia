@@ -59,7 +59,7 @@ async fn main() {
 
     // Build the Axum router
     let r = Router::new()
-        .nest_service("/static", axum::routing::get_service(ServeDir::new("src/static")))
+        .nest_service("/static", axum::routing::get_service(ServeDir::new("static")))
         .route("/", get(get_inquiries))
         .merge(state_change_routes())
         .merge(fact_routes())
