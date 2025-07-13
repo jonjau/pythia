@@ -7,6 +7,7 @@ on:
 
 permissions:
   id-token: write  # Required for configure-aws-credentials to request JWT from GitHub OIDC
+  contents: read
 
 jobs:
   deploy:
@@ -21,5 +22,5 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v2
         with:
           role-to-assume: ${{ secrets.TERRAFORM_AWS_ROLE_ARN }}
-          role-session-name: github-actions-${{ github.repository }}-${{ github.ref_name }}-${{ github.run_id }}
+          role-session-name: github-actions-pythia-${{ github.ref_name }}-${{ github.run_id }}
           aws-region: us-west-2
