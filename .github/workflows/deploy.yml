@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - 'introduce-iac'
+    paths: ["infra/**"]
 
 permissions:
   id-token: write  # Required for configure-aws-credentials to request JWT from GitHub OIDC
@@ -19,8 +20,26 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v3
         with:
           role-to-assume: ${{ secrets.TERRAFORM_AWS_ROLE_ARN }}
           role-session-name: github-actions-pythia-${{ github.ref_name }}-${{ github.run_id }}
-          aws-region: us-west-2
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform init and apply
+        run: |
+          cd infra
+          terraform fmt
+          terraform init \
+            -backend-config="bucket=${{ secrets.TERRAFORM_BACKEND_BUCKET }}" \
+            -backend-config="key=${{ secrets.TERRAFORM_BACKEND_KEY }}" \
+            -backend-config="region=${{ secrets.AWS_REGION }}"
+          cat > variables.auto.tfvars <<EOF
+          environment    = "dev"
+          tag_prefix     = "pythia"
+          EOF
+          terraform apply -auto-approve
+

@@ -29,3 +29,6 @@ override.tf.json
 # Ignore CLI configuration files
 .terraformrc
 terraform.rc
+
+# My files for partial configuration
+*.config
