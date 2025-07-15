@@ -1,7 +1,6 @@
 variable "ecr_repository_name" {
   description = "Name of the ECR repo"
   type        = string
-  default = "ecr0"
 }
 
 variable "tag_prefix" {
