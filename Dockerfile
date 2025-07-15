@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM rust:1.86-bullseye as builder
+FROM rust:1.86-bullseye AS builder
 
 WORKDIR /pythia
 

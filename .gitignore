@@ -7,10 +7,6 @@
 # Vagrant
 /.vagrant
 
-# VS Code
-*.code-workspace
-*.devcontainer
-
 # Node/npm
 /node_modules
 

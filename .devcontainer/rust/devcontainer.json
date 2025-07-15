@@ -1,0 +1,22 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/rust
+{
+	"name": "Rust",
+	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
+	"image": "mcr.microsoft.com/devcontainers/rust:1-1-bullseye",
+
+	// https://universal-blue.discourse.group/t/should-we-really-recommend-vscode-podman-as-supported/220/3
+	"runArgs": [
+		"--userns=keep-id",
+		"--security-opt=label=disable"
+	],
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"rebornix.prolog"
+			]
+		}
+	}
+	// "remoteUser": "vscode",
+	// "containerUser": "vscode"
+}
