@@ -14,6 +14,8 @@ use services::{
     fact::FactService, logic_machine::LogicMachineService, state_change::StateChangeService,
 };
 
+use crate::services::db::DbService;
+
 /// Shared application state used by all handlers and services.
 ///
 /// This includes:
@@ -40,6 +42,23 @@ pub struct AppState {
 async fn main() {
     env_logger::init();
     info!("Starting pythia...");
+
+
+    let db = DbService::new("us-west-2".into(), "http://host.docker.internal:8000".into()).await;
+
+    let _ = db.create_table("types", "rt_name").await;
+
+    let list_resp = db.client.list_tables().send().await;
+    match list_resp {
+        Ok(resp) => {
+            println!("Found {} tables", resp.table_names().len());
+            for name in resp.table_names() {
+                println!("  {}", name);
+            }
+        }
+        Err(err) => eprintln!("Failed to list local dynamodb tables: {err:?}"),
+    }
+
 
     // Generate logic programs (Prolog code) before launching
     utils::codegen::generate_prolog_programs().expect("Failed to generate prolog programs");
