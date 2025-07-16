@@ -1,6 +1,9 @@
 # Pythia
 /unused
 
+# DynamoDB local
+/dynamodb
+
 # Rust/cargo
 /target
 

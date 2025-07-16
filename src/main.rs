@@ -46,7 +46,7 @@ async fn main() {
 
     let db = DbService::new("us-west-2".into(), "http://host.docker.internal:8000".into()).await;
 
-    let _ = db.create_table("types", "rt_name").await;
+    let _ = db.create_table_if_not_exists("types", "rt_name").await;
 
     let list_resp = db.client.list_tables().send().await;
     match list_resp {
