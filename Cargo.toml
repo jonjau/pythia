@@ -29,3 +29,5 @@ nom = "8"
 log = "0.4.27"
 env_logger = "0.11.8"
 tower-http = { version = "0.6.6", features = ["fs"] }
+aws-config = {version = "1.8.2", features = ["behavior-version-latest"] }
+aws-sdk-dynamodb = "1.83.0"
