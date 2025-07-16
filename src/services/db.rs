@@ -1,8 +1,8 @@
 use aws_sdk_dynamodb::{
-    operation::create_table::CreateTableOutput,
     types::{AttributeDefinition, BillingMode, KeySchemaElement, KeyType, ScalarAttributeType},
     Client, Error,
 };
+use log::info;
 
 #[derive(Clone)]
 pub struct DbService {
@@ -25,7 +25,11 @@ impl DbService {
         DbService { client }
     }
 
-    pub async fn create_table(&self, table: &str, key: &str) -> Result<CreateTableOutput, Error> {
+    pub async fn create_table_if_not_exists(&self, table: &str, key: &str) -> Result<(), Error> {
+        if self.table_exists(table).await? {
+            return Ok(());
+        }
+
         let ad = AttributeDefinition::builder()
             .attribute_name(key)
             .attribute_type(ScalarAttributeType::S)
@@ -47,13 +51,25 @@ impl DbService {
             .await;
 
         match response {
-            Ok(out) => {
-                println!("Added table {} with key {}", table, key);
-                Ok(out)
+            Ok(_) => {
+                info!("Added table {} with key {}", table, key);
+                Ok(())
             }
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    async fn table_exists(&self, table: &str) -> Result<bool, Error> {
+        let resp = self.client.describe_table().table_name(table).send().await;
+
+        match resp {
+            Ok(_) => Ok(true),
             Err(e) => {
-                eprintln!("Got an error creating table:");
-                eprintln!("{}", e);
+                if let aws_sdk_dynamodb::error::SdkError::ServiceError(inner) = &e {
+                    if inner.err().is_resource_not_found_exception() {
+                        return Ok(false);
+                    }
+                }
                 Err(e.into())
             }
         }
