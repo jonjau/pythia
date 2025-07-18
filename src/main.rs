@@ -14,7 +14,7 @@ use services::{
     fact::FactService, logic_machine::LogicMachineService, state_change::StateChangeService,
 };
 
-use crate::services::db::DbService;
+use crate::services::db::{DbService, RecordTypeDesc};
 
 /// Shared application state used by all handlers and services.
 ///
@@ -29,7 +29,6 @@ pub struct AppState {
     state_changes: StateChangeService,
 }
 
-
 /// Main entry point of the Pythia application.
 ///
 /// This function:
@@ -43,22 +42,56 @@ async fn main() {
     env_logger::init();
     info!("Starting pythia...");
 
-
-    let db = DbService::new("us-west-2".into(), "http://host.docker.internal:8000".into()).await;
+    let db = DbService::new(
+        "us-west-2".into(),
+        "http://host.docker.internal:8000".into(),
+    )
+    .await;
 
     let _ = db.create_table_if_not_exists("types", "rt_name").await;
 
-    let list_resp = db.client.list_tables().send().await;
-    match list_resp {
-        Ok(resp) => {
-            println!("Found {} tables", resp.table_names().len());
-            for name in resp.table_names() {
-                println!("  {}", name);
+    // create types if needed
+    // get all record_types
+    // for each record_type, create table if needed get all facts, dump into files
+    // run codegen
+    // add_facts
+
+    let record_types = db.get_all_record_types().await;
+    match record_types {
+        Ok(record_types) => {
+            println!("Found {} items in table:", record_types.len());
+            for rt in record_types {
+                println!(
+                    "  rt_name: {:?}, id_fields: {:?}, data_fields: {:?}, metadata_fields: {:?}",
+                    rt.rt_name, rt.id_fields, rt.data_fields, rt.metadata_fields
+                );
+
+                let _ = db
+                    .create_table_if_not_exists(&rt.rt_name, "id")
+                    .await;
+
+                db.get_all_facts(&rt.rt_name)
+                    .await
+                    .map(|facts| {
+                        println!(
+                            "  Found {} facts for record type '{}':",
+                            facts.len(),
+                            rt.rt_name
+                        );
+                        for fact in facts {
+                            println!("    {:?}", fact);
+                        }
+                    })
+                    .unwrap_or_else(|err| {
+                        eprintln!(
+                            "Failed to get facts for record type '{}': {:?}",
+                            rt.rt_name, err
+                        );
+                    });
             }
         }
-        Err(err) => eprintln!("Failed to list local dynamodb tables: {err:?}"),
+        Err(err) => eprintln!("Failed to get items from local dynamodb table: {err:?}"),
     }
-
 
     // Generate logic programs (Prolog code) before launching
     utils::codegen::generate_prolog_programs().expect("Failed to generate prolog programs");
@@ -78,7 +111,10 @@ async fn main() {
 
     // Build the Axum router
     let r = Router::new()
-        .nest_service("/static", axum::routing::get_service(ServeDir::new("static")))
+        .nest_service(
+            "/static",
+            axum::routing::get_service(ServeDir::new("static")),
+        )
         .route("/", get(get_inquiries))
         .merge(state_change_routes())
         .merge(fact_routes())

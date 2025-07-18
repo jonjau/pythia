@@ -1,12 +1,35 @@
+use std::collections::HashMap;
+
 use aws_sdk_dynamodb::{
-    types::{AttributeDefinition, BillingMode, KeySchemaElement, KeyType, ScalarAttributeType},
+    types::{
+        AttributeDefinition, AttributeValue, BillingMode, KeySchemaElement, KeyType,
+        ScalarAttributeType,
+    },
     Client, Error,
 };
 use log::info;
 
+use crate::services::persist::{PersistenceService, PersistenceServiceError};
+
+#[derive(Clone)]
+pub struct RecordTypeDesc {
+    pub rt_name: String,
+    pub id_fields: Vec<String>,
+    pub data_fields: Vec<String>,
+    pub metadata_fields: Vec<String>,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct RecordTypeDescOut {
+    pub rt_name: String,
+    pub id_fields: Option<Vec<String>>,
+    pub data_fields: Option<Vec<String>>,
+    pub metadata_fields: Option<Vec<String>>,
+}
+
 #[derive(Clone)]
 pub struct DbService {
-    pub client: Client,
+    client: Client,
 }
 
 impl DbService {
@@ -25,7 +48,11 @@ impl DbService {
         DbService { client }
     }
 
-    pub async fn create_table_if_not_exists(&self, table: &str, key: &str) -> Result<(), Error> {
+    pub async fn create_table_if_not_exists(
+        &self,
+        table: &str,
+        key: &str,
+    ) -> Result<(), PersistenceServiceError> {
         if self.table_exists(table).await? {
             return Ok(());
         }
@@ -73,5 +100,123 @@ impl DbService {
                 Err(e.into())
             }
         }
+    }
+
+    pub async fn get_all_record_types(&self) -> Result<Vec<RecordTypeDescOut>, Error> {
+        let resp = self.client.scan().table_name("types").send().await?;
+
+        let items = resp.items();
+
+        let record_types: Vec<RecordTypeDescOut> = items
+            .into_iter()
+            .map(|item| RecordTypeDescOut {
+                rt_name: item
+                    .get("rt_name")
+                    .and_then(|v| v.as_s().ok())
+                    .map(String::from)
+                    .unwrap_or_default(),
+                id_fields: item.get("id_fields").and_then(|v| v.as_l().ok()).map(|l| {
+                    l.iter()
+                        .filter_map(|v| v.as_s().ok())
+                        .map(String::from)
+                        .collect()
+                }),
+                data_fields: item
+                    .get("data_fields")
+                    .and_then(|v| v.as_l().ok())
+                    .map(|l| {
+                        l.iter()
+                            .filter_map(|v| v.as_s().ok())
+                            .map(String::from)
+                            .collect()
+                    }),
+                metadata_fields: item
+                    .get("metadata_fields")
+                    .and_then(|v| v.as_l().ok())
+                    .map(|l| {
+                        l.iter()
+                            .filter_map(|v| v.as_s().ok())
+                            .map(String::from)
+                            .collect()
+                    }),
+            })
+            .collect();
+
+        Ok(record_types)
+    }
+
+    pub async fn put_record_type(&self, item: RecordTypeDesc, table: &String) -> Result<(), Error> {
+        let rt_name = AttributeValue::S(item.rt_name);
+        let id_fields =
+            AttributeValue::L(item.id_fields.into_iter().map(AttributeValue::S).collect());
+        let data_fields = AttributeValue::L(
+            item.data_fields
+                .into_iter()
+                .map(AttributeValue::S)
+                .collect(),
+        );
+        let metadata_fields = AttributeValue::L(
+            item.metadata_fields
+                .into_iter()
+                .map(AttributeValue::S)
+                .collect(),
+        );
+
+        let request = self
+            .client
+            .put_item()
+            .table_name(table)
+            .item("rt_name", rt_name)
+            .item("id_fields", id_fields)
+            .item("data_fields", data_fields)
+            .item("metadata_fields", metadata_fields);
+
+        let _ = request.send().await?;
+        info!("Info added item to table {}...", table);
+
+        Ok(())
+    }
+
+    pub async fn put_fact(
+        &self,
+        item: HashMap<String, String>,
+        table: &String,
+    ) -> Result<(), Error> {
+        let mut request = self.client.put_item().table_name(table);
+
+        for (key, value) in item {
+            request = request.item(key, AttributeValue::S(value));
+        }
+
+        let _ = request.send().await?;
+        info!("Info added item to table {}...", table);
+
+        Ok(())
+    }
+
+    pub async fn get_all_facts(
+        &self,
+        table: &String,
+    ) -> Result<Vec<HashMap<String, String>>, Error> {
+        let resp = self.client.scan().table_name(table).send().await?;
+
+        let items = resp.items();
+
+        let facts: Vec<HashMap<String, String>> = items
+            .into_iter()
+            .map(|item| {
+                item.iter()
+                    .filter_map(|(k, v)| v.as_s().ok().map(|s| (k.clone(), s.to_string())))
+                    .collect()
+            })
+            .collect();
+
+        Ok(facts)
+    }
+}
+
+impl PersistenceService for DbService {
+    async fn create_record_types_table(&self) -> Result<(), PersistenceServiceError> {
+        self.create_table_if_not_exists("types", "rt_name").await
     }
 }
