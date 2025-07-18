@@ -14,7 +14,7 @@ use services::{
     fact::FactService, logic_machine::LogicMachineService, state_change::StateChangeService,
 };
 
-use crate::services::db::{DbService, RecordTypeDesc};
+use crate::{routes::record_type::record_type_routes, services::db::DbService};
 
 /// Shared application state used by all handlers and services.
 ///
@@ -24,6 +24,7 @@ use crate::services::db::{DbService, RecordTypeDesc};
 /// - `StateChangeService`: Handles state change operations.
 #[derive(Clone)]
 pub struct AppState {
+    db: DbService,
     lm: LogicMachineService,
     facts: FactService,
     state_changes: StateChangeService,
@@ -48,50 +49,13 @@ async fn main() {
     )
     .await;
 
-    let _ = db.create_table_if_not_exists("types", "rt_name").await;
+    let _ = db.create_table_if_not_exists("types", "name").await;
 
     // create types if needed
     // get all record_types
     // for each record_type, create table if needed get all facts, dump into files
     // run codegen
     // add_facts
-
-    let record_types = db.get_all_record_types().await;
-    match record_types {
-        Ok(record_types) => {
-            println!("Found {} items in table:", record_types.len());
-            for rt in record_types {
-                println!(
-                    "  rt_name: {:?}, id_fields: {:?}, data_fields: {:?}, metadata_fields: {:?}",
-                    rt.rt_name, rt.id_fields, rt.data_fields, rt.metadata_fields
-                );
-
-                let _ = db
-                    .create_table_if_not_exists(&rt.rt_name, "id")
-                    .await;
-
-                db.get_all_facts(&rt.rt_name)
-                    .await
-                    .map(|facts| {
-                        println!(
-                            "  Found {} facts for record type '{}':",
-                            facts.len(),
-                            rt.rt_name
-                        );
-                        for fact in facts {
-                            println!("    {:?}", fact);
-                        }
-                    })
-                    .unwrap_or_else(|err| {
-                        eprintln!(
-                            "Failed to get facts for record type '{}': {:?}",
-                            rt.rt_name, err
-                        );
-                    });
-            }
-        }
-        Err(err) => eprintln!("Failed to get items from local dynamodb table: {err:?}"),
-    }
 
     // Generate logic programs (Prolog code) before launching
     utils::codegen::generate_prolog_programs().expect("Failed to generate prolog programs");
@@ -104,6 +68,7 @@ async fn main() {
 
     // Initialise Pythia application state and services
     let state = AppState {
+        db: db.clone(),
         lm: lm.clone(),
         facts: FactService::new(lm.clone()),
         state_changes: StateChangeService::new(lm.clone()),
@@ -118,6 +83,7 @@ async fn main() {
         .route("/", get(get_inquiries))
         .merge(state_change_routes())
         .merge(fact_routes())
+        .merge(record_type_routes())
         .with_state(state);
 
     // Run the HTTP server

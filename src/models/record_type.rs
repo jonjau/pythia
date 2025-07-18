@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::utils::tracking::IdContext;
 
@@ -50,7 +50,7 @@ pub struct RecordType {
 
 /// Represents a deserializable version of a `RecordType`,
 /// used when loading from JSON config or data files.
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RecordTypeJson {
     pub name: String,
     pub display_name: String,
