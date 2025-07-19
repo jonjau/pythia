@@ -10,17 +10,5 @@
     "id_fields": ["Id1", "Id2"],
     "data_fields": ["DRef", "IRef", "BegPeriod", "EndPeriod"],
     "metadata_fields": ["Context", "EditTime", "RecStatus", "SeqNum"]
-  },
-  {
-    "name": "edge",
-    "id_fields": [],
-    "data_fields": ["X", "Y"],
-    "metadata_fields": []
-  },
-  {
-    "name": "arc",
-    "id_fields": [],
-    "data_fields": ["X", "Y"],
-    "metadata_fields": []
   }
 ]
