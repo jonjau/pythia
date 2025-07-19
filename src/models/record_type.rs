@@ -53,7 +53,6 @@ pub struct RecordType {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RecordTypeJson {
     pub name: String,
-    pub display_name: String,
     pub id_fields: Vec<String>,
     pub data_fields: Vec<String>,
     pub metadata_fields: Vec<String>,

@@ -98,12 +98,7 @@ impl DbService {
             .into_iter()
             .map(|item| RecordTypeJson {
                 name: item
-                    .get("rt_name")
-                    .and_then(|v| v.as_s().ok())
-                    .map(String::from)
-                    .unwrap_or_default(),
-                display_name: item
-                    .get("display_name")
+                    .get("name")
                     .and_then(|v| v.as_s().ok())
                     .map(String::from)
                     .unwrap_or_default(),
@@ -145,7 +140,6 @@ impl DbService {
 
     pub async fn put_record_type(&self, rt: RecordTypeJson, table: String) -> Result<(), Error> {
         let name = AttributeValue::S(rt.name.clone());
-        let display_name = AttributeValue::S(rt.display_name.clone());
         let id_fields = AttributeValue::L(
             rt.id_fields
                 .into_iter()
@@ -169,7 +163,6 @@ impl DbService {
             .put_item()
             .table_name(table)
             .item("name", name)
-            .item("display_name", display_name)
             .item("id_fields", id_fields)
             .item("data_fields", data_fields)
             .item("metadata_fields", metadata_fields);

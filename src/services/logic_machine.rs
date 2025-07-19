@@ -51,7 +51,6 @@ impl LogicMachineService {
             .into_iter()
             .map(|rt| {
                 RecordTypeBuilder::new(rt.name, rt.data_fields)
-                    .display_name(rt.display_name)
                     .id_fields(rt.id_fields)
                     .metadata_fields(rt.metadata_fields)
                     .build()
