@@ -126,7 +126,21 @@ impl FactService {
         let mut facts = Vec::new();
 
         for values in named_valuess {
-            let f = self.add_fact_to_lm(&rt_name, values).await?;
+            let rt: std::sync::Arc<crate::models::record_type::RecordType> =
+                self.lm.get_record_type(rt_name).await?;
+
+            // let f = self.add_fact_to_lm(&rt_name, values).await?;
+            let named_values = values
+            .into_iter()
+            .map(|(k, v)| {
+                (
+                    format!("{}0_{}", rt.name.to_uppercase(), k),
+                    FactTerm::String(v),
+                )
+            })
+            .collect::<HashMap<_, _>>();
+
+            let f = rt.to_fact(&named_values.into())?;
 
             self.db.put_fact(f.clone().into()).await?;
 
