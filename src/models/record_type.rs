@@ -58,7 +58,6 @@ pub struct RecordTypeJson {
     pub metadata_fields: Vec<String>,
 }
 
-
 /// Builder pattern for constructing and validating `RecordType` instances.
 pub struct RecordTypeBuilder {
     name: String,
@@ -330,5 +329,27 @@ impl RecordType {
         }
 
         Ok(Fact::new(self, complete_values))
+    }
+}
+
+impl From<Arc<RecordType>> for RecordTypeJson {
+    fn from(rt: Arc<RecordType>) -> Self {
+        RecordTypeJson {
+            name: rt.name.clone(),
+            id_fields: rt.id_fields.clone(),
+            data_fields: rt.data_fields.clone(),
+            metadata_fields: rt.metadata_fields.clone(),
+        }
+    }
+}
+
+impl RecordTypeJson {
+    pub fn all_fields(&self) -> Vec<String> {
+        self.id_fields
+            .iter()
+            .chain(self.data_fields.iter())
+            .chain(self.metadata_fields.iter())
+            .cloned()
+            .collect()
     }
 }

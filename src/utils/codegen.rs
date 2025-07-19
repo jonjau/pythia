@@ -7,26 +7,20 @@ use std::{
 use askama::Template;
 use serde_json::Value;
 
-#[derive(Clone)]
-struct RecordType {
-    name: String,
-    id_fields: String,
-    data_fields: String,
-    metadata_fields: String,
-    n_fields: usize,
-}
+use crate::models::{fact::FactJson, record_type::RecordTypeJson};
 
 #[derive(Template)]
 #[template(path = "prolog/fact.pl")]
 struct FactTemplate {
-    record_type: RecordType,
+    record_type: RecordTypeJson,
+    facts: Vec<FactJson>,
 }
 
 #[derive(Template)]
 #[template(path = "prolog/pythia.pl")]
 struct PythiaTemplate {
     import_paths: Vec<String>,
-    record_types: Vec<RecordType>,
+    record_types: Vec<RecordTypeJson>,
 }
 
 /// Errors that can occur during Prolog code generation.
@@ -74,6 +68,7 @@ pub fn generate_prolog_programs() -> Result<(), CodeGenError> {
 
         let fact_program = (FactTemplate {
             record_type: record_type.clone(),
+            facts: vec![],
         })
         .render()?;
 
@@ -83,11 +78,24 @@ pub fn generate_prolog_programs() -> Result<(), CodeGenError> {
     Ok(())
 }
 
-fn get_fact_program_file_path(record_type: &RecordType) -> String {
+pub fn generate_fact_programs_for_record_types(
+    record_type: RecordTypeJson,
+    facts: Vec<FactJson>,
+) -> Result<(), CodeGenError> {
+    let file_path = get_fact_program_file_path(&record_type);
+    let fact_program = FactTemplate { record_type, facts }.render()?;
+
+    println!("Writing facts: {} ", fact_program);
+
+    fs::write(file_path, fact_program)?;
+    Ok(())
+}
+
+fn get_fact_program_file_path(record_type: &RecordTypeJson) -> String {
     format!("data/{}.pl", record_type.name)
 }
 
-fn read_record_types_from_json(file_path: &str) -> Result<Vec<RecordType>, CodeGenError> {
+fn read_record_types_from_json(file_path: &str) -> Result<Vec<RecordTypeJson>, CodeGenError> {
     let json_data = fs::read_to_string(path::Path::new(file_path))?;
     let objects: Vec<serde_json::Value> = serde_json::from_str(&json_data)?;
 
@@ -96,40 +104,33 @@ fn read_record_types_from_json(file_path: &str) -> Result<Vec<RecordType>, CodeG
         .map(|o| {
             let name = o
                 .get("name")
-                .ok_or(CodeGenError::FieldNotFound("name".to_owned()))?
-                .as_str()
-                .ok_or(CodeGenError::InvalidFieldType("name".to_owned()))?;
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| CodeGenError::FieldNotFound("name".to_owned()))?;
 
-            let id_fields = parse_array_field(o, "id_fields")?;
-            let id_fields = id_fields
-                .is_empty()
-                .then(|| vec!["\"NONE\""])
-                .unwrap_or(id_fields);
+            let id_fields = parse_array_field(o, "id_fields")?
+                .into_iter()
+                .map(|s| s.to_owned())
+                .collect::<Vec<_>>();
+            let data_fields = parse_array_field(o, "data_fields")?
+                .into_iter()
+                .map(|s| s.to_owned())
+                .collect::<Vec<_>>();
+            let metadata_fields = parse_array_field(o, "metadata_fields")?
+                .into_iter()
+                .map(|s| s.to_owned())
+                .collect::<Vec<_>>();
 
-            let data_fields = parse_array_field(o, "data_fields")?;
-            let data_fields = data_fields
-                .is_empty()
-                .then(|| vec!["\"NONE\""])
-                .unwrap_or(data_fields);
-
-            let metadata_fields = parse_array_field(o, "metadata_fields")?;
-            let metadata_fields = metadata_fields
-                .is_empty()
-                .then(|| vec!["\"NONE\""])
-                .unwrap_or(metadata_fields);
-
-            Ok(RecordType {
-                name: name.to_string(),
-                id_fields: id_fields.join(", "),
-                data_fields: data_fields.join(", "),
-                metadata_fields: metadata_fields.join(", "),
-                n_fields: id_fields.len() + data_fields.len() + metadata_fields.len(),
+            Ok(RecordTypeJson {
+                name: name.to_owned(),
+                id_fields,
+                data_fields,
+                metadata_fields,
             })
         })
         .collect::<Result<Vec<_>, CodeGenError>>()?)
 }
 
-fn get_import_paths(record_types: &Vec<RecordType>) -> Vec<String> {
+fn get_import_paths(record_types: &Vec<RecordTypeJson>) -> Vec<String> {
     record_types
         .iter()
         .map(|rt| format!("'./data/{}.pl'", &rt.name))

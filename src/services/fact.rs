@@ -1,11 +1,12 @@
 use std::collections::HashMap;
-use std::fs::OpenOptions;
-use std::io::{self, Write};
+use std::io::{self};
 
 use crate::models::fact::{Fact, FactTerm};
 use crate::models::logic_machine::LogicMachineError;
 use crate::models::record_type::RecordTypeError;
+use crate::services::db::DbService;
 use crate::services::logic_machine::LogicMachineService;
+use crate::services::persist::PersistenceServiceError;
 
 /// Errors that can occur during getting and fetching facts from the LogicMachine.
 #[derive(thiserror::Error, Debug)]
@@ -16,6 +17,8 @@ pub enum FactServiceError {
     RecordTypeError(#[from] RecordTypeError),
     #[error("File error: {0}")]
     IoError(#[from] io::Error),
+    #[error("Persistence error: {0}")]
+    PersistenceError(#[from] PersistenceServiceError),
 }
 
 /// Represents a simple in-memory fact table, with columns and row data.
@@ -45,6 +48,7 @@ pub struct FactTableData {
 #[derive(Clone)]
 pub struct FactService {
     lm: LogicMachineService,
+    db: DbService,
 }
 
 impl FactService {
@@ -53,8 +57,8 @@ impl FactService {
     /// # Arguments
     ///
     /// * `lm` - The logic machine service used for fact storage and querying.
-    pub fn new(lm: LogicMachineService) -> Self {
-        FactService { lm }
+    pub fn new(lm: LogicMachineService, db: DbService) -> Self {
+        FactService { lm, db }
     }
 
     /// Retrieves all facts for a given record type name.
@@ -111,19 +115,22 @@ impl FactService {
         rt_name: &str,
         named_valuess: Vec<HashMap<String, String>>,
     ) -> Result<Vec<Fact>, FactServiceError> {
-        let mut file = OpenOptions::new()
-            .append(true)
-            .create(true)
-            .open(format!("data/{}.pl", &rt_name))?;
+        // let mut file = OpenOptions::new()
+        //     .append(true)
+        //     .create(true)
+        //     .open(format!("data/{}.pl", &rt_name))?;
 
-        let iso_time = chrono::Utc::now().to_rfc3339();
-        writeln!(file, "\n% [{}]", iso_time)?;
+        // let iso_time = chrono::Utc::now().to_rfc3339();
+        // writeln!(file, "\n% [{}]", iso_time)?;
 
         let mut facts = Vec::new();
 
         for values in named_valuess {
             let f = self.add_fact_to_lm(&rt_name, values).await?;
-            writeln!(file, "{}.", f.to_string())?;
+
+            self.db.put_fact(f.clone().into()).await?;
+
+            // writeln!(file, "{}.", f.to_string())?;
             facts.push(f);
         }
 

@@ -14,11 +14,11 @@ use std::fmt::Formatter;
 use std::str::FromStr;
 use std::{clone::Clone, collections::HashMap, sync::Arc};
 
-use crate::models::record_type::{RecordType, RecordTypeBuilder};
+use crate::models::record_type::{RecordType, RecordTypeBuilder, RecordTypeJson};
 
 /// Represents a compound term which has all its values grounded.
 /// It is meant to be asserted to or by the logic machine.
-/// 
+///
 /// A `Fact` is typed using a [`RecordType`] and contain a list of associated values.
 /// Typically corresponds to a logic assertion like: `'Person'("Alice", 30)`.
 #[derive(Debug, Clone, PartialEq)]
@@ -28,6 +28,12 @@ pub struct Fact {
 
     /// The ordered list of values for this fact, e.g., `[String("Alice"), Integer(30)]`.
     pub values: Vec<FactTerm>,
+}
+
+#[derive(Debug)]
+pub struct FactJson {
+    pub type_: RecordTypeJson,
+    pub values: Vec<String>,
 }
 
 /// Represents an individual term in a `Fact``.
@@ -84,7 +90,7 @@ impl Fact {
     }
 
     /// Returns a mapping from field names to their values (data fields only).
-    fn to_data_values(&self) -> HashMap<String, FactTerm> {
+    fn to_data_values_map(&self) -> HashMap<String, FactTerm> {
         self.type_
             .data_fields
             .iter()
@@ -95,7 +101,7 @@ impl Fact {
 
     /// Retrieves the value of a field by name, or returns `FieldNotFound` if missing.
     pub fn get(&self, field: &str) -> Result<FactTerm, FieldNotFound> {
-        self.to_data_values()
+        self.to_data_values_map()
             .get(field)
             .ok_or(FieldNotFound(field.to_string()))
             .cloned()
@@ -236,6 +242,38 @@ impl FromStr for FactTerm {
         parse_fact_term(s)
             .map(|(_, term)| term)
             .map_err(|e| format!("Parsing error: {:?}", e))
+    }
+}
+
+impl From<Fact> for FactJson {
+    fn from(fact: Fact) -> Self {
+        FactJson {
+            type_: fact.type_.into(),
+            values: fact
+                .values
+                .iter()
+                .map(|v| v.to_string())
+                .collect::<Vec<_>>(),
+        }
+    }
+}
+
+impl FactJson {
+    pub fn to_all_values_map(&self) -> HashMap<String, String> {
+        let all_fields = self
+            .type_
+            .id_fields
+            .iter()
+            .chain(self.type_.data_fields.iter())
+            .chain(self.type_.metadata_fields.iter())
+            .cloned()
+            .collect::<Vec<_>>();
+
+
+        all_fields
+            .into_iter()
+            .zip(self.values.clone().into_iter())
+            .collect::<HashMap<_, _>>()
     }
 }
 
