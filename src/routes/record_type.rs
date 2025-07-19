@@ -1,4 +1,4 @@
-use crate::{models::record_type::{self, RecordTypeJson}, AppState};
+use crate::{models::record_type::{ RecordTypeJson}, AppState};
 use axum::{
     extract::{Path, State},
     routing::{delete, get, post},
@@ -62,6 +62,13 @@ async fn delete_record_type(
 async fn reload_record_types(State(state): State<AppState>) -> Json<Value> {
     let res = state.db.dump_to_files("dimlink").await;
     info!("Dumped record types to files: {:?}", res);
+
+    let ress = state.lm.reload_actor(
+        &std::fs::read_to_string("data/internal/pythia.pl").expect("Failed to read pythia.pl"),
+        "data/types.json",
+    ).await;
+    info!("Reloaded Logic Machine actor: {:?}", ress);
+
     match state.db.get_all_record_types().await {
         Ok(record_types) => Json(json!({"record_types": record_types})),
         Err(e) => {

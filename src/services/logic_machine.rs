@@ -7,7 +7,7 @@ use crate::models::goal::Goal;
 use crate::models::logic_machine::{LogicMachine, LogicMachineResult};
 use crate::models::record_type::{RecordType, RecordTypeBuilder, RecordTypeError, RecordTypeJson};
 
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, RwLock};
 use tokio::{runtime::Builder, task::LocalSet};
 
 /// A high-level asynchronous interface for interacting with the logic machine.
@@ -16,7 +16,7 @@ use tokio::{runtime::Builder, task::LocalSet};
 /// off the main thread using message-passing and Tokio's runtime.
 #[derive(Clone)]
 pub struct LogicMachineService {
-    lm_actor: ActorHandle,
+    lm_actor: Arc<RwLock<ActorHandle>>,
 }
 
 /// Errors that can occur while loading/building record types from a JSON file.
@@ -34,11 +34,27 @@ impl LogicMachineService {
     /// Creates a new logic machine service loading facts from the given Prolog program string and a JSON record types file path.
     pub fn new(program: &str, record_types_file_path: &str) -> Result<Self, ReadRecordTypesError> {
         Ok(LogicMachineService {
-            lm_actor: ActorHandle::new(
+            lm_actor: Arc::new(RwLock::new(ActorHandle::new(
                 program.to_owned(),
                 LogicMachineService::read_record_types_from_json(record_types_file_path)?,
-            ),
+            ))),
         })
+    }
+
+    pub async fn reload_actor(
+        &self,
+        program: &str,
+        record_types_file_path: &str,
+    ) -> Result<(), ReadRecordTypesError> {
+
+        let new_actor = ActorHandle::new(
+            program.to_owned(),
+        LogicMachineService::read_record_types_from_json(record_types_file_path)?,
+        );
+
+        let mut actor_guard = self.lm_actor.write().await;
+        *actor_guard = new_actor;
+        Ok(())
     }
 
     /// Loads record types from a JSON file into `RecordType` instances.
@@ -64,6 +80,8 @@ impl LogicMachineService {
         fact_type: impl Into<String>,
     ) -> LogicMachineResult<Arc<RecordType>> {
         self.lm_actor
+            .read()
+            .await
             .send_query(GetRecordTypeQuery {
                 fact_type: fact_type.into(),
             })
@@ -72,12 +90,18 @@ impl LogicMachineService {
 
     /// Retrieves all record types known by the logic machine.
     pub async fn get_all_record_types(&self) -> LogicMachineResult<Vec<Arc<RecordType>>> {
-        self.lm_actor.send_query(GetAllRecordTypesQuery).await
+        self.lm_actor
+            .read()
+            .await
+            .send_query(GetAllRecordTypesQuery)
+            .await
     }
 
     /// Gets all facts of a given record type.
     pub async fn get_all_facts(&self, fact_type: String) -> LogicMachineResult<Vec<Fact>> {
         self.lm_actor
+            .read()
+            .await
             .send_query(GetAllFactsQuery { fact_type })
             .await
     }
@@ -89,13 +113,19 @@ impl LogicMachineService {
         target_rt: Arc<RecordType>,
     ) -> LogicMachineResult<Vec<Fact>> {
         self.lm_actor
+            .read()
+            .await
             .send_query(GetFactsQuery { goal, target_rt })
             .await
     }
 
     /// Adds a new fact to the logic machine.
     pub async fn add_fact(&self, fact: Fact) -> LogicMachineResult<Fact> {
-        self.lm_actor.send_query(AddFactQuery { fact }).await
+        self.lm_actor
+            .read()
+            .await
+            .send_query(AddFactQuery { fact })
+            .await
     }
 }
 
