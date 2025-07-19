@@ -27,10 +27,16 @@ change_path(RType, Ctx, Id, Vals1, Vals2, [Step|Steps]) :-
 {% for record in record_types -%}
 record(
     "{{record.name}}",
-    {{record.metadata_fields}},
-    [{{record.id_fields}}],
-    [{{record.data_fields}}]
+    {%- for metadata_field in record.metadata_fields %}
+    {{ metadata_field }},
+    {%- endfor %}
+    [{% for id_field in record.id_fields -%} {{ id_field }} {%- if !loop.last -%} , {% endif %} {%- endfor %}],
+    [{% for data_field in record.data_fields -%} {{data_field}} {%- if !loop.last -%} , {% endif %} {%- endfor %}]
 ) :-
-{{record.name}}({{record.id_fields}}, {{record.data_fields}}, {{record.metadata_fields}}).
+{{record.name}}(
+    {% for id_field in record.id_fields -%} {{ id_field }}, {% endfor -%}
+    {% for data_field in record.data_fields -%} {{ data_field }}, {% endfor -%}
+    {% for metadata_field in record.metadata_fields -%} {{ metadata_field }} {%- if !loop.last -%} , {% endif %}{% endfor %}
+).
 
 {% endfor -%}
