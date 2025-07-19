@@ -10,8 +10,9 @@ use aws_sdk_dynamodb::{
 use log::info;
 
 use crate::{
-    models::record_type::RecordTypeJson,
+    models::{fact::FactJson, record_type::RecordTypeJson},
     services::persist::{PersistenceService, PersistenceServiceError},
+    utils::codegen::generate_fact_programs_for_record_types,
 };
 
 #[derive(Clone)]
@@ -89,56 +90,98 @@ impl DbService {
         }
     }
 
-    pub async fn get_all_record_types(&self) -> Result<Vec<RecordTypeJson>, Error> {
+    /// Maps DynamoDB attributes to a RecordTypeJson instance.
+    fn map_item_to_record_type(item: &HashMap<String, AttributeValue>) -> RecordTypeJson {
+        RecordTypeJson {
+            name: item
+                .get("name")
+                .and_then(|v| v.as_s().ok())
+                .map(String::from)
+                .unwrap_or_default(),
+            id_fields: item
+                .get("id_fields")
+                .and_then(|v| v.as_l().ok())
+                .map(|v| {
+                    v.iter()
+                        .filter_map(|av| av.as_s().ok())
+                        .map(String::from)
+                        .collect()
+                })
+                .unwrap_or_default(),
+            data_fields: item
+                .get("data_fields")
+                .and_then(|v| v.as_l().ok())
+                .map(|v| {
+                    v.iter()
+                        .filter_map(|av| av.as_s().ok())
+                        .map(String::from)
+                        .collect()
+                })
+                .unwrap_or_default(),
+            metadata_fields: item
+                .get("metadata_fields")
+                .and_then(|v| v.as_l().ok())
+                .map(|v| {
+                    v.iter()
+                        .filter_map(|av| av.as_s().ok())
+                        .map(String::from)
+                        .collect()
+                })
+                .unwrap_or_default(),
+        }
+    }
+
+    pub async fn get_all_record_types(
+        &self,
+    ) -> Result<Vec<RecordTypeJson>, PersistenceServiceError> {
         let resp = self.client.scan().table_name("types").send().await?;
-
-        let items = resp.items();
-
-        let record_types: Vec<RecordTypeJson> = items
+        let record_types = resp
+            .items()
             .into_iter()
-            .map(|item| RecordTypeJson {
-                name: item
-                    .get("name")
-                    .and_then(|v| v.as_s().ok())
-                    .map(String::from)
-                    .unwrap_or_default(),
-                id_fields: item
-                    .get("id_fields")
-                    .and_then(|v| v.as_l().ok())
-                    .map(|v| {
-                        v.iter()
-                            .filter_map(|av| av.as_s().ok())
-                            .map(String::from)
-                            .collect()
-                    })
-                    .unwrap_or_default(),
-                data_fields: item
-                    .get("data_fields")
-                    .and_then(|v| v.as_l().ok())
-                    .map(|v| {
-                        v.iter()
-                            .filter_map(|av| av.as_s().ok())
-                            .map(String::from)
-                            .collect()
-                    })
-                    .unwrap_or_default(),
-                metadata_fields: item
-                    .get("metadata_fields")
-                    .and_then(|v| v.as_l().ok())
-                    .map(|v| {
-                        v.iter()
-                            .filter_map(|av| av.as_s().ok())
-                            .map(String::from)
-                            .collect()
-                    })
-                    .unwrap_or_default(),
-            })
+            .map(Self::map_item_to_record_type)
             .collect();
-
         Ok(record_types)
     }
 
-    pub async fn put_record_type(&self, rt: RecordTypeJson, table: String) -> Result<(), Error> {
+    pub async fn get_record_type(
+        &self,
+        name: &str,
+    ) -> Result<RecordTypeJson, PersistenceServiceError> {
+        let request = self
+            .client
+            .get_item()
+            .table_name("types")
+            .key("name", AttributeValue::S(name.to_owned()));
+
+        let resp = request.send().await?;
+
+        if let Some(item) = resp.item() {
+            Ok(Self::map_item_to_record_type(item))
+        } else {
+            Err(PersistenceServiceError::RecordTypeNotFound(name.to_owned()))
+        }
+    }
+
+    fn get_key_name(rt: &RecordTypeJson) -> String {
+        format!("{}-id", rt.name)
+    }
+
+    fn get_composite_key_value(f: &FactJson) -> String {
+        let map = f.to_all_values_map();
+        f.type_
+            .id_fields
+            .iter()
+            .chain(f.type_.metadata_fields.iter())
+            .map(|k| map.get(k).cloned().unwrap_or_default())
+            .collect::<Vec<_>>()
+            .join("-")
+    }
+
+    pub async fn put_record_type(&self, rt: RecordTypeJson) -> Result<(), PersistenceServiceError> {
+        self.create_table_if_not_exists("types", "name").await?;
+
+        let composite_key = Self::get_key_name(&rt);
+
         let name = AttributeValue::S(rt.name.clone());
         let id_fields = AttributeValue::L(
             rt.id_fields
@@ -161,7 +204,7 @@ impl DbService {
         let request = self
             .client
             .put_item()
-            .table_name(table)
+            .table_name("types")
             .item("name", name)
             .item("id_fields", id_fields)
             .item("data_fields", data_fields)
@@ -169,10 +212,13 @@ impl DbService {
 
         let _ = request.send().await?;
 
+        self.create_table_if_not_exists(&rt.name, &composite_key)
+            .await?;
+
         Ok(())
     }
 
-    pub async fn delete_record_type(&self, name: &str) -> Result<(), Error> {
+    pub async fn delete_record_type(&self, name: &str) -> Result<(), PersistenceServiceError> {
         let request = self
             .client
             .delete_item()
@@ -185,41 +231,101 @@ impl DbService {
         Ok(())
     }
 
-    pub async fn put_fact(
-        &self,
-        item: HashMap<String, String>,
-        table: &String,
-    ) -> Result<(), Error> {
-        let mut request = self.client.put_item().table_name(table);
+    pub async fn put_fact(&self, fact: FactJson) -> Result<(), PersistenceServiceError> {
+        let mut request = self
+            .client
+            .put_item()
+            .table_name(fact.type_.name.clone())
+            .item(
+                Self::get_key_name(&fact.type_),
+                AttributeValue::S(Self::get_composite_key_value(&fact)),
+            );
 
-        for (key, value) in item {
+        info!(
+            "Putting fact: {:?}, key_name: {:?}, key_value: {:?}",
+            fact,
+            Self::get_key_name(&fact.type_),
+            AttributeValue::S(Self::get_composite_key_value(&fact))
+        );
+
+        for (key, value) in fact.to_all_values_map().into_iter() {
             request = request.item(key, AttributeValue::S(value));
         }
 
         let _ = request.send().await?;
-        info!("Info added item to table {}...", table);
 
         Ok(())
     }
 
-    pub async fn get_all_facts(
-        &self,
-        table: &String,
-    ) -> Result<Vec<HashMap<String, String>>, Error> {
-        let resp = self.client.scan().table_name(table).send().await?;
+    pub async fn get_all_facts(&self, rt: &RecordTypeJson) -> Result<Vec<FactJson>, Error> {
+        let resp = self
+            .client
+            .scan()
+            .table_name(rt.name.clone())
+            .send()
+            .await?;
 
         let items = resp.items();
 
-        let facts: Vec<HashMap<String, String>> = items
+        let facts = items
             .into_iter()
-            .map(|item| {
-                item.iter()
-                    .filter_map(|(k, v)| v.as_s().ok().map(|s| (k.clone(), s.to_string())))
-                    .collect()
+            .map(|item| FactJson {
+                type_: rt.clone(),
+                values: rt
+                    .all_fields()
+                    .iter()
+                    .map(|field| {
+                        item.get(field)
+                            .and_then(|v| v.as_s().ok())
+                            .map(String::from)
+                            .unwrap_or_default()
+                    })
+                    .collect(),
             })
             .collect();
 
         Ok(facts)
+    }
+
+    // pub async fn get_all_facts2(
+    //     &self,
+    //     table: &str,
+    // ) -> Result<Vec<FactJson>, PersistenceServiceError> {
+    //     let resp = self.client.scan().table_name(table).send().await?;
+
+    //     let rt = self.get_record_type(table).await?;
+
+    //     let items = resp.items();
+
+    // let facts: Vec<FactJson> = items
+    //     .into_iter()
+    //     .map(|item| FactJson {
+    //         type_: rt.clone(),
+    //         values: rt.all_fields().iter().map(|field| {
+    //             item.get(field)
+    //                 .and_then(|v| v.as_s().ok())
+    //                 .map(String::from)
+    //                 .unwrap_or_default()
+    //         }).collect(),
+    //     })
+    //     .collect();
+
+    //     Ok(facts)
+    // }
+
+    pub async fn dump_to_files(&self, table: &str) -> Result<(), PersistenceServiceError> {
+        let record_type = self.get_record_type(table).await?;
+        let facts = self.get_all_facts(&record_type).await?;
+
+        info!("Dumping facts for record type: {}", &record_type.name);
+        info!(
+            "Found {:?} facts for record type: {}",
+            facts, record_type.name
+        );
+
+        generate_fact_programs_for_record_types(record_type, facts)?;
+
+        Ok(())
     }
 }
 

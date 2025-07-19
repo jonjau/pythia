@@ -49,13 +49,20 @@ async fn main() {
     )
     .await;
 
-    let _ = db.create_table_if_not_exists("types", "name").await;
 
-    // create types if needed
-    // get all record_types
-    // for each record_type, create table if needed get all facts, dump into files
-    // run codegen
-    // add_facts
+    // initial start up:
+    // load logic machine:
+    // - get all record types and their facts
+    // - dump all record types' facts to files
+    // - init logic machine on the generated files
+    //
+    // after start up:
+    // add/remove record types, this creates table if needed
+    // add/remove facts, this creates table if needed
+    // reload record types:
+    // - get all record types and their facts
+    // - dump all record types' facts to files
+    // - reload logic machine on the generated files
 
     // Generate logic programs (Prolog code) before launching
     utils::codegen::generate_prolog_programs().expect("Failed to generate prolog programs");
@@ -70,7 +77,7 @@ async fn main() {
     let state = AppState {
         db: db.clone(),
         lm: lm.clone(),
-        facts: FactService::new(lm.clone()),
+        facts: FactService::new(lm.clone(), db.clone()),
         state_changes: StateChangeService::new(lm.clone()),
     };
 
