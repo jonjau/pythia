@@ -71,9 +71,13 @@ async fn delete_record_type(
 }
 
 async fn reload_record_types(State(state): State<AppState>) -> Result<Json<Value>, Json<Value>> {
+
+    // TODO JCJ: get single record type route
+    // TODO JCJ: full reload in 1 function
+
     state
         .db
-        .generate_prolog_files()
+        .generate_data_files()
         .await
         .map_err(|e| Json(json!({"error": format!("Failed to generate Prolog files: {}", e)})))?;
 
