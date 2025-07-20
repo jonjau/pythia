@@ -31,46 +31,21 @@ pub struct AppState {
 }
 
 /// Main entry point of the Pythia application.
-///
-/// This function:
-/// - Initializes logging.
-/// - Generates necessary Prolog programs at start-up.
-/// - Initializes all core services.
-/// - Builds the Axum router and mounts static files, routes, and handlers.
-/// - Starts the HTTP server on port 3000.
 #[tokio::main]
 async fn main() {
     env_logger::init();
     info!("Starting pythia...");
 
+    // Generates knowledge base from persistence layer (i.e. DB) at start-up.
     let db = DbService::new(
         "us-west-2".into(),
         "http://host.docker.internal:8000".into(),
     )
     .await;
+    db.generate_data_files().await.expect("Failed to generate data files");
 
-
-    // initial start up:
-    // load logic machine:
-    // - get all record types and their facts
-    // - dump all record types' facts to files
-    // - init logic machine on the generated files
-    //
-    // after start up:
-    // add/remove record types, this creates table if needed
-    // add/remove facts, this creates table if needed
-    // reload record types:
-    // - get all record types and their facts
-    // - dump all record types' facts to files
-    // - reload logic machine on the generated files
-
-    // Generate logic programs (Prolog code) before launching
-    utils::codegen::generate_prolog_programs().expect("Failed to generate prolog programs");
-
-    // Load and initialize logic machine with Prolog code and type definitions
-    let program_data =
-        std::fs::read_to_string("data/internal/pythia.pl").expect("Failed to read pythia.pl");
-    let lm = LogicMachineService::new(&program_data, "data/types.json")
+    // Load knowledge base in Prolog
+    let lm = LogicMachineService::new()
         .expect("Failed to start LogicMachine service");
 
     // Initialise Pythia application state and services
@@ -81,7 +56,7 @@ async fn main() {
         state_changes: StateChangeService::new(lm.clone()),
     };
 
-    // Build the Axum router
+    // Build the Axum router, mount static files, routes, and handlers
     let r = Router::new()
         .nest_service(
             "/static",

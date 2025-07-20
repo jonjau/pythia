@@ -1,5 +1,5 @@
-:- use_module('./data/dimlink.pl').
-:- use_module('./data/transaction.pl').
+:- use_module('data/dimlink.pl').
+:- use_module('data/transaction.pl').
 :- use_module(library(clpz)).
 :- use_module(library(lists)).
 
