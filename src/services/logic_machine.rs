@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::models::fact::Fact;
 use crate::models::goal::Goal;
 use crate::models::logic_machine::{LogicMachine, LogicMachineResult};
-use crate::models::record_type::{RecordType, RecordTypeBuilder, RecordTypeError, RecordTypeJson};
+use crate::models::record_type::{RecordType, RecordTypeBuilder, RecordTypeError, RecordTypeData};
 
 use tokio::sync::{mpsc, oneshot, RwLock};
 use tokio::{runtime::Builder, task::LocalSet};
@@ -62,7 +62,7 @@ impl LogicMachineService {
         file_path: &str,
     ) -> Result<Vec<RecordType>, ReadRecordTypesError> {
         let reader = BufReader::new(File::open(file_path)?);
-        let rts: Vec<RecordTypeJson> = serde_json::from_reader(reader)?;
+        let rts: Vec<RecordTypeData> = serde_json::from_reader(reader)?;
         Ok(rts
             .into_iter()
             .map(|rt| {

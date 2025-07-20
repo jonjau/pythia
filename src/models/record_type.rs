@@ -51,7 +51,7 @@ pub struct RecordType {
 /// Represents a deserializable version of a `RecordType`,
 /// used when loading from JSON config or data files.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct RecordTypeJson {
+pub struct RecordTypeData {
     pub name: String,
     pub id_fields: Vec<String>,
     pub data_fields: Vec<String>,
@@ -332,9 +332,9 @@ impl RecordType {
     }
 }
 
-impl From<Arc<RecordType>> for RecordTypeJson {
+impl From<Arc<RecordType>> for RecordTypeData {
     fn from(rt: Arc<RecordType>) -> Self {
-        RecordTypeJson {
+        RecordTypeData {
             name: rt.name.clone(),
             id_fields: rt.id_fields.clone(),
             data_fields: rt.data_fields.clone(),
@@ -343,7 +343,7 @@ impl From<Arc<RecordType>> for RecordTypeJson {
     }
 }
 
-impl RecordTypeJson {
+impl RecordTypeData {
     pub fn all_fields(&self) -> Vec<String> {
         self.id_fields
             .iter()

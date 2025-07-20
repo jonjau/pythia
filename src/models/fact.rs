@@ -14,7 +14,7 @@ use std::fmt::Formatter;
 use std::str::FromStr;
 use std::{clone::Clone, collections::HashMap, sync::Arc};
 
-use crate::models::record_type::{RecordType, RecordTypeBuilder, RecordTypeJson};
+use crate::models::record_type::{RecordType, RecordTypeBuilder, RecordTypeData};
 
 /// Represents a compound term which has all its values grounded.
 /// It is meant to be asserted to or by the logic machine.
@@ -31,8 +31,8 @@ pub struct Fact {
 }
 
 #[derive(Debug)]
-pub struct FactJson {
-    pub type_: RecordTypeJson,
+pub struct FactData {
+    pub type_: RecordTypeData,
     pub values: Vec<String>,
 }
 
@@ -245,9 +245,9 @@ impl FromStr for FactTerm {
     }
 }
 
-impl From<Fact> for FactJson {
+impl From<Fact> for FactData {
     fn from(fact: Fact) -> Self {
-        FactJson {
+        FactData {
             type_: fact.type_.into(),
             values: fact
                 .values
@@ -258,7 +258,7 @@ impl From<Fact> for FactJson {
     }
 }
 
-impl FactJson {
+impl FactData {
     pub fn to_all_values_map(&self) -> HashMap<String, String> {
         let all_fields = self
             .type_
