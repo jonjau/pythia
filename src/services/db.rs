@@ -76,7 +76,7 @@ impl DbService {
     }
 
     pub async fn create_essential_tables_if_not_exist(&self) -> Result<(), DbServiceError> {
-        self.create_table_if_not_exists("types", "rt_name").await?;
+        self.create_table_if_not_exists("types", "name").await?;
         self.create_table_if_not_exists("knowledge_base", "file_path")
             .await?;
         Ok(())
