@@ -1,4 +1,4 @@
-use crate::{models::record_type::{ RecordTypeJson}, AppState};
+use crate::{models::record_type::RecordTypeJson, AppState};
 use axum::{
     extract::{Path, State},
     routing::{delete, get, post},
@@ -15,15 +15,17 @@ pub fn record_type_routes() -> Router<AppState> {
             get(get_record_types).post(create_record_type),
         )
         .route("/api/record_types/:name", delete(delete_record_type))
-        .route("/api/reload_record_types", post(reload_record_types))
+        .route("/api/record_types/reload", post(reload_record_types))
 }
 
-async fn get_record_types(State(state): State<AppState>) -> Json<Value> {
+async fn get_record_types(State(state): State<AppState>) -> Result<Json<Value>, Json<Value>> {
     match state.db.get_all_record_types().await {
-        Ok(record_types) => Json(json!({"record_types": record_types})),
+        Ok(record_types) => Ok(Json(json!({"record_types": record_types}))),
         Err(e) => {
             info!("Failed to get record types: {}", e);
-            Json(json!({"error": format!("Failed to get record types: {}", e)}))
+            Err(Json(
+                json!({"error": format!("Failed to get record types: {}", e)}),
+            ))
         }
     }
 }
@@ -31,16 +33,19 @@ async fn get_record_types(State(state): State<AppState>) -> Json<Value> {
 async fn create_record_type(
     State(state): State<AppState>,
     Json(record_type): Json<RecordTypeJson>,
-) -> Json<Value> {
-    match state
-        .db
-        .put_record_type(record_type.clone())
-        .await
-    {
-        Ok(_) => Json(json!({"record_type": record_type})),
+) -> Result<Json<Value>, Json<Value>> {
+    match state.db.put_record_type(&record_type).await {
+        Ok(_) => {
+            info!("Created record type: {}", record_type.name);
+            Ok(Json(
+                json!({"message": format!("Record type '{}' created successfully", record_type.name)}),
+            ))
+        }
         Err(e) => {
             info!("Failed to create record type: {}", e);
-            Json(json!({"error": format!("Failed to create record type: {}", e)}))
+            Err(Json(
+                json!({"error": format!("Failed to create record type '{}': {}", record_type.name, e)}),
+            ))
         }
     }
 }
@@ -48,32 +53,43 @@ async fn create_record_type(
 async fn delete_record_type(
     State(state): State<AppState>,
     Path(name): Path<String>,
-) -> Json<Value> {
-    let db = state.db.clone();
-    match db.delete_record_type(&name).await {
-        Ok(_) => Json(json!({"message": "Record type deleted successfully"})),
+) -> Result<Json<Value>, Json<Value>> {
+    match state.db.delete_record_type(&name).await {
+        Ok(_) => {
+            info!("Deleted record type: {}", name);
+            Ok(Json(
+                json!({"message": format!("Record type '{}' deleted successfully", name)}),
+            ))
+        }
         Err(e) => {
             info!("Failed to delete record type: {}", e);
-            Json(json!({"error": format!("Failed to delete record type: {}", e)}))
+            Err(Json(
+                json!({"error": format!("Failed to delete record type '{}': {}", name, e)}),
+            ))
         }
     }
 }
 
-async fn reload_record_types(State(state): State<AppState>) -> Json<Value> {
-    let res = state.db.dump_to_files("dimlink").await;
-    info!("Dumped record types to files: {:?}", res);
+async fn reload_record_types(State(state): State<AppState>) -> Result<Json<Value>, Json<Value>> {
+    state
+        .db
+        .generate_prolog_files()
+        .await
+        .map_err(|e| Json(json!({"error": format!("Failed to generate Prolog files: {}", e)})))?;
 
-    let ress = state.lm.reload_actor(
-        &std::fs::read_to_string("data/internal/pythia.pl").expect("Failed to read pythia.pl"),
-        "data/types.json",
-    ).await;
-    info!("Reloaded Logic Machine actor: {:?}", ress);
+    let program = std::fs::read_to_string("data/internal/pythia.pl").map_err(|e| {
+        Json(json!({"error": format!("Failed to read internal Pythia Prolog file: {}", e)}))
+    })?;
 
-    match state.db.get_all_record_types().await {
-        Ok(record_types) => Json(json!({"record_types": record_types})),
-        Err(e) => {
-            info!("Failed to reload record types: {}", e);
-            Json(json!({"error": format!("Failed to reload record types: {}", e)}))
-        }
-    }
+    state
+        .lm
+        .reload_actor(&program, "data/types.json")
+        .await
+        .map_err(|e| {
+            Json(json!({"error": format!("Failed to reload Logic Machine actor: {}", e)}))
+        })?;
+
+    Ok(Json(
+        json!({"message": "Record types reloaded successfully"}),
+    ))
 }

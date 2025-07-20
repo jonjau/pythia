@@ -11,8 +11,8 @@ use crate::models::{fact::FactJson, record_type::RecordTypeJson};
 
 #[derive(Template)]
 #[template(path = "prolog/fact.pl")]
-struct FactTemplate {
-    record_type: RecordTypeJson,
+struct FactTemplate<'a> {
+    record_type: &'a RecordTypeJson,
     facts: Vec<FactJson>,
 }
 
@@ -67,7 +67,7 @@ pub fn generate_prolog_programs() -> Result<(), CodeGenError> {
         let mut file = fs::File::create(get_fact_program_file_path(record_type))?;
 
         let fact_program = (FactTemplate {
-            record_type: record_type.clone(),
+            record_type,
             facts: vec![],
         })
         .render()?;
@@ -79,10 +79,10 @@ pub fn generate_prolog_programs() -> Result<(), CodeGenError> {
 }
 
 pub fn generate_fact_programs_for_record_types(
-    record_type: RecordTypeJson,
+    record_type: &RecordTypeJson,
     facts: Vec<FactJson>,
 ) -> Result<(), CodeGenError> {
-    let file_path = get_fact_program_file_path(&record_type);
+    let file_path = get_fact_program_file_path(record_type);
     let fact_program = FactTemplate { record_type, facts }.render()?;
 
     println!("Writing facts: {} ", fact_program);
