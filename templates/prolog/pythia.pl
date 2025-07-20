@@ -1,5 +1,5 @@
 {% for import_path in import_paths -%}
-:- use_module({{import_path}}).
+:- use_module('{{import_path}}').
 {% endfor -%}
 :- use_module(library(clpz)).
 :- use_module(library(lists)).

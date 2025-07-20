@@ -89,21 +89,15 @@ async fn delete_record_type(
 }
 
 async fn reload_record_types(State(state): State<AppState>) -> Result<Json<Value>, Json<Value>> {
-    // TODO JCJ: full reload in 1 function
-
     state
         .db
         .generate_data_files()
         .await
         .map_err(|e| Json(json!({"error": format!("Failed to generate Prolog files: {}", e)})))?;
 
-    let program = std::fs::read_to_string("data/internal/pythia.pl").map_err(|e| {
-        Json(json!({"error": format!("Failed to read internal Pythia Prolog file: {}", e)}))
-    })?;
-
     state
         .lm
-        .reload_actor(&program, "data/types.json")
+        .reload()
         .await
         .map_err(|e| {
             Json(json!({"error": format!("Failed to reload Logic Machine actor: {}", e)}))

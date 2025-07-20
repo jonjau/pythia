@@ -300,10 +300,10 @@ impl DbService {
 
         codegen::generate_record_types_json_and_pythia_program(&record_types)?;
 
-        for rt in record_types{
+        for rt in record_types {
             info!("Generating Prolog file for record type: {}", rt.name);
             let facts = self.get_all_facts(&rt).await?;
-            codegen::generate_fact_programs_for_record_types(&rt, facts)?;
+            codegen::generate_fact_programs(&rt, facts)?;
         }
         Ok(())
     }

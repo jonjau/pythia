@@ -1,11 +1,9 @@
 use std::{
     fs,
-    io::{self, Write},
-    path,
+    io::{self, Read},
 };
 
 use askama::Template;
-use serde_json::Value;
 
 use crate::models::{fact::FactData, record_type::RecordTypeData};
 
@@ -26,10 +24,6 @@ struct PythiaTemplate {
 /// Errors that can occur during Prolog code generation.
 #[derive(thiserror::Error, Debug)]
 pub enum CodeGenError {
-    #[error("Field not found in type definition: {0}")]
-    FieldNotFound(String),
-    #[error("Field is of invalid type: {0}")]
-    InvalidFieldType(String),
     #[error("IO Error: {0}")]
     IoError(#[from] io::Error),
     #[error("Invalid JSON format: {0}")]
@@ -38,51 +32,36 @@ pub enum CodeGenError {
     FailedToRender(#[from] askama::Error),
 }
 
-/// Generates and writes to Prolog files for each well-defined record type in `data/types.json`:
-///
-/// - `data/<record type>.pl` for the facts of each record type.
-/// - `data/internal/pythia.pl` for state change predicates.
-///
-/// Both kinds of Prolog files are described by Askama templates.
-///
-/// # Errors
-/// Returns an error if this fails to read/create files, could not render the Prolog template, or
-/// finds a malformed record type or a non-string field definition in the JSON.
-pub fn generate_prolog_programs() -> Result<(), CodeGenError> {
-    let record_types = read_record_types_from_json("data/types.json")?;
+const TYPES_JSON_PATH: &str = "data/types.json";
+const PYTHIA_PROGRAM_PATH: &str = "data/internal/pythia.pl";
 
-    let pythia_program = PythiaTemplate {
-        import_paths: get_import_paths(&record_types),
-        record_types: record_types.clone(),
-    }
-    .render()?;
-
-    fs::write("data/internal/pythia.pl", pythia_program)?;
-
-    let record_types_with_no_prolog_file = record_types.iter().filter(|record_type| {
-        !fs::exists(get_fact_program_file_path(record_type)).is_ok_and(|e| e)
-    });
-
-    for record_type in record_types_with_no_prolog_file {
-        let mut file = fs::File::create(get_fact_program_file_path(record_type))?;
-
-        let fact_program = (FactTemplate {
-            record_type,
-            facts: vec![],
-        })
-        .render()?;
-
-        file.write_all(fact_program.as_bytes())?;
-    }
-
-    Ok(())
+pub fn load_record_types() -> Result<Vec<RecordTypeData>, CodeGenError> {
+    let file = fs::File::open(TYPES_JSON_PATH)?;
+    let reader = io::BufReader::new(file);
+    let record_types: Vec<RecordTypeData> = serde_json::from_reader(reader)?;
+    Ok(record_types)
 }
 
+pub fn load_pythia_program() -> Result<String, CodeGenError> {
+    let file = fs::File::open(PYTHIA_PROGRAM_PATH)?;
+    let mut reader = io::BufReader::new(file);
+    let mut program = String::new();
+    reader.read_to_string(&mut program)?;
+    Ok(program)
+}
+
+/// Generates and writes to:
+///
+/// - `data/types.json` for record type defitions and main 'Pythia' prolog program for state change predicates.
+/// - `data/internal/pythia.pl` for state change predicates (Askama template).
+///
+/// Returns an error if this fails to read/create files, could not render the Prolog template, or
+/// encounters invalid JSON.
 pub fn generate_record_types_json_and_pythia_program(
     record_types: &Vec<RecordTypeData>,
 ) -> Result<(), CodeGenError> {
     let json_data = serde_json::to_string_pretty(&record_types)?;
-    fs::write("data/types.json", json_data)?;
+    fs::write(TYPES_JSON_PATH, json_data)?;
 
     let pythia_program = PythiaTemplate {
         import_paths: get_import_paths(&record_types),
@@ -90,19 +69,29 @@ pub fn generate_record_types_json_and_pythia_program(
     }
     .render()?;
 
-    fs::write("data/internal/pythia.pl", pythia_program)?;
+    fs::write(PYTHIA_PROGRAM_PATH, pythia_program)?;
 
     Ok(())
 }
 
-pub fn generate_fact_programs_for_record_types(
+fn get_import_paths(record_types: &Vec<RecordTypeData>) -> Vec<String> {
+    record_types
+        .iter()
+        .map(get_fact_program_file_path)
+        .collect::<Vec<_>>()
+}
+
+/// Generates and writes to:
+///
+/// - `data/<record type>.pl` for the facts of each record type (Askama template).
+///
+/// Returns an error if this fails to read/create files, or could not render the Prolog template.
+pub fn generate_fact_programs(
     record_type: &RecordTypeData,
     facts: Vec<FactData>,
 ) -> Result<(), CodeGenError> {
     let file_path = get_fact_program_file_path(record_type);
     let fact_program = FactTemplate { record_type, facts }.render()?;
-
-    println!("Writing facts: {} ", fact_program);
 
     fs::write(file_path, fact_program)?;
     Ok(())
@@ -110,62 +99,4 @@ pub fn generate_fact_programs_for_record_types(
 
 fn get_fact_program_file_path(record_type: &RecordTypeData) -> String {
     format!("data/{}.pl", record_type.name)
-}
-
-fn read_record_types_from_json(file_path: &str) -> Result<Vec<RecordTypeData>, CodeGenError> {
-    let json_data = fs::read_to_string(path::Path::new(file_path))?;
-    let objects: Vec<serde_json::Value> = serde_json::from_str(&json_data)?;
-
-    Ok(objects
-        .iter()
-        .map(|o| {
-            let name = o
-                .get("name")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| CodeGenError::FieldNotFound("name".to_owned()))?;
-
-            let id_fields = parse_array_field(o, "id_fields")?
-                .into_iter()
-                .map(|s| s.to_owned())
-                .collect::<Vec<_>>();
-            let data_fields = parse_array_field(o, "data_fields")?
-                .into_iter()
-                .map(|s| s.to_owned())
-                .collect::<Vec<_>>();
-            let metadata_fields = parse_array_field(o, "metadata_fields")?
-                .into_iter()
-                .map(|s| s.to_owned())
-                .collect::<Vec<_>>();
-
-            Ok(RecordTypeData {
-                name: name.to_owned(),
-                id_fields,
-                data_fields,
-                metadata_fields,
-            })
-        })
-        .collect::<Result<Vec<_>, CodeGenError>>()?)
-}
-
-fn get_import_paths(record_types: &Vec<RecordTypeData>) -> Vec<String> {
-    record_types
-        .iter()
-        .map(|rt| format!("'./data/{}.pl'", &rt.name))
-        .collect::<Vec<_>>()
-}
-
-fn parse_array_field<'a>(o: &'a Value, field_name: &str) -> Result<Vec<&'a str>, CodeGenError> {
-    let array = o
-        .get(field_name)
-        .ok_or_else(|| CodeGenError::FieldNotFound(field_name.to_owned()))?
-        .as_array()
-        .ok_or_else(|| CodeGenError::InvalidFieldType(field_name.to_owned()))?;
-
-    array
-        .iter()
-        .map(|v| {
-            v.as_str()
-                .ok_or_else(|| CodeGenError::InvalidFieldType(field_name.to_owned()))
-        })
-        .collect()
 }

@@ -1,11 +1,10 @@
-use std::fs::File;
-use std::io::BufReader;
 use std::sync::Arc;
 
 use crate::models::fact::Fact;
 use crate::models::goal::Goal;
 use crate::models::logic_machine::{LogicMachine, LogicMachineResult};
-use crate::models::record_type::{RecordType, RecordTypeBuilder, RecordTypeError, RecordTypeData};
+use crate::models::record_type::{RecordType, RecordTypeBuilder, RecordTypeError};
+use crate::utils::codegen;
 
 use tokio::sync::{mpsc, oneshot, RwLock};
 use tokio::{runtime::Builder, task::LocalSet};
@@ -28,42 +27,30 @@ pub enum ReadRecordTypesError {
     CouldNotParseJson(#[from] serde_json::Error),
     #[error("Failed to build record type: {0}")]
     CouldNotBuildRecordType(#[from] RecordTypeError),
+    #[error("Failed to load state from generated files: {0}")]
+    CodeGenError(#[from] codegen::CodeGenError),
 }
 
 impl LogicMachineService {
-    /// Creates a new logic machine service loading facts from the given Prolog program string and a JSON record types file path.
-    pub fn new(program: &str, record_types_file_path: &str) -> Result<Self, ReadRecordTypesError> {
+    /// Creates a new logic machine service loading facts from generated files.
+    pub fn new() -> Result<Self, ReadRecordTypesError> {
         Ok(LogicMachineService {
-            lm_actor: Arc::new(RwLock::new(ActorHandle::new(
-                program.to_owned(),
-                LogicMachineService::read_record_types_from_json(record_types_file_path)?,
-            ))),
+            lm_actor: Arc::new(RwLock::new(Self::load_lm_actor_from_generated_files()?)),
         })
     }
 
-    pub async fn reload_actor(
-        &self,
-        program: &str,
-        record_types_file_path: &str,
-    ) -> Result<(), ReadRecordTypesError> {
-
-        let new_actor = ActorHandle::new(
-            program.to_owned(),
-        LogicMachineService::read_record_types_from_json(record_types_file_path)?,
-        );
+    /// Reloads the logic machine's knowledge from the generated files.
+    pub async fn reload(&self) -> Result<(), ReadRecordTypesError> {
+        let new_actor = Self::load_lm_actor_from_generated_files()?;
 
         let mut actor_guard = self.lm_actor.write().await;
         *actor_guard = new_actor;
         Ok(())
     }
 
-    /// Loads record types from a JSON file into `RecordType` instances.
-    fn read_record_types_from_json(
-        file_path: &str,
-    ) -> Result<Vec<RecordType>, ReadRecordTypesError> {
-        let reader = BufReader::new(File::open(file_path)?);
-        let rts: Vec<RecordTypeData> = serde_json::from_reader(reader)?;
-        Ok(rts
+    fn load_lm_actor_from_generated_files() -> Result<ActorHandle, ReadRecordTypesError> {
+        let program = codegen::load_pythia_program()?;
+        let rts = codegen::load_record_types()?
             .into_iter()
             .map(|rt| {
                 RecordTypeBuilder::new(rt.name, rt.data_fields)
@@ -71,7 +58,9 @@ impl LogicMachineService {
                     .metadata_fields(rt.metadata_fields)
                     .build()
             })
-            .collect::<Result<Vec<_>, RecordTypeError>>()?)
+            .collect::<Result<Vec<_>, RecordTypeError>>()?;
+
+        Ok(ActorHandle::new(program, rts))
     }
 
     /// Fetches a record type by its name.
