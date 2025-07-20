@@ -7,7 +7,7 @@ use crate::models::record_type::{RecordType, RecordTypeBuilder, RecordTypeError}
 use crate::services::db::{DbService, DbServiceError};
 use crate::utils::codegen;
 
-use tokio::sync::{mpsc, oneshot, RwLock};
+use tokio::sync::{mpsc, oneshot};
 use tokio::{runtime::Builder, task::LocalSet};
 
 /// A high-level asynchronous interface for interacting with the logic machine.
@@ -16,7 +16,7 @@ use tokio::{runtime::Builder, task::LocalSet};
 /// off the main thread using message-passing and Tokio's runtime.
 #[derive(Clone)]
 pub struct LogicMachineService {
-    lm_actor: Arc<RwLock<ActorHandle>>,
+    lm_actor: ActorHandle,
     db: DbService,
 }
 
@@ -43,7 +43,7 @@ impl LogicMachineService {
         let (program, record_types) = Self::load_lm_types_and_facts(&db).await?;
 
         Ok(LogicMachineService {
-            lm_actor: Arc::new(RwLock::new(ActorHandle::new(program, record_types))),
+            lm_actor: ActorHandle::new(program, record_types),
             db,
         })
     }
@@ -54,8 +54,6 @@ impl LogicMachineService {
 
         Ok(self
             .lm_actor
-            .read()
-            .await
             .send_query(ReloadQuery {
                 program,
                 record_types,
@@ -92,8 +90,6 @@ impl LogicMachineService {
         self.reload().await?;
         Ok(self
             .lm_actor
-            .read()
-            .await
             .send_query(GetRecordTypeQuery {
                 fact_type: fact_type.into(),
             })
@@ -107,8 +103,6 @@ impl LogicMachineService {
         self.reload().await?;
         Ok(self
             .lm_actor
-            .read()
-            .await
             .send_query(GetAllRecordTypesQuery)
             .await?)
     }
@@ -121,8 +115,6 @@ impl LogicMachineService {
         self.reload().await?;
         Ok(self
             .lm_actor
-            .read()
-            .await
             .send_query(GetAllFactsQuery { fact_type })
             .await?)
     }
@@ -136,8 +128,6 @@ impl LogicMachineService {
         self.reload().await?;
         Ok(self
             .lm_actor
-            .read()
-            .await
             .send_query(GetFactsQuery { goal, target_rt })
             .await?)
     }
