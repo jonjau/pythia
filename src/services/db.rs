@@ -12,7 +12,7 @@ use log::info;
 use crate::{
     models::{fact::FactJson, record_type::RecordTypeJson},
     services::persist::{PersistenceService, PersistenceServiceError},
-    utils::codegen::generate_fact_programs_for_record_types,
+    utils::codegen,
 };
 
 #[derive(Clone)]
@@ -177,7 +177,10 @@ impl DbService {
             .join("-")
     }
 
-    pub async fn put_record_type(&self, rt: &RecordTypeJson) -> Result<(), PersistenceServiceError> {
+    pub async fn put_record_type(
+        &self,
+        rt: &RecordTypeJson,
+    ) -> Result<(), PersistenceServiceError> {
         self.create_table_if_not_exists("types", "name").await?;
 
         let composite_key = Self::get_key_name(&rt);
@@ -287,11 +290,20 @@ impl DbService {
         Ok(facts)
     }
 
-    pub async fn generate_prolog_files(&self) -> Result<(), PersistenceServiceError> {
-        for rt in self.get_all_record_types().await? {
+    pub async fn generate_data_files(&self) -> Result<(), PersistenceServiceError> {
+        let record_types = self
+            .get_all_record_types()
+            .await?
+            .into_iter()
+            .map(|rt| rt.into())
+            .collect::<Vec<_>>();
+
+        codegen::generate_record_types_json_and_pythia_program(&record_types)?;
+
+        for rt in record_types{
             info!("Generating Prolog file for record type: {}", rt.name);
             let facts = self.get_all_facts(&rt).await?;
-            generate_fact_programs_for_record_types(&rt, facts)?;
+            codegen::generate_fact_programs_for_record_types(&rt, facts)?;
         }
         Ok(())
     }

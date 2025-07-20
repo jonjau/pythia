@@ -78,6 +78,23 @@ pub fn generate_prolog_programs() -> Result<(), CodeGenError> {
     Ok(())
 }
 
+pub fn generate_record_types_json_and_pythia_program(
+    record_types: &Vec<RecordTypeJson>,
+) -> Result<(), CodeGenError> {
+    let json_data = serde_json::to_string_pretty(&record_types)?;
+    fs::write("data/types.json", json_data)?;
+
+    let pythia_program = PythiaTemplate {
+        import_paths: get_import_paths(&record_types),
+        record_types: record_types.to_vec(),
+    }
+    .render()?;
+
+    fs::write("data/internal/pythia.pl", pythia_program)?;
+
+    Ok(())
+}
+
 pub fn generate_fact_programs_for_record_types(
     record_type: &RecordTypeJson,
     facts: Vec<FactJson>,
