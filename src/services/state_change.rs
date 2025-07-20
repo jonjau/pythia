@@ -2,9 +2,8 @@ use std::{collections::HashMap, fmt, sync::Arc};
 
 use crate::models::fact::{Fact, FactTerm, FieldNotFound};
 use crate::models::goal::GoalTerm;
-use crate::models::logic_machine::LogicMachineError;
 use crate::models::record_type::{RecordType, RecordTypeError};
-use crate::services::logic_machine::LogicMachineService;
+use crate::services::logic_machine::{LogicMachineService, LogicMachineServiceError};
 
 /// Represents the difference in a single field between two facts.
 ///
@@ -105,8 +104,8 @@ pub enum StateChangeError {
     ParameterNotFound(String),
     #[error("Invalid int parameter found: {0}")]
     InvalidIntParameter(#[from] std::num::ParseIntError),
-    #[error("LogicMachine error: {0}")]
-    FactError(#[from] LogicMachineError),
+    #[error("LogicMachineService error: {0}")]
+    LogicMachineServiceError(#[from] LogicMachineServiceError),
     #[error("RecordType error: {0}")]
     RecordTypeError(#[from] RecordTypeError),
     #[error("Field not found in state change: {0}")]

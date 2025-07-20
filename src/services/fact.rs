@@ -1,15 +1,14 @@
 use crate::models::fact::{Fact, FactTerm};
-use crate::models::logic_machine::LogicMachineError;
 use crate::models::record_type::RecordTypeError;
 use crate::services::db::{DbService, DbServiceError};
-use crate::services::logic_machine::LogicMachineService;
+use crate::services::logic_machine::{LogicMachineService, LogicMachineServiceError};
 use std::collections::HashMap;
 
 /// Errors that can occur during getting and fetching facts from the LogicMachine.
 #[derive(thiserror::Error, Debug)]
 pub enum FactServiceError {
-    #[error("LogicMachine error: {0}")]
-    FactError(#[from] LogicMachineError),
+    #[error("LogicMachineService error: {0}")]
+    LogicMachineServiceError(#[from] LogicMachineServiceError),
     #[error("RecordType error: {0}")]
     RecordTypeError(#[from] RecordTypeError),
     #[error("Database error: {0}")]
