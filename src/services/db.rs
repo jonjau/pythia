@@ -11,7 +11,7 @@ use log::info;
 
 use crate::{
     models::{fact::FactData, record_type::RecordTypeData},
-    utils::codegen,
+    utils::codegen::{self, KnowledgeBase, KnowledgeBaseItem},
 };
 
 use aws_sdk_dynamodb::operation::{
@@ -49,6 +49,9 @@ pub enum DbServiceError {
 
     #[error("Failed to find record type: {0}")]
     RecordTypeNotFound(String),
+
+    #[error("Failed to find knowledge base item: {0}")]
+    KnowledgeBaseItemNotFound(String),
 }
 
 #[derive(Clone)]
@@ -72,8 +75,11 @@ impl DbService {
         DbService { client }
     }
 
-    pub async fn create_record_types_table_if_not_exist(&self) -> Result<(), DbServiceError> {
-        self.create_table_if_not_exists("types", "rt_name").await
+    pub async fn create_essential_tables_if_not_exist(&self) -> Result<(), DbServiceError> {
+        self.create_table_if_not_exists("types", "rt_name").await?;
+        self.create_table_if_not_exists("knowledge_base", "file_path")
+            .await?;
+        Ok(())
     }
 
     async fn create_table_if_not_exists(
@@ -319,21 +325,95 @@ impl DbService {
         Ok(facts)
     }
 
-    pub async fn generate_data_files(&self) -> Result<(), DbServiceError> {
-        let record_types = self
-            .get_all_record_types()
-            .await?
-            .into_iter()
-            .map(|rt| rt.into())
-            .collect::<Vec<_>>();
+    pub async fn update_knowledge_base(&self) -> Result<(), DbServiceError> {
+        info!("Updating knowledge base...");
+        let rts = self.get_all_record_types().await?;
 
-        codegen::generate_record_types_json_and_pythia_program(&record_types)?;
-
-        for rt in record_types {
-            info!("Generating Prolog file for record type: {}", rt.name);
-            let facts = self.get_all_facts(&rt).await?;
-            codegen::generate_fact_programs(&rt, facts)?;
+        let mut rt_facts = Vec::new();
+        for rt in &rts {
+            let facts = self.get_all_facts(rt).await?;
+            rt_facts.push((rt.clone(), facts));
         }
+
+        let kb = codegen::generate_knowledge_base(&rts, &rt_facts)?;
+
+        self.update_knowledge_base_item(kb.record_type_definitions)
+            .await?;
+        self.update_knowledge_base_item(kb.pythia_program).await?;
+        for fact_program in kb.fact_programs {
+            self.update_knowledge_base_item(fact_program).await?;
+        }
+
+        Ok(())
+    }
+
+    async fn update_knowledge_base_item(
+        &self,
+        kbi: KnowledgeBaseItem,
+    ) -> Result<(), DbServiceError> {
+        let request = self
+            .client
+            .put_item()
+            .table_name("knowledge_base")
+            .item("file_path", AttributeValue::S(kbi.file_path))
+            .item("contents", AttributeValue::S(kbi.contents));
+
+        request.send().await?;
+        Ok(())
+    }
+
+    pub async fn get_knowledge_base(&self) -> Result<KnowledgeBase, DbServiceError> {
+        let rts = self.get_all_record_types().await?;
+
+        let mut fact_programs = Vec::new();
+        for rt in &rts {
+            let path = codegen::get_fact_program_file_path(rt);
+            fact_programs.push(self.get_knowledge_base_item(&path).await?);
+        }
+
+        let kb = KnowledgeBase {
+            record_type_definitions: self.get_knowledge_base_item("data/types.json").await?,
+            pythia_program: self
+                .get_knowledge_base_item("data/internal/pythia.pl")
+                .await?,
+            fact_programs,
+        };
+
+        Ok(kb)
+    }
+
+    async fn get_knowledge_base_item(
+        &self,
+        file_path: &str,
+    ) -> Result<KnowledgeBaseItem, DbServiceError> {
+        let request = self
+            .client
+            .get_item()
+            .table_name("knowledge_base")
+            .key("file_path", AttributeValue::S(file_path.to_owned()));
+
+        let resp = request.send().await?;
+
+        if let Some(item) = resp.item() {
+            let contents = item
+                .get("contents")
+                .and_then(|v| v.as_s().ok())
+                .map(String::from)
+                .unwrap_or_default();
+            Ok(KnowledgeBaseItem {
+                file_path: file_path.to_owned(),
+                contents,
+            })
+        } else {
+            Err(DbServiceError::KnowledgeBaseItemNotFound(
+                file_path.to_owned(),
+            ))
+        }
+    }
+
+    pub async fn export_knowledge_base(&self) -> Result<(), DbServiceError> {
+        let kb = self.get_knowledge_base().await?;
+        codegen::export_knowledge_base(&kb)?;
         Ok(())
     }
 }

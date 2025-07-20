@@ -30,7 +30,7 @@ pub struct Fact {
     pub values: Vec<FactTerm>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FactData {
     pub type_: RecordTypeData,
     pub values: Vec<String>,

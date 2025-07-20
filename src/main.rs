@@ -14,7 +14,7 @@ use services::{
     fact::FactService, logic_machine::LogicMachineService, state_change::StateChangeService,
 };
 
-use crate::{routes::record_type::record_type_routes, services::db::DbService};
+use crate::{routes::{knowledge_base::knowledge_base_routes, record_type::record_type_routes}, services::db::DbService};
 
 /// Shared application state used by all handlers and services.
 ///
@@ -42,13 +42,11 @@ async fn main() {
         "http://host.docker.internal:8000".into(),
     )
     .await;
-    db.create_record_types_table_if_not_exist().await.expect("Failed to create record types table");
-    db.generate_data_files()
-        .await
-        .expect("Failed to generate data files");
+    db.create_essential_tables_if_not_exist().await.expect("Failed to create essential tables");
+    db.update_knowledge_base().await.expect("Failed to update knowledge base");
 
     // Load knowledge base in Prolog
-    let lm = LogicMachineService::new().expect("Failed to start LogicMachine service");
+    let lm = LogicMachineService::new(db.clone()).await.expect("Failed to start LogicMachine service");
 
     // Initialise Pythia application state and services
     let state = AppState {
@@ -68,6 +66,7 @@ async fn main() {
         .merge(state_change_routes())
         .merge(fact_routes())
         .merge(record_type_routes())
+        .merge(knowledge_base_routes())
         .with_state(state);
 
     // Run the HTTP server

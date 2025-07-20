@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use crate::models::fact::Fact;
 use crate::models::goal::Goal;
-use crate::models::logic_machine::{LogicMachine, LogicMachineResult};
+use crate::models::logic_machine::{LogicMachine, LogicMachineError, LogicMachineResult};
 use crate::models::record_type::{RecordType, RecordTypeBuilder, RecordTypeError};
+use crate::services::db::{DbService, DbServiceError};
 use crate::utils::codegen;
 
 use tokio::sync::{mpsc, oneshot, RwLock};
@@ -16,41 +17,60 @@ use tokio::{runtime::Builder, task::LocalSet};
 #[derive(Clone)]
 pub struct LogicMachineService {
     lm_actor: Arc<RwLock<ActorHandle>>,
+    db: DbService,
 }
 
-/// Errors that can occur while loading/building record types from a JSON file.
+/// Errors that can occur while using the LogicMachineServiceError.
 #[derive(thiserror::Error, Debug)]
-pub enum ReadRecordTypesError {
+pub enum LogicMachineServiceError {
     #[error("Failed to open file: {0}")]
     CouldNotOpenFile(#[from] std::io::Error),
     #[error("Failed to parse JSON: {0}")]
     CouldNotParseJson(#[from] serde_json::Error),
     #[error("Failed to build record type: {0}")]
     CouldNotBuildRecordType(#[from] RecordTypeError),
+    #[error("Failed to load state from DB: {0}")]
+    DbServiceError(#[from] DbServiceError),
     #[error("Failed to load state from generated files: {0}")]
     CodeGenError(#[from] codegen::CodeGenError),
+    #[error("Failed to reload LM state: {0}")]
+    LogicMachineError(#[from] LogicMachineError),
 }
 
 impl LogicMachineService {
     /// Creates a new logic machine service loading facts from generated files.
-    pub fn new() -> Result<Self, ReadRecordTypesError> {
+    pub async fn new(db: DbService) -> Result<Self, LogicMachineServiceError> {
+        let (program, record_types) = Self::load_lm_types_and_facts(&db).await?;
+
         Ok(LogicMachineService {
-            lm_actor: Arc::new(RwLock::new(Self::load_lm_actor_from_generated_files()?)),
+            lm_actor: Arc::new(RwLock::new(ActorHandle::new(program, record_types))),
+            db,
         })
     }
 
-    /// Reloads the logic machine's knowledge from the generated files.
-    pub async fn reload(&self) -> Result<(), ReadRecordTypesError> {
-        let new_actor = Self::load_lm_actor_from_generated_files()?;
+    /// Reloads the logic machine's knowledge from the knowledge base stored in the database.
+    pub async fn reload(&self) -> Result<(), LogicMachineServiceError> {
+        let (program, record_types) = Self::load_lm_types_and_facts(&self.db).await?;
 
-        let mut actor_guard = self.lm_actor.write().await;
-        *actor_guard = new_actor;
-        Ok(())
+        Ok(self
+            .lm_actor
+            .read()
+            .await
+            .send_query(ReloadQuery {
+                program,
+                record_types,
+            })
+            .await?)
     }
 
-    fn load_lm_actor_from_generated_files() -> Result<ActorHandle, ReadRecordTypesError> {
-        let program = codegen::load_pythia_program()?;
-        let rts = codegen::load_record_types()?
+    /// Returns the main program and the record types to be used by the logic machine.
+    async fn load_lm_types_and_facts(
+        db: &DbService,
+    ) -> Result<(String, Vec<RecordType>), LogicMachineServiceError> {
+        let kb = db.get_knowledge_base().await?;
+        let program = kb.get_pythia_program_with_facts_inline();
+        let rts = kb
+            .get_record_types()?
             .into_iter()
             .map(|rt| {
                 RecordTypeBuilder::new(rt.name, rt.data_fields)
@@ -60,7 +80,7 @@ impl LogicMachineService {
             })
             .collect::<Result<Vec<_>, RecordTypeError>>()?;
 
-        Ok(ActorHandle::new(program, rts))
+        Ok((program, rts))
     }
 
     /// Fetches a record type by its name.
@@ -109,6 +129,11 @@ impl LogicMachineService {
     }
 }
 
+struct ReloadQuery {
+    program: String,
+    record_types: Vec<RecordType>,
+}
+
 struct GetAllFactsQuery {
     fact_type: String,
 }
@@ -132,17 +157,25 @@ struct Message<Query, Response> {
 
 /// Enum representing all supported actor messages.
 enum ActorMessage {
+    Reload(ReloadMessage),
     GetAllFacts(GetAllFactsMessage),
     GetFacts(GetFactsMessage),
     GetRecordType(GetRecordTypeMessage),
     GetAllRecordTypes(GetAllRecordTypesMessage),
 }
 
+type ReloadMessage = Message<ReloadQuery, LogicMachineResult<()>>;
 type GetAllFactsMessage = Message<GetAllFactsQuery, LogicMachineResult<Vec<Fact>>>;
 type GetFactsMessage = Message<GetFactsQuery, LogicMachineResult<Vec<Fact>>>;
 type GetRecordTypeMessage = Message<GetRecordTypeQuery, LogicMachineResult<Arc<RecordType>>>;
 type GetAllRecordTypesMessage =
     Message<GetAllRecordTypesQuery, LogicMachineResult<Vec<Arc<RecordType>>>>;
+
+impl From<ReloadMessage> for ActorMessage {
+    fn from(msg: ReloadMessage) -> Self {
+        ActorMessage::Reload(msg)
+    }
+}
 
 impl From<GetAllFactsMessage> for ActorMessage {
     fn from(msg: GetAllFactsMessage) -> Self {
@@ -188,6 +221,10 @@ impl Actor {
 
     fn handle_message(&mut self, msg: ActorMessage) {
         match msg {
+            ActorMessage::Reload(Message { query, respond_to }) => {
+                let r = Ok(self.lm.load_program(query.program, query.record_types));
+                let _ = respond_to.send(r);
+            }
             ActorMessage::GetAllFacts(Message { query, respond_to }) => {
                 let r = self
                     .lm

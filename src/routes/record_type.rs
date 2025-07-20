@@ -1,7 +1,7 @@
 use crate::{models::record_type::RecordTypeData, AppState};
 use axum::{
     extract::{Path, State},
-    routing::{get, post},
+    routing::get,
     Json, Router,
 };
 use log::info;
@@ -18,7 +18,6 @@ pub fn record_type_routes() -> Router<AppState> {
             "/api/record-types/:name",
             get(get_record_type).delete(delete_record_type),
         )
-        .route("/api/record-types/reload", post(reload_record_types))
 }
 
 async fn get_record_types(State(state): State<AppState>) -> Result<Json<Value>, Json<Value>> {
@@ -86,24 +85,4 @@ async fn delete_record_type(
             ))
         }
     }
-}
-
-async fn reload_record_types(State(state): State<AppState>) -> Result<Json<Value>, Json<Value>> {
-    state
-        .db
-        .generate_data_files()
-        .await
-        .map_err(|e| Json(json!({"error": format!("Failed to generate Prolog files: {}", e)})))?;
-
-    state
-        .lm
-        .reload()
-        .await
-        .map_err(|e| {
-            Json(json!({"error": format!("Failed to reload Logic Machine actor: {}", e)}))
-        })?;
-
-    Ok(Json(
-        json!({"message": "Record types reloaded successfully"}),
-    ))
 }
