@@ -234,21 +234,21 @@ impl DbService {
         Ok(())
     }
 
-    pub async fn put_fact(&self, fact: FactData) -> Result<(), PersistenceServiceError> {
+    pub async fn put_fact(&self, fact: &FactData) -> Result<(), PersistenceServiceError> {
         let mut request = self
             .client
             .put_item()
             .table_name(fact.type_.name.clone())
             .item(
                 Self::get_key_name(&fact.type_),
-                AttributeValue::S(Self::get_composite_key_value(&fact)),
+                AttributeValue::S(Self::get_composite_key_value(fact)),
             );
 
         info!(
             "Putting fact: {:?}, key_name: {:?}, key_value: {:?}",
             fact,
             Self::get_key_name(&fact.type_),
-            AttributeValue::S(Self::get_composite_key_value(&fact))
+            AttributeValue::S(Self::get_composite_key_value(fact))
         );
 
         for (key, value) in fact.to_all_values_map().into_iter() {

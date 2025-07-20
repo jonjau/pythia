@@ -107,19 +107,6 @@ impl LogicMachineService {
             .send_query(GetFactsQuery { goal, target_rt })
             .await
     }
-
-    /// Adds a new fact to the logic machine.
-    pub async fn add_fact(&self, fact: Fact) -> LogicMachineResult<Fact> {
-        self.lm_actor
-            .read()
-            .await
-            .send_query(AddFactQuery { fact })
-            .await
-    }
-}
-
-struct AddFactQuery {
-    fact: Fact,
 }
 
 struct GetAllFactsQuery {
@@ -145,25 +132,17 @@ struct Message<Query, Response> {
 
 /// Enum representing all supported actor messages.
 enum ActorMessage {
-    AddFact(AddFactMessage),
     GetAllFacts(GetAllFactsMessage),
     GetFacts(GetFactsMessage),
     GetRecordType(GetRecordTypeMessage),
     GetAllRecordTypes(GetAllRecordTypesMessage),
 }
 
-type AddFactMessage = Message<AddFactQuery, LogicMachineResult<Fact>>;
 type GetAllFactsMessage = Message<GetAllFactsQuery, LogicMachineResult<Vec<Fact>>>;
 type GetFactsMessage = Message<GetFactsQuery, LogicMachineResult<Vec<Fact>>>;
 type GetRecordTypeMessage = Message<GetRecordTypeQuery, LogicMachineResult<Arc<RecordType>>>;
 type GetAllRecordTypesMessage =
     Message<GetAllRecordTypesQuery, LogicMachineResult<Vec<Arc<RecordType>>>>;
-
-impl From<AddFactMessage> for ActorMessage {
-    fn from(msg: AddFactMessage) -> Self {
-        ActorMessage::AddFact(msg)
-    }
-}
 
 impl From<GetAllFactsMessage> for ActorMessage {
     fn from(msg: GetAllFactsMessage) -> Self {
@@ -209,14 +188,6 @@ impl Actor {
 
     fn handle_message(&mut self, msg: ActorMessage) {
         match msg {
-            ActorMessage::AddFact(Message { query, respond_to }) => {
-                let r = self.lm.add_fact(query.fact);
-
-                // The `let _ =` ignores any errors when sending.
-                // This can happen if the `select!` macro is
-                // to cancel waiting for the response.
-                let _ = respond_to.send(r);
-            }
             ActorMessage::GetAllFacts(Message { query, respond_to }) => {
                 let r = self
                     .lm
