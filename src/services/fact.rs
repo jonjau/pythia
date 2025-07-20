@@ -1,9 +1,8 @@
 use crate::models::fact::{Fact, FactTerm};
 use crate::models::logic_machine::LogicMachineError;
 use crate::models::record_type::RecordTypeError;
-use crate::services::db::DbService;
+use crate::services::db::{DbService, DbServiceError};
 use crate::services::logic_machine::LogicMachineService;
-use crate::services::persist::PersistenceServiceError;
 use std::collections::HashMap;
 
 /// Errors that can occur during getting and fetching facts from the LogicMachine.
@@ -13,8 +12,8 @@ pub enum FactServiceError {
     FactError(#[from] LogicMachineError),
     #[error("RecordType error: {0}")]
     RecordTypeError(#[from] RecordTypeError),
-    #[error("Persistence error: {0}")]
-    PersistenceError(#[from] PersistenceServiceError),
+    #[error("Database error: {0}")]
+    DbServiceError(#[from] DbServiceError),
 }
 
 /// Represents a simple in-memory fact table, with columns and row data.
@@ -102,7 +101,7 @@ impl FactService {
     ///
     /// # Errors
     ///
-    /// Returns an error if record type lookup, or fact creation fails.
+    /// Returns an error if record type lookup, or fact creation/persistence fails.
     pub async fn add_facts(
         &self,
         rt_name: &str,
@@ -145,13 +144,13 @@ impl FactService {
     ///
     /// # Errors
     ///
-    /// Returns an error if record type lookup, fact creation, or persistence fails.
+    /// Returns an error if record type lookup, fact creation, or database fails.
     pub async fn add_fact(
         &self,
         rt_name: &str,
         named_values: HashMap<String, String>,
     ) -> Result<Fact, FactServiceError> {
-        let f = self.add_facts(rt_name, vec![named_values]).await?[0].clone();
+        let f = self.add_facts(rt_name, vec![named_values]).await?[0].to_owned();
         Ok(f)
     }
 }
