@@ -1,4 +1,4 @@
-use crate::{models::record_type::RecordTypeJson, AppState};
+use crate::{models::record_type::RecordTypeData, AppState};
 use axum::{
     extract::{Path, State},
     routing::{get, post},
@@ -50,7 +50,7 @@ async fn get_record_type(
 
 async fn create_record_type(
     State(state): State<AppState>,
-    Json(record_type): Json<RecordTypeJson>,
+    Json(record_type): Json<RecordTypeData>,
 ) -> Result<Json<Value>, Json<Value>> {
     match state.db.put_record_type(&record_type).await {
         Ok(_) => {

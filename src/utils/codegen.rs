@@ -7,20 +7,20 @@ use std::{
 use askama::Template;
 use serde_json::Value;
 
-use crate::models::{fact::FactJson, record_type::RecordTypeJson};
+use crate::models::{fact::FactData, record_type::RecordTypeData};
 
 #[derive(Template)]
 #[template(path = "prolog/fact.pl")]
 struct FactTemplate<'a> {
-    record_type: &'a RecordTypeJson,
-    facts: Vec<FactJson>,
+    record_type: &'a RecordTypeData,
+    facts: Vec<FactData>,
 }
 
 #[derive(Template)]
 #[template(path = "prolog/pythia.pl")]
 struct PythiaTemplate {
     import_paths: Vec<String>,
-    record_types: Vec<RecordTypeJson>,
+    record_types: Vec<RecordTypeData>,
 }
 
 /// Errors that can occur during Prolog code generation.
@@ -79,7 +79,7 @@ pub fn generate_prolog_programs() -> Result<(), CodeGenError> {
 }
 
 pub fn generate_record_types_json_and_pythia_program(
-    record_types: &Vec<RecordTypeJson>,
+    record_types: &Vec<RecordTypeData>,
 ) -> Result<(), CodeGenError> {
     let json_data = serde_json::to_string_pretty(&record_types)?;
     fs::write("data/types.json", json_data)?;
@@ -96,8 +96,8 @@ pub fn generate_record_types_json_and_pythia_program(
 }
 
 pub fn generate_fact_programs_for_record_types(
-    record_type: &RecordTypeJson,
-    facts: Vec<FactJson>,
+    record_type: &RecordTypeData,
+    facts: Vec<FactData>,
 ) -> Result<(), CodeGenError> {
     let file_path = get_fact_program_file_path(record_type);
     let fact_program = FactTemplate { record_type, facts }.render()?;
@@ -108,11 +108,11 @@ pub fn generate_fact_programs_for_record_types(
     Ok(())
 }
 
-fn get_fact_program_file_path(record_type: &RecordTypeJson) -> String {
+fn get_fact_program_file_path(record_type: &RecordTypeData) -> String {
     format!("data/{}.pl", record_type.name)
 }
 
-fn read_record_types_from_json(file_path: &str) -> Result<Vec<RecordTypeJson>, CodeGenError> {
+fn read_record_types_from_json(file_path: &str) -> Result<Vec<RecordTypeData>, CodeGenError> {
     let json_data = fs::read_to_string(path::Path::new(file_path))?;
     let objects: Vec<serde_json::Value> = serde_json::from_str(&json_data)?;
 
@@ -137,7 +137,7 @@ fn read_record_types_from_json(file_path: &str) -> Result<Vec<RecordTypeJson>, C
                 .map(|s| s.to_owned())
                 .collect::<Vec<_>>();
 
-            Ok(RecordTypeJson {
+            Ok(RecordTypeData {
                 name: name.to_owned(),
                 id_fields,
                 data_fields,
@@ -147,7 +147,7 @@ fn read_record_types_from_json(file_path: &str) -> Result<Vec<RecordTypeJson>, C
         .collect::<Result<Vec<_>, CodeGenError>>()?)
 }
 
-fn get_import_paths(record_types: &Vec<RecordTypeJson>) -> Vec<String> {
+fn get_import_paths(record_types: &Vec<RecordTypeData>) -> Vec<String> {
     record_types
         .iter()
         .map(|rt| format!("'./data/{}.pl'", &rt.name))

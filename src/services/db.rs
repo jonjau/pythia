@@ -10,7 +10,7 @@ use aws_sdk_dynamodb::{
 use log::info;
 
 use crate::{
-    models::{fact::FactJson, record_type::RecordTypeJson},
+    models::{fact::FactData, record_type::RecordTypeData},
     services::persist::{PersistenceService, PersistenceServiceError},
     utils::codegen,
 };
@@ -91,8 +91,8 @@ impl DbService {
     }
 
     /// Maps DynamoDB attributes to a RecordTypeJson instance.
-    fn map_item_to_record_type(item: &HashMap<String, AttributeValue>) -> RecordTypeJson {
-        RecordTypeJson {
+    fn map_item_to_record_type(item: &HashMap<String, AttributeValue>) -> RecordTypeData {
+        RecordTypeData {
             name: item
                 .get("name")
                 .and_then(|v| v.as_s().ok())
@@ -133,7 +133,7 @@ impl DbService {
 
     pub async fn get_all_record_types(
         &self,
-    ) -> Result<Vec<RecordTypeJson>, PersistenceServiceError> {
+    ) -> Result<Vec<RecordTypeData>, PersistenceServiceError> {
         let resp = self.client.scan().table_name("types").send().await?;
         let record_types = resp
             .items()
@@ -146,7 +146,7 @@ impl DbService {
     pub async fn get_record_type(
         &self,
         name: &str,
-    ) -> Result<RecordTypeJson, PersistenceServiceError> {
+    ) -> Result<RecordTypeData, PersistenceServiceError> {
         let request = self
             .client
             .get_item()
@@ -162,11 +162,11 @@ impl DbService {
         }
     }
 
-    fn get_key_name(rt: &RecordTypeJson) -> String {
+    fn get_key_name(rt: &RecordTypeData) -> String {
         format!("{}-id", rt.name)
     }
 
-    fn get_composite_key_value(f: &FactJson) -> String {
+    fn get_composite_key_value(f: &FactData) -> String {
         let map = f.to_all_values_map();
         f.type_
             .id_fields
@@ -179,7 +179,7 @@ impl DbService {
 
     pub async fn put_record_type(
         &self,
-        rt: &RecordTypeJson,
+        rt: &RecordTypeData,
     ) -> Result<(), PersistenceServiceError> {
         self.create_table_if_not_exists("types", "name").await?;
 
@@ -234,7 +234,7 @@ impl DbService {
         Ok(())
     }
 
-    pub async fn put_fact(&self, fact: FactJson) -> Result<(), PersistenceServiceError> {
+    pub async fn put_fact(&self, fact: FactData) -> Result<(), PersistenceServiceError> {
         let mut request = self
             .client
             .put_item()
@@ -260,7 +260,7 @@ impl DbService {
         Ok(())
     }
 
-    pub async fn get_all_facts(&self, rt: &RecordTypeJson) -> Result<Vec<FactJson>, Error> {
+    pub async fn get_all_facts(&self, rt: &RecordTypeData) -> Result<Vec<FactData>, Error> {
         let resp = self
             .client
             .scan()
@@ -272,7 +272,7 @@ impl DbService {
 
         let facts = items
             .into_iter()
-            .map(|item| FactJson {
+            .map(|item| FactData {
                 type_: rt.clone(),
                 values: rt
                     .all_fields()
