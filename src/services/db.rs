@@ -326,7 +326,6 @@ impl DbService {
     }
 
     pub async fn update_knowledge_base(&self) -> Result<(), DbServiceError> {
-        info!("Updating knowledge base...");
         let rts = self.get_all_record_types().await?;
 
         let mut rt_facts = Vec::new();

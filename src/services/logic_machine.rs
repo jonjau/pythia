@@ -67,6 +67,7 @@ impl LogicMachineService {
     async fn load_lm_types_and_facts(
         db: &DbService,
     ) -> Result<(String, Vec<RecordType>), LogicMachineServiceError> {
+        db.update_knowledge_base().await?;
         let kb = db.get_knowledge_base().await?;
         let program = kb.get_pythia_program_with_facts_inline();
         let rts = kb
@@ -87,32 +88,43 @@ impl LogicMachineService {
     pub async fn get_record_type(
         &self,
         fact_type: impl Into<String>,
-    ) -> LogicMachineResult<Arc<RecordType>> {
-        self.lm_actor
+    ) -> Result<Arc<RecordType>, LogicMachineServiceError> {
+        self.reload().await?;
+        Ok(self
+            .lm_actor
             .read()
             .await
             .send_query(GetRecordTypeQuery {
                 fact_type: fact_type.into(),
             })
-            .await
+            .await?)
     }
 
     /// Retrieves all record types known by the logic machine.
-    pub async fn get_all_record_types(&self) -> LogicMachineResult<Vec<Arc<RecordType>>> {
-        self.lm_actor
+    pub async fn get_all_record_types(
+        &self,
+    ) -> Result<Vec<Arc<RecordType>>, LogicMachineServiceError> {
+        self.reload().await?;
+        Ok(self
+            .lm_actor
             .read()
             .await
             .send_query(GetAllRecordTypesQuery)
-            .await
+            .await?)
     }
 
     /// Gets all facts of a given record type.
-    pub async fn get_all_facts(&self, fact_type: String) -> LogicMachineResult<Vec<Fact>> {
-        self.lm_actor
+    pub async fn get_all_facts(
+        &self,
+        fact_type: String,
+    ) -> Result<Vec<Fact>, LogicMachineServiceError> {
+        self.reload().await?;
+        Ok(self
+            .lm_actor
             .read()
             .await
             .send_query(GetAllFactsQuery { fact_type })
-            .await
+            .await?)
     }
 
     /// Gets facts matching a goal for a specific target record type.
@@ -120,12 +132,14 @@ impl LogicMachineService {
         &self,
         goal: Goal,
         target_rt: Arc<RecordType>,
-    ) -> LogicMachineResult<Vec<Fact>> {
-        self.lm_actor
+    ) -> Result<Vec<Fact>, LogicMachineServiceError> {
+        self.reload().await?;
+        Ok(self
+            .lm_actor
             .read()
             .await
             .send_query(GetFactsQuery { goal, target_rt })
-            .await
+            .await?)
     }
 }
 
