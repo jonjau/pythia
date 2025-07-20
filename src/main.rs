@@ -42,11 +42,13 @@ async fn main() {
         "http://host.docker.internal:8000".into(),
     )
     .await;
-    db.generate_data_files().await.expect("Failed to generate data files");
+    db.create_record_types_table_if_not_exist().await.expect("Failed to create record types table");
+    db.generate_data_files()
+        .await
+        .expect("Failed to generate data files");
 
     // Load knowledge base in Prolog
-    let lm = LogicMachineService::new()
-        .expect("Failed to start LogicMachine service");
+    let lm = LogicMachineService::new().expect("Failed to start LogicMachine service");
 
     // Initialise Pythia application state and services
     let state = AppState {

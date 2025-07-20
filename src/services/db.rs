@@ -11,9 +11,45 @@ use log::info;
 
 use crate::{
     models::{fact::FactData, record_type::RecordTypeData},
-    services::persist::{PersistenceService, PersistenceServiceError},
     utils::codegen,
 };
+
+use aws_sdk_dynamodb::operation::{
+    create_table::CreateTableError, delete_item::DeleteItemError, get_item::GetItemError,
+    put_item::PutItemError, scan::ScanError,
+};
+
+use crate::utils::codegen::CodeGenError;
+
+#[derive(thiserror::Error, Debug)]
+pub enum DbServiceError {
+    #[error("DynamoDB SDK Error: {0}")]
+    AwsDynamoDbError(#[from] aws_sdk_dynamodb::Error),
+
+    #[error("DynamoDB SDK BuildError: {0}")]
+    AwsDynamoDbBuildError(#[from] aws_sdk_dynamodb::error::BuildError),
+
+    #[error("DynamoDB CreateTableError: {0}")]
+    AwsDynamoDbCreateTableError(#[from] aws_sdk_dynamodb::error::SdkError<CreateTableError>),
+
+    #[error("DynamoDB ScanError: {0}")]
+    AwsDynamoDbScanError(#[from] aws_sdk_dynamodb::error::SdkError<ScanError>),
+
+    #[error("DynamoDB GetItemError: {0}")]
+    AwsDynamoDbGetItemError(#[from] aws_sdk_dynamodb::error::SdkError<GetItemError>),
+
+    #[error("DynamoDB PutItemError: {0}")]
+    AwsDynamoDbPutItemError(#[from] aws_sdk_dynamodb::error::SdkError<PutItemError>),
+
+    #[error("DynamoDB DeleteItemError: {0}")]
+    AwsDynamoDbDeleteItemError(#[from] aws_sdk_dynamodb::error::SdkError<DeleteItemError>),
+
+    #[error("Code generation error: {0}")]
+    CodeGenError(#[from] CodeGenError),
+
+    #[error("Failed to find record type: {0}")]
+    RecordTypeNotFound(String),
+}
 
 #[derive(Clone)]
 pub struct DbService {
@@ -36,11 +72,15 @@ impl DbService {
         DbService { client }
     }
 
-    pub async fn create_table_if_not_exists(
+    pub async fn create_record_types_table_if_not_exist(&self) -> Result<(), DbServiceError> {
+        self.create_table_if_not_exists("types", "rt_name").await
+    }
+
+    async fn create_table_if_not_exists(
         &self,
         table: &str,
         key: &str,
-    ) -> Result<(), PersistenceServiceError> {
+    ) -> Result<(), DbServiceError> {
         if self.table_exists(table).await? {
             return Ok(());
         }
@@ -131,9 +171,7 @@ impl DbService {
         }
     }
 
-    pub async fn get_all_record_types(
-        &self,
-    ) -> Result<Vec<RecordTypeData>, PersistenceServiceError> {
+    pub async fn get_all_record_types(&self) -> Result<Vec<RecordTypeData>, DbServiceError> {
         let resp = self.client.scan().table_name("types").send().await?;
         let record_types = resp
             .items()
@@ -143,10 +181,7 @@ impl DbService {
         Ok(record_types)
     }
 
-    pub async fn get_record_type(
-        &self,
-        name: &str,
-    ) -> Result<RecordTypeData, PersistenceServiceError> {
+    pub async fn get_record_type(&self, name: &str) -> Result<RecordTypeData, DbServiceError> {
         let request = self
             .client
             .get_item()
@@ -158,7 +193,7 @@ impl DbService {
         if let Some(item) = resp.item() {
             Ok(Self::map_item_to_record_type(item))
         } else {
-            Err(PersistenceServiceError::RecordTypeNotFound(name.to_owned()))
+            Err(DbServiceError::RecordTypeNotFound(name.to_owned()))
         }
     }
 
@@ -177,12 +212,7 @@ impl DbService {
             .join("-")
     }
 
-    pub async fn put_record_type(
-        &self,
-        rt: &RecordTypeData,
-    ) -> Result<(), PersistenceServiceError> {
-        self.create_table_if_not_exists("types", "name").await?;
-
+    pub async fn put_record_type(&self, rt: &RecordTypeData) -> Result<(), DbServiceError> {
         let composite_key = Self::get_key_name(&rt);
 
         let name = AttributeValue::S(rt.name.clone());
@@ -221,7 +251,7 @@ impl DbService {
         Ok(())
     }
 
-    pub async fn delete_record_type(&self, name: &str) -> Result<(), PersistenceServiceError> {
+    pub async fn delete_record_type(&self, name: &str) -> Result<(), DbServiceError> {
         let request = self
             .client
             .delete_item()
@@ -234,7 +264,7 @@ impl DbService {
         Ok(())
     }
 
-    pub async fn put_fact(&self, fact: &FactData) -> Result<(), PersistenceServiceError> {
+    pub async fn put_fact(&self, fact: &FactData) -> Result<(), DbServiceError> {
         let mut request = self
             .client
             .put_item()
@@ -245,10 +275,9 @@ impl DbService {
             );
 
         info!(
-            "Putting fact: {:?}, key_name: {:?}, key_value: {:?}",
-            fact,
-            Self::get_key_name(&fact.type_),
-            AttributeValue::S(Self::get_composite_key_value(fact))
+            "Putting fact for '{}', key: {}",
+            fact.type_.name,
+            Self::get_composite_key_value(fact)
         );
 
         for (key, value) in fact.to_all_values_map().into_iter() {
@@ -290,7 +319,7 @@ impl DbService {
         Ok(facts)
     }
 
-    pub async fn generate_data_files(&self) -> Result<(), PersistenceServiceError> {
+    pub async fn generate_data_files(&self) -> Result<(), DbServiceError> {
         let record_types = self
             .get_all_record_types()
             .await?
@@ -306,11 +335,5 @@ impl DbService {
             codegen::generate_fact_programs(&rt, facts)?;
         }
         Ok(())
-    }
-}
-
-impl PersistenceService for DbService {
-    async fn create_record_types_table(&self) -> Result<(), PersistenceServiceError> {
-        self.create_table_if_not_exists("types", "rt_name").await
     }
 }
