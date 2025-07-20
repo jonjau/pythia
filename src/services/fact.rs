@@ -1,12 +1,10 @@
-use std::collections::HashMap;
-use std::io::{self};
-
 use crate::models::fact::{Fact, FactTerm};
 use crate::models::logic_machine::LogicMachineError;
 use crate::models::record_type::RecordTypeError;
 use crate::services::db::DbService;
 use crate::services::logic_machine::LogicMachineService;
 use crate::services::persist::PersistenceServiceError;
+use std::collections::HashMap;
 
 /// Errors that can occur during getting and fetching facts from the LogicMachine.
 #[derive(thiserror::Error, Debug)]
@@ -15,8 +13,6 @@ pub enum FactServiceError {
     FactError(#[from] LogicMachineError),
     #[error("RecordType error: {0}")]
     RecordTypeError(#[from] RecordTypeError),
-    #[error("File error: {0}")]
-    IoError(#[from] io::Error),
     #[error("Persistence error: {0}")]
     PersistenceError(#[from] PersistenceServiceError),
 }
@@ -95,9 +91,6 @@ impl FactService {
 
     /// Adds multiple facts to a given record type.
     ///
-    /// Each fact is also written to a `.pl` file under `data/{rt_name}.pl`
-    /// along with a timestamped comment.
-    ///
     /// # Arguments
     ///
     /// * `rt_name` - The name of the record type.
@@ -109,49 +102,37 @@ impl FactService {
     ///
     /// # Errors
     ///
-    /// Returns an error if file I/O, record type lookup, or fact creation fails.
+    /// Returns an error if record type lookup, or fact creation fails.
     pub async fn add_facts(
         &self,
         rt_name: &str,
         named_valuess: Vec<HashMap<String, String>>,
     ) -> Result<Vec<Fact>, FactServiceError> {
-        // let mut file = OpenOptions::new()
-        //     .append(true)
-        //     .create(true)
-        //     .open(format!("data/{}.pl", &rt_name))?;
-
-        // let iso_time = chrono::Utc::now().to_rfc3339();
-        // writeln!(file, "\n% [{}]", iso_time)?;
-
         let mut facts = Vec::new();
 
         for values in named_valuess {
-            let rt: std::sync::Arc<crate::models::record_type::RecordType> =
-                self.lm.get_record_type(rt_name).await?;
-
-            // let f = self.add_fact_to_lm(&rt_name, values).await?;
+            let rt = self.lm.get_record_type(rt_name).await?;
             let named_values = values
-            .into_iter()
-            .map(|(k, v)| {
-                (
-                    format!("{}0_{}", rt.name.to_uppercase(), k),
-                    FactTerm::String(v),
-                )
-            })
-            .collect::<HashMap<_, _>>();
+                .into_iter()
+                .map(|(k, v)| {
+                    (
+                        format!("{}0_{}", rt.name.to_uppercase(), k),
+                        FactTerm::String(v),
+                    )
+                })
+                .collect::<HashMap<_, _>>();
 
             let f = rt.to_fact(&named_values.into())?;
 
-            self.db.put_fact(f.clone().into()).await?;
+            self.db.put_fact(&f.clone().into()).await?;
 
-            // writeln!(file, "{}.", f.to_string())?;
             facts.push(f);
         }
 
         Ok(facts)
     }
 
-    /// Adds a single fact for the given record type, without file output.
+    /// Adds a single fact for the given record type
     ///
     /// # Arguments
     ///
@@ -172,30 +153,5 @@ impl FactService {
     ) -> Result<Fact, FactServiceError> {
         let f = self.add_facts(rt_name, vec![named_values]).await?[0].clone();
         Ok(f)
-    }
-
-    /// Adds a single fact to the logic machine, without file output.
-    async fn add_fact_to_lm(
-        &self,
-        rt_name: &str,
-        named_values: HashMap<String, String>,
-    ) -> Result<Fact, FactServiceError> {
-        let rt: std::sync::Arc<crate::models::record_type::RecordType> =
-            self.lm.get_record_type(rt_name).await?;
-
-        let named_values = named_values
-            .into_iter()
-            .map(|(k, v)| {
-                (
-                    format!("{}0_{}", rt.name.to_uppercase(), k),
-                    FactTerm::String(v),
-                )
-            })
-            .collect::<HashMap<_, _>>();
-
-        let fact = rt.to_fact(&named_values.into())?;
-
-        let res = self.lm.add_fact(fact).await?;
-        Ok(res)
     }
 }

@@ -147,20 +147,6 @@ impl LogicMachine {
             .collect())
     }
 
-    /// Asserts a fact into the Prolog engine.
-    ///
-    /// # Errors
-    ///
-    /// Returns a `PrologError` if the assertion fails.
-    pub fn add_fact(&mut self, f: Fact) -> LogicMachineResult<Fact> {
-        info!("Asserting fact: {}", f);
-        self.machine
-            .run_query(format!(r#"assertz({})."#, f.to_string()))
-            .map_err(LogicMachineError::PrologError)?;
-
-        Ok(f)
-    }
-
     /// Fetches all known facts of the given type from the engine.
     pub fn fetch_all(&mut self, rt: Arc<RecordType>) -> LogicMachineResult<Vec<Fact>> {
         self.fetch(Arc::clone(&rt).to_most_general_goal(), Arc::clone(&rt))
