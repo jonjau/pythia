@@ -3,6 +3,9 @@
 :- use_module(library(clpz)).
 :- use_module(library(lists)).
 
+:- discontiguous change_step/5.
+:- discontiguous change_path/6.
+
 change_step(RType, Ctx, Id, Vals1, Vals2) :-
     record(RType, Ctx, _, _, SeqNum1, Id, Vals1),
     record(RType, Ctx, _, _, SeqNum2, Id, Vals2),
