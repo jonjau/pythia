@@ -1,9 +1,10 @@
-:- use_module('./data/dimlink.pl').
-:- use_module('./data/transaction.pl').
-:- use_module('./data/edge.pl').
-:- use_module('./data/arc.pl').
+:- use_module('data/dimlink.pl').
+:- use_module('data/transaction.pl').
 :- use_module(library(clpz)).
 :- use_module(library(lists)).
+
+:- discontiguous(change_step/5).
+:- discontiguous(change_path/6).
 
 change_step(RType, Ctx, Id, Vals1, Vals2) :-
     record(RType, Ctx, _, _, SeqNum1, Id, Vals1),
@@ -25,33 +26,27 @@ change_path(RType, Ctx, Id, Vals1, Vals2, [Step|Steps]) :-
 
 record(
     "dimlink",
-    Context, EditTime, RecStatus, SeqNum,
+    Context,
+    EditTime,
+    RecStatus,
+    SeqNum,
     [Id],
     [DRef, IRef, BegPeriod, EndPeriod]
 ) :-
-dimlink(Id, DRef, IRef, BegPeriod, EndPeriod, Context, EditTime, RecStatus, SeqNum).
+dimlink(
+    Id, DRef, IRef, BegPeriod, EndPeriod, Context, EditTime, RecStatus, SeqNum
+).
 
 record(
     "transaction",
-    Context, EditTime, RecStatus, SeqNum,
+    Context,
+    EditTime,
+    RecStatus,
+    SeqNum,
     [Id1, Id2],
     [DRef, IRef, BegPeriod, EndPeriod]
 ) :-
-transaction(Id1, Id2, DRef, IRef, BegPeriod, EndPeriod, Context, EditTime, RecStatus, SeqNum).
-
-record(
-    "edge",
-    "NONE",
-    ["NONE"],
-    [X, Y]
-) :-
-edge("NONE", X, Y, "NONE").
-
-record(
-    "arc",
-    "NONE",
-    ["NONE"],
-    [X, Y]
-) :-
-arc("NONE", X, Y, "NONE").
+transaction(
+    Id1, Id2, DRef, IRef, BegPeriod, EndPeriod, Context, EditTime, RecStatus, SeqNum
+).
 

@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::utils::tracking::IdContext;
 
@@ -50,15 +50,13 @@ pub struct RecordType {
 
 /// Represents a deserializable version of a `RecordType`,
 /// used when loading from JSON config or data files.
-#[derive(Debug, Deserialize)]
-pub struct RecordTypeJson {
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RecordTypeData {
     pub name: String,
-    pub display_name: String,
     pub id_fields: Vec<String>,
     pub data_fields: Vec<String>,
     pub metadata_fields: Vec<String>,
 }
-
 
 /// Builder pattern for constructing and validating `RecordType` instances.
 pub struct RecordTypeBuilder {
@@ -331,5 +329,27 @@ impl RecordType {
         }
 
         Ok(Fact::new(self, complete_values))
+    }
+}
+
+impl From<Arc<RecordType>> for RecordTypeData {
+    fn from(rt: Arc<RecordType>) -> Self {
+        RecordTypeData {
+            name: rt.name.clone(),
+            id_fields: rt.id_fields.clone(),
+            data_fields: rt.data_fields.clone(),
+            metadata_fields: rt.metadata_fields.clone(),
+        }
+    }
+}
+
+impl RecordTypeData {
+    pub fn all_fields(&self) -> Vec<String> {
+        self.id_fields
+            .iter()
+            .chain(self.data_fields.iter())
+            .chain(self.metadata_fields.iter())
+            .cloned()
+            .collect()
     }
 }

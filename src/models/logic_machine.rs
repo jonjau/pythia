@@ -12,7 +12,7 @@ use crate::models::record_type::{RecordType, RecordTypeBuilder};
 /// Represents errors that may occur while interacting with the logic engine.
 #[derive(thiserror::Error, Debug)]
 pub enum LogicMachineError {
-    /// Query returned an unsupported resolution 
+    /// Query returned an unsupported resolution
     #[error("Unexpected query resolution")]
     UnexpectedQueryResolution,
 
@@ -57,9 +57,6 @@ impl LogicMachine {
     ///
     /// Panics if any system record type fails to build.
     pub fn new<T: Into<String>>(program: T, record_types: Vec<RecordType>) -> LogicMachine {
-        let mut machine = Machine::new_lib();
-        machine.load_module_string("module0", program.into());
-
         let system_rts = vec![
             RecordTypeBuilder::new("change_step", vec!["RType", "Ctx", "Id", "Vals1", "Vals2"]),
             RecordTypeBuilder::new(
@@ -79,11 +76,22 @@ impl LogicMachine {
             .map(|rt| (rt.name.clone(), rt))
             .collect::<HashMap<_, _>>();
 
+        let mut machine = Machine::new_lib();
+        machine.load_module_string("module0", program.into());
+
         LogicMachine {
             system_record_types: system_rts,
             record_types: rts,
             machine,
         }
+    }
+
+    pub fn load_program<T: Into<String>>(&mut self, program: T, record_types: Vec<RecordType>) {
+        self.record_types = record_types
+            .into_iter()
+            .map(|rt| (rt.name.clone(), rt))
+            .collect::<HashMap<_, _>>();
+        self.machine.load_module_string("module0", program.into());
     }
 
     /// Parses a `QueryResolution` into `Fact` instances for a given record type.
@@ -145,20 +153,6 @@ impl LogicMachine {
             .values()
             .map(|record| Arc::new(record.clone()))
             .collect())
-    }
-
-    /// Asserts a fact into the Prolog engine.
-    ///
-    /// # Errors
-    ///
-    /// Returns a `PrologError` if the assertion fails.
-    pub fn add_fact(&mut self, f: Fact) -> LogicMachineResult<Fact> {
-        info!("Asserting fact: {}", f);
-        self.machine
-            .run_query(format!(r#"assertz({})."#, f.to_string()))
-            .map_err(LogicMachineError::PrologError)?;
-
-        Ok(f)
     }
 
     /// Fetches all known facts of the given type from the engine.

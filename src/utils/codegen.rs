@@ -1,41 +1,29 @@
 use std::{
     fs,
-    io::{self, Write},
-    path,
+    io::{self},
 };
 
 use askama::Template;
-use serde_json::Value;
 
-#[derive(Clone)]
-struct RecordType {
-    name: String,
-    id_fields: String,
-    data_fields: String,
-    metadata_fields: String,
-    n_fields: usize,
-}
+use crate::models::{fact::FactData, record_type::RecordTypeData};
 
 #[derive(Template)]
 #[template(path = "prolog/fact.pl")]
-struct FactTemplate {
-    record_type: RecordType,
+struct FactTemplate<'a> {
+    record_type: &'a RecordTypeData,
+    facts: Vec<FactData>,
 }
 
 #[derive(Template)]
 #[template(path = "prolog/pythia.pl")]
 struct PythiaTemplate {
     import_paths: Vec<String>,
-    record_types: Vec<RecordType>,
+    record_types: Vec<RecordTypeData>,
 }
 
 /// Errors that can occur during Prolog code generation.
 #[derive(thiserror::Error, Debug)]
 pub enum CodeGenError {
-    #[error("Field not found in type definition: {0}")]
-    FieldNotFound(String),
-    #[error("Field is of invalid type: {0}")]
-    InvalidFieldType(String),
     #[error("IO Error: {0}")]
     IoError(#[from] io::Error),
     #[error("Invalid JSON format: {0}")]
@@ -44,110 +32,133 @@ pub enum CodeGenError {
     FailedToRender(#[from] askama::Error),
 }
 
-/// Generates and writes to Prolog files for each well-defined record type in `data/types.json`:
+/// Represents a single item in the knowledge base, containing a file path and its contents.
+pub struct KnowledgeBaseItem {
+    pub file_path: String,
+    pub contents: String,
+}
+
+/// Represents a knowledge base containing Prolog code for record type definitions,
+/// the Pythia program, and facts for various record types.
+pub struct KnowledgeBase {
+    pub record_type_definitions: KnowledgeBaseItem,
+    pub pythia_program: KnowledgeBaseItem,
+    pub fact_programs: Vec<KnowledgeBaseItem>,
+}
+
+impl KnowledgeBase {
+    /// Creates a new `KnowledgeBase` instance with the provided record type definitions,
+    /// Pythia program, and a list of fact programs.
+    pub fn new(
+        record_type_definitions: KnowledgeBaseItem,
+        pythia_program: KnowledgeBaseItem,
+        fact_programs: Vec<KnowledgeBaseItem>,
+    ) -> Self {
+        Self {
+            record_type_definitions,
+            pythia_program,
+            fact_programs,
+        }
+    }
+
+    /// Returns the main Pythia program as a string, with all fact programs inlined.
+    pub fn get_pythia_program_with_facts_inline(&self) -> String {
+        let mut replaced = self.pythia_program.contents.clone();
+
+        for fact_program in &self.fact_programs {
+            replaced = replaced.replace(
+                &format!(":- use_module('{}').", fact_program.file_path),
+                &fact_program.contents,
+            );
+        }
+
+        replaced
+    }
+
+    /// Returns the record type definitions JSON as a vector of `RecordTypeData`.
+    pub fn get_record_types(&self) -> Result<Vec<RecordTypeData>, CodeGenError> {
+        Ok(serde_json::from_str(
+            &self.record_type_definitions.contents,
+        )?)
+    }
+}
+
+const TYPES_JSON_PATH: &str = "data/types.json";
+const PYTHIA_PROGRAM_PATH: &str = "data/internal/pythia.pl";
+
+/// Generates file_path/content pairs in the form of a knowledge base for Prolog.
 ///
-/// - `data/<record type>.pl` for the facts of each record type.
-/// - `data/internal/pythia.pl` for state change predicates.
+/// - `data/types.json` for record type defitions and main 'Pythia' prolog program for state change predicates.
+/// - `data/internal/pythia.pl` for state change predicates (Askama template).
+/// - `data/<record type>.pl` for the facts of the given record type (Askama template).
 ///
-/// Both kinds of Prolog files are described by Askama templates.
-///
-/// # Errors
 /// Returns an error if this fails to read/create files, could not render the Prolog template, or
-/// finds a malformed record type or a non-string field definition in the JSON.
-pub fn generate_prolog_programs() -> Result<(), CodeGenError> {
-    let record_types = read_record_types_from_json("data/types.json")?;
+/// encounters invalid JSON.
+pub fn generate_knowledge_base(
+    rts: &Vec<RecordTypeData>,
+    rt_facts: &Vec<(RecordTypeData, Vec<FactData>)>,
+) -> Result<KnowledgeBase, CodeGenError> {
+    let record_type_definitions = KnowledgeBaseItem {
+        file_path: TYPES_JSON_PATH.to_owned(),
+        contents: serde_json::to_string_pretty(rts)?,
+    };
+    let pythia_program = KnowledgeBaseItem {
+        file_path: PYTHIA_PROGRAM_PATH.to_owned(),
+        contents: PythiaTemplate {
+            import_paths: get_import_paths(rts),
+            record_types: rts.to_vec(),
+        }
+        .render()?,
+    };
 
-    let pythia_program = PythiaTemplate {
-        import_paths: get_import_paths(&record_types),
-        record_types: record_types.clone(),
-    }
-    .render()?;
-
-    fs::write("data/internal/pythia.pl", pythia_program)?;
-
-    let record_types_with_no_prolog_file = record_types.iter().filter(|record_type| {
-        !fs::exists(get_fact_program_file_path(record_type)).is_ok_and(|e| e)
-    });
-
-    for record_type in record_types_with_no_prolog_file {
-        let mut file = fs::File::create(get_fact_program_file_path(record_type))?;
-
-        let fact_program = (FactTemplate {
-            record_type: record_type.clone(),
-        })
-        .render()?;
-
-        file.write_all(fact_program.as_bytes())?;
-    }
-
-    Ok(())
-}
-
-fn get_fact_program_file_path(record_type: &RecordType) -> String {
-    format!("data/{}.pl", record_type.name)
-}
-
-fn read_record_types_from_json(file_path: &str) -> Result<Vec<RecordType>, CodeGenError> {
-    let json_data = fs::read_to_string(path::Path::new(file_path))?;
-    let objects: Vec<serde_json::Value> = serde_json::from_str(&json_data)?;
-
-    Ok(objects
+    let fact_programs = rt_facts
         .iter()
-        .map(|o| {
-            let name = o
-                .get("name")
-                .ok_or(CodeGenError::FieldNotFound("name".to_owned()))?
-                .as_str()
-                .ok_or(CodeGenError::InvalidFieldType("name".to_owned()))?;
-
-            let id_fields = parse_array_field(o, "id_fields")?;
-            let id_fields = id_fields
-                .is_empty()
-                .then(|| vec!["\"NONE\""])
-                .unwrap_or(id_fields);
-
-            let data_fields = parse_array_field(o, "data_fields")?;
-            let data_fields = data_fields
-                .is_empty()
-                .then(|| vec!["\"NONE\""])
-                .unwrap_or(data_fields);
-
-            let metadata_fields = parse_array_field(o, "metadata_fields")?;
-            let metadata_fields = metadata_fields
-                .is_empty()
-                .then(|| vec!["\"NONE\""])
-                .unwrap_or(metadata_fields);
-
-            Ok(RecordType {
-                name: name.to_string(),
-                id_fields: id_fields.join(", "),
-                data_fields: data_fields.join(", "),
-                metadata_fields: metadata_fields.join(", "),
-                n_fields: id_fields.len() + data_fields.len() + metadata_fields.len(),
+        .map(|(rt, fs)| {
+            Ok(KnowledgeBaseItem {
+                file_path: get_fact_program_file_path(rt),
+                contents: FactTemplate {
+                    record_type: rt,
+                    facts: fs.to_vec(),
+                }
+                .render()?,
             })
         })
-        .collect::<Result<Vec<_>, CodeGenError>>()?)
+        .collect::<Result<Vec<_>, crate::utils::codegen::CodeGenError>>()?;
+
+    Ok(KnowledgeBase::new(
+        record_type_definitions,
+        pythia_program,
+        fact_programs,
+    ))
 }
 
-fn get_import_paths(record_types: &Vec<RecordType>) -> Vec<String> {
+fn get_import_paths(record_types: &Vec<RecordTypeData>) -> Vec<String> {
     record_types
         .iter()
-        .map(|rt| format!("'./data/{}.pl'", &rt.name))
+        .map(get_fact_program_file_path)
         .collect::<Vec<_>>()
 }
 
-fn parse_array_field<'a>(o: &'a Value, field_name: &str) -> Result<Vec<&'a str>, CodeGenError> {
-    let array = o
-        .get(field_name)
-        .ok_or_else(|| CodeGenError::FieldNotFound(field_name.to_owned()))?
-        .as_array()
-        .ok_or_else(|| CodeGenError::InvalidFieldType(field_name.to_owned()))?;
+/// Returns the file path in the knowledge base for the Prolog program file for a given record type.
+pub fn get_fact_program_file_path(record_type: &RecordTypeData) -> String {
+    format!("data/{}.pl", record_type.name)
+}
 
-    array
-        .iter()
-        .map(|v| {
-            v.as_str()
-                .ok_or_else(|| CodeGenError::InvalidFieldType(field_name.to_owned()))
-        })
-        .collect()
+/// Exports the knowledge base to the file system.
+/// This will create the necessary directories and write the record type definitions,
+/// Pythia program, and fact programs to their respective files.
+/// Returns an error if it fails to create directories or write files.
+pub fn export_knowledge_base(kb: &KnowledgeBase) -> Result<(), CodeGenError> {
+    fs::create_dir_all("data/internal")?;
+    fs::write(
+        &kb.record_type_definitions.file_path,
+        &kb.record_type_definitions.contents,
+    )?;
+    fs::write(&kb.pythia_program.file_path, &kb.pythia_program.contents)?;
+
+    for fact_program in &kb.fact_programs {
+        fs::write(&fact_program.file_path, &fact_program.contents)?;
+    }
+
+    Ok(())
 }

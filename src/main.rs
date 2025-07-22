@@ -14,6 +14,8 @@ use services::{
     fact::FactService, logic_machine::LogicMachineService, state_change::StateChangeService,
 };
 
+use crate::{routes::{knowledge_base::knowledge_base_routes, record_type::record_type_routes}, services::db::DbService};
+
 /// Shared application state used by all handlers and services.
 ///
 /// This includes:
@@ -22,47 +24,49 @@ use services::{
 /// - `StateChangeService`: Handles state change operations.
 #[derive(Clone)]
 pub struct AppState {
+    db: DbService,
     lm: LogicMachineService,
     facts: FactService,
     state_changes: StateChangeService,
 }
 
-
 /// Main entry point of the Pythia application.
-///
-/// This function:
-/// - Initializes logging.
-/// - Generates necessary Prolog programs at start-up.
-/// - Initializes all core services.
-/// - Builds the Axum router and mounts static files, routes, and handlers.
-/// - Starts the HTTP server on port 3000.
 #[tokio::main]
 async fn main() {
     env_logger::init();
     info!("Starting pythia...");
 
-    // Generate logic programs (Prolog code) before launching
-    utils::codegen::generate_prolog_programs().expect("Failed to generate prolog programs");
+    // Generates knowledge base from persistence layer (i.e. DB) at start-up.
+    let db = DbService::new(
+        "us-west-2".into(),
+        "http://host.docker.internal:8000".into(),
+    )
+    .await;
+    db.create_essential_tables_if_not_exist().await.expect("Failed to create essential tables");
+    db.update_knowledge_base().await.expect("Failed to update knowledge base");
 
-    // Load and initialize logic machine with Prolog code and type definitions
-    let program_data =
-        std::fs::read_to_string("data/internal/pythia.pl").expect("Failed to read pythia.pl");
-    let lm = LogicMachineService::new(&program_data, "data/types.json")
-        .expect("Failed to start LogicMachine service");
+    // Load knowledge base in Prolog
+    let lm = LogicMachineService::new(db.clone()).await.expect("Failed to start LogicMachine service");
 
     // Initialise Pythia application state and services
     let state = AppState {
+        db: db.clone(),
         lm: lm.clone(),
-        facts: FactService::new(lm.clone()),
+        facts: FactService::new(lm.clone(), db.clone()),
         state_changes: StateChangeService::new(lm.clone()),
     };
 
-    // Build the Axum router
+    // Build the Axum router, mount static files, routes, and handlers
     let r = Router::new()
-        .nest_service("/static", axum::routing::get_service(ServeDir::new("static")))
+        .nest_service(
+            "/static",
+            axum::routing::get_service(ServeDir::new("static")),
+        )
         .route("/", get(get_inquiries))
         .merge(state_change_routes())
         .merge(fact_routes())
+        .merge(record_type_routes())
+        .merge(knowledge_base_routes())
         .with_state(state);
 
     // Run the HTTP server
