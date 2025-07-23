@@ -30,7 +30,13 @@ pub struct FactTableData {
     ///
     /// Each inner vector should have the same length as `columns`, where
     /// `rows[i][j]` is the value for column `columns[j]` in row `i`.
-    pub rows: Vec<Vec<String>>,
+    pub rows: Vec<FactTableRow>,
+}
+
+/// Represents a single row in the fact table.
+pub struct FactTableRow {
+    pub id: String,
+    pub values: Vec<String>,
 }
 
 /// A high-level wrapper around the [`LogicMachineService`] for working with fact tables.
@@ -69,18 +75,15 @@ impl FactService {
     ///
     /// Returns an error if the record type does not exist or if fact retrieval fails.
     pub async fn get_facts(&self, rt_name: String) -> Result<FactTableData, FactServiceError> {
-        let facts = self.lm.get_all_facts(rt_name.clone()).await?;
+        let rt = self.db.get_record_type(&rt_name).await?;
+        let facts = self.db.get_all_facts(&rt).await?;
 
-        let rt = self.lm.get_record_type(rt_name).await?;
         let columns = rt.all_fields();
-
         let rows = facts
             .iter()
-            .map(|f| {
-                f.to_all_values()
-                    .into_iter()
-                    .map(|v| v.to_string())
-                    .collect::<Vec<_>>()
+            .map(|f| FactTableRow {
+                id: f.id.clone(),
+                values: f.values.iter().map(|v| v.trim_matches('\"').to_string()).collect(),
             })
             .collect::<Vec<_>>();
 
@@ -151,5 +154,17 @@ impl FactService {
     ) -> Result<Fact, FactServiceError> {
         let f = self.add_facts(rt_name, vec![named_values]).await?[0].to_owned();
         Ok(f)
+    }
+
+    /// Deletes a fact by its ID for a specific record type.
+    pub async fn delete_fact(
+        &self,
+        rt_name: &str,
+        fact_id: &str,
+    ) -> Result<FactTableData, FactServiceError> {
+        let rt = self.db.get_record_type(rt_name).await?;
+        self.db.delete_fact(&rt, fact_id).await?;
+        
+        self.get_facts(rt.name).await
     }
 }

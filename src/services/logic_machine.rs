@@ -106,19 +106,7 @@ impl LogicMachineService {
             .send_query(GetAllRecordTypesQuery)
             .await?)
     }
-
-    /// Gets all facts of a given record type.
-    pub async fn get_all_facts(
-        &self,
-        fact_type: String,
-    ) -> Result<Vec<Fact>, LogicMachineServiceError> {
-        self.reload().await?;
-        Ok(self
-            .lm_actor
-            .send_query(GetAllFactsQuery { fact_type })
-            .await?)
-    }
-
+    
     /// Gets facts matching a goal for a specific target record type.
     pub async fn get_facts(
         &self,
