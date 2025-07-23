@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use askama::Template;
 use axum::{
     extract::{Path, State},
-    routing::{get, post},
+    routing::{delete, get, post},
     Form, Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -20,6 +20,7 @@ pub fn fact_routes() -> Router<AppState> {
             "/:fact_type/facts/new",
             get(get_new_fact_form).delete(get_add_fact_button),
         )
+        .route("/:fact_type/facts/:fact_id", delete(delete_fact))
 }
 
 #[derive(Template)]
@@ -29,15 +30,18 @@ struct GetFactsTemplate {
     fact_table_data: FactTableData,
 }
 
-async fn get_facts(State(state): State<AppState>, Path(rt_name): Path<String>) -> GetFactsTemplate {
+async fn get_facts(
+    State(state): State<AppState>,
+    Path(fact_type): Path<String>,
+) -> GetFactsTemplate {
     let fact_table_data = state
         .facts
-        .get_facts(rt_name.clone())
+        .get_facts(fact_type.clone())
         .await
         .unwrap_or_default();
 
     GetFactsTemplate {
-        fact_type: rt_name,
+        fact_type,
         fact_table_data,
     }
 }
@@ -78,6 +82,7 @@ async fn get_add_fact_button(Path(rt_name): Path<String>) -> GetAddFactButtonTem
 #[derive(Template)]
 #[template(path = "fact/facts-table.html")]
 struct FactsTableTemplate {
+    fact_type: String,
     fact_table_data: FactTableData,
 }
 
@@ -91,9 +96,16 @@ async fn create_fact(
         .add_fact(&rt_name, f.clone())
         .await
         .expect(&format!("Failed to add fact for {}, {:?}", rt_name, f));
-    let fact_table_data = state.facts.get_facts(rt_name).await.unwrap_or_default();
+    let fact_table_data = state
+        .facts
+        .get_facts(rt_name.clone())
+        .await
+        .unwrap_or_default();
 
-    FactsTableTemplate { fact_table_data }
+    FactsTableTemplate {
+        fact_type: rt_name,
+        fact_table_data,
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -145,4 +157,18 @@ async fn create_fact_json(
         serde_json::to_value(payload)
             .expect("Failed to deserialise payload JSON in echo response."),
     )
+}
+
+async fn delete_fact(
+    State(state): State<AppState>,
+    Path((rt_name, fact_id)): Path<(String, String)>,
+) -> FactsTableTemplate {
+    FactsTableTemplate {
+        fact_type: rt_name.clone(),
+        fact_table_data: state
+            .facts
+            .delete_fact(&rt_name, &fact_id)
+            .await
+            .unwrap_or_default(),
+    }
 }

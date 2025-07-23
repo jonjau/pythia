@@ -203,24 +203,7 @@ impl DbService {
         }
     }
 
-    fn get_key_name(rt: &RecordTypeData) -> String {
-        format!("{}-id", rt.name)
-    }
-
-    fn get_composite_key_value(f: &FactData) -> String {
-        let map = f.to_all_values_map();
-        f.type_
-            .id_fields
-            .iter()
-            .chain(f.type_.metadata_fields.iter())
-            .map(|k| map.get(k).cloned().unwrap_or_default())
-            .collect::<Vec<_>>()
-            .join("-")
-    }
-
     pub async fn put_record_type(&self, rt: &RecordTypeData) -> Result<(), DbServiceError> {
-        let composite_key = Self::get_key_name(&rt);
-
         let name = AttributeValue::S(rt.name.clone());
         let id_fields = AttributeValue::L(
             rt.id_fields
@@ -251,8 +234,7 @@ impl DbService {
 
         let _ = request.send().await?;
 
-        self.create_table_if_not_exists(&rt.name, &composite_key)
-            .await?;
+        self.create_table_if_not_exists(&rt.name, "id").await?;
 
         Ok(())
     }
@@ -271,20 +253,15 @@ impl DbService {
     }
 
     pub async fn put_fact(&self, fact: &FactData) -> Result<(), DbServiceError> {
+        let uuid = uuid::Uuid::new_v4();
+
         let mut request = self
             .client
             .put_item()
             .table_name(fact.type_.name.clone())
-            .item(
-                Self::get_key_name(&fact.type_),
-                AttributeValue::S(Self::get_composite_key_value(fact)),
-            );
+            .item("id", AttributeValue::S(uuid.to_string()));
 
-        info!(
-            "Putting fact for '{}', key: {}",
-            fact.type_.name,
-            Self::get_composite_key_value(fact)
-        );
+        info!("Putting fact for '{}', key: {}", fact.type_.name, uuid);
 
         for (key, value) in fact.to_all_values_map().into_iter() {
             request = request.item(key, AttributeValue::S(value));
@@ -295,7 +272,11 @@ impl DbService {
         Ok(())
     }
 
-    pub async fn get_all_facts(&self, rt: &RecordTypeData) -> Result<Vec<FactData>, Error> {
+    /// Retrieves all facts for a given record type.
+    pub async fn get_all_facts(
+        &self,
+        rt: &RecordTypeData,
+    ) -> Result<Vec<FactData>, DbServiceError> {
         let resp = self
             .client
             .scan()
@@ -308,6 +289,11 @@ impl DbService {
         let facts = items
             .into_iter()
             .map(|item| FactData {
+                id: item
+                    .get("id")
+                    .and_then(|v| v.as_s().ok())
+                    .map(String::from)
+                    .unwrap_or_default(),
                 type_: rt.clone(),
                 values: rt
                     .all_fields()
@@ -343,6 +329,18 @@ impl DbService {
             self.update_knowledge_base_item(fact_program).await?;
         }
 
+        Ok(())
+    }
+
+    /// Deletes a fact by its ID for a specific record type.
+    pub async fn delete_fact(&self, rt: &RecordTypeData, fact_id: &str) -> Result<(), DbServiceError> {
+        let request = self
+            .client
+            .delete_item()
+            .table_name(rt.name.to_owned())
+            .key("id", AttributeValue::S(fact_id.to_owned()));
+
+        request.send().await?;
         Ok(())
     }
 

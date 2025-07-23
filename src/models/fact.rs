@@ -32,6 +32,7 @@ pub struct Fact {
 
 #[derive(Debug, Clone)]
 pub struct FactData {
+    pub id: String,
     pub type_: RecordTypeData,
     pub values: Vec<String>,
 }
@@ -248,6 +249,7 @@ impl FromStr for FactTerm {
 impl From<Fact> for FactData {
     fn from(fact: Fact) -> Self {
         FactData {
+            id: uuid::Uuid::new_v4().to_string(),
             type_: fact.type_.into(),
             values: fact
                 .values

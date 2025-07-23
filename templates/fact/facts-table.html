@@ -1,10 +1,11 @@
 <table id="fact-table" class="table">
   <thead class="bg-stone-800">
     <tr>
-      <td class="p-3 border-b border-stone-700" />
+      <th class="p-3 border-b border-stone-700" />
       {% for value in fact_table_data.columns %}
       <th class="p-3 border-b border-stone-700">{{ value }}</th>
       {% endfor %}
+      <th class="p-3 border-b border-stone-700" />
     </tr>
   </thead>
   <tbody>
@@ -13,9 +14,13 @@
       <td class="bg-stone-800 p-3 border-b border-stone-700">
         {{ loop.index }}
       </td>
-      {% for value in row %}
+      {% for value in row.values %}
       <td class="p-3 border-b border-stone-700">{{ value }}</td>
       {% endfor %}
+      <td class="bg-stone-800 border-b border-stone-700">
+        <button hx-delete="/{{fact_type}}/facts/{{row.id}}" hx-target="#fact-table"
+          class="button bg-red-800 hover:bg-red-700">Delete</button>
+      </td>
     </tr>
     {% endfor %}
   </tbody>
