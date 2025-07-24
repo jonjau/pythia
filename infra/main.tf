@@ -83,14 +83,14 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_attach" {
 # }
 
 
-# resource "aws_ecs_cluster" "default" {
-#   name = "ecs-cluster0"
+resource "aws_ecs_cluster" "cluster" {
+  name = "ecs-cluster0"
 
-#   tags = {
-#     "${var.tag_prefix}:Owner"       = "devops"
-#     "${var.tag_prefix}:Environment" = var.environment
-#   }
-# }
+  tags = {
+    "${var.tag_prefix}:Owner"       = "devops"
+    "${var.tag_prefix}:Environment" = var.environment
+  }
+}
 
 # ECS Task Definition
 # resource "aws_ecs_task_definition" "app" {
@@ -114,14 +114,16 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_attach" {
 # }
 
 resource "aws_ecs_task_definition" "service" {
-  family = "ecs-task-definition0"
-  network_mode = "awsvpc"
+  family                   = "ecs-task-definition0"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = 256
+  memory                   = 512
   container_definitions = jsonencode([
     {
-      name      = "pythia-app"
-      image     = "${aws_ecr_repository.repository.repository_url}:latest"
-      cpu       = 256
-      memory    = 512
+      name  = "pythia-app"
+      image = "${aws_ecr_repository.repository.repository_url}:latest"
+
       essential = true
       portMappings = [
         {
@@ -139,6 +141,7 @@ resource "aws_ecs_task_definition" "service" {
 
 resource "aws_ecs_service" "service" {
   name            = "ecs-service-0"
+  cluster         = aws_ecs_cluster.cluster.id
   launch_type     = "FARGATE"
   task_definition = aws_ecs_task_definition.service.arn
 
@@ -167,7 +170,7 @@ resource "aws_ecs_service" "service" {
 #     type  = "spread"
 #     field = "attribute:ecs.availability-zone"
 #   }
-  
+
 #   ## Make use of all available space on the Container Instances
 #   ordered_placement_strategy {
 #     type  = "binpack"
