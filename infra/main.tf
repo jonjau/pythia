@@ -40,7 +40,6 @@ resource "aws_ecr_registry_scanning_configuration" "default" {
   scan_type = "BASIC"
 }
 
-# IAM Role for ECS Task Execution
 resource "aws_iam_role" "ecs_task_execution" {
   name = "ecsTaskExecutionRole"
 
