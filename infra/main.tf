@@ -113,6 +113,27 @@ resource "aws_ecs_cluster" "cluster" {
 #   ])
 # }
 
+data "aws_vpc" "default" {
+  default = true
+
+  tags = {
+    "${var.tag_prefix}:Owner"       = "devops"
+    "${var.tag_prefix}:Environment" = var.environment
+  }
+}
+
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+
+  tags = {
+    "${var.tag_prefix}:Owner"       = "devops"
+    "${var.tag_prefix}:Environment" = var.environment
+  }
+}
+
 resource "aws_ecs_task_definition" "service" {
   family                   = "ecs-task-definition0"
   network_mode             = "awsvpc"
@@ -145,6 +166,10 @@ resource "aws_ecs_service" "service" {
   cluster         = aws_ecs_cluster.cluster.id
   launch_type     = "FARGATE"
   task_definition = aws_ecs_task_definition.service.arn
+
+  network_configuration {
+    subnets          = data.aws_subnets.default.ids
+  }
 
   tags = {
     "${var.tag_prefix}:Owner"       = "devops"
