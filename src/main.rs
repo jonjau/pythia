@@ -1,3 +1,5 @@
+use std::env;
+
 use askama::Template;
 use axum::{extract::State, routing::get, Router};
 use tower_http::services::ServeDir;
@@ -14,7 +16,10 @@ use services::{
     fact::FactService, logic_machine::LogicMachineService, state_change::StateChangeService,
 };
 
-use crate::{routes::{knowledge_base::knowledge_base_routes, record_type::record_type_routes}, services::db::DbService};
+use crate::{
+    routes::{knowledge_base::knowledge_base_routes, record_type::record_type_routes},
+    services::db::DbService,
+};
 
 /// Shared application state used by all handlers and services.
 ///
@@ -34,19 +39,26 @@ pub struct AppState {
 #[tokio::main]
 async fn main() {
     env_logger::init();
+
+    let aws_region = env::var("AWS_REGION").unwrap_or_else(|_| "us-west-2".to_owned());
+    let db_endpoint =
+        env::var("DYNAMODB_ENDPOINT").unwrap_or_else(|_| "http://host.docker.internal:8000".to_owned());
+
     info!("Starting pythia...");
 
     // Generates knowledge base from persistence layer (i.e. DB) at start-up.
-    let db = DbService::new(
-        "us-west-2".into(),
-        "http://host.docker.internal:8000".into(),
-    )
-    .await;
-    db.create_essential_tables_if_not_exist().await.expect("Failed to create essential tables");
-    db.update_knowledge_base().await.expect("Failed to update knowledge base");
+    let db = DbService::new(aws_region, db_endpoint).await;
+    db.create_essential_tables_if_not_exist()
+        .await
+        .expect("Failed to create essential tables");
+    db.update_knowledge_base()
+        .await
+        .expect("Failed to update knowledge base");
 
     // Load knowledge base in Prolog
-    let lm = LogicMachineService::new(db.clone()).await.expect("Failed to start LogicMachine service");
+    let lm = LogicMachineService::new(db.clone())
+        .await
+        .expect("Failed to start LogicMachine service");
 
     // Initialise Pythia application state and services
     let state = AppState {
