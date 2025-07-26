@@ -29,3 +29,14 @@ variable "container_port" {
   type        = number
   default     = 3000
 }
+
+variable "image_uri" {
+  description = "ECR image URI with digest"
+  type        = string
+}
+
+variable app_container_name {
+  description = "Name of the application container"
+  type        = string
+  default     = "pythia-app"
+}

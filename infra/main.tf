@@ -182,6 +182,16 @@ resource "aws_route_table_association" "private" {
   route_table_id = aws_route_table.private[count.index].id
 }
 
+resource "aws_cloudwatch_log_group" "log_group" {
+  name              = "/ecs/${var.app_container_name}"
+  retention_in_days = 5
+
+  tags = {
+    "${var.tag_prefix}:Owner"       = "devops"
+    "${var.tag_prefix}:Environment" = var.environment
+  }
+}
+
 resource "aws_ecs_task_definition" "service" {
   family                   = "ecs-task-definition-0"
   network_mode             = "awsvpc"
@@ -191,8 +201,8 @@ resource "aws_ecs_task_definition" "service" {
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
   container_definitions = jsonencode([
     {
-      name  = "pythia-app"
-      image = "${aws_ecr_repository.repository.repository_url}:latest"
+      name  = var.app_container_name
+      image = var.image_uri
 
       essential = true
       portMappings = [
@@ -200,6 +210,14 @@ resource "aws_ecs_task_definition" "service" {
           containerPort = var.container_port
         }
       ]
+        logConfiguration = {
+        logDriver = "awslogs",
+        options   = {
+          "awslogs-group"         = aws_cloudwatch_log_group.log_group.name,
+          "awslogs-region"        = "us-west-2",
+          "awslogs-stream-prefix" = var.app_container_name
+        }
+      }
     }
   ])
 
@@ -239,14 +257,14 @@ resource "aws_ecs_service" "service" {
   cluster         = aws_ecs_cluster.cluster.id
   launch_type     = "FARGATE"
   task_definition = aws_ecs_task_definition.service.arn
-  desired_count = 1
+  desired_count   = 0
 
   network_configuration {
     # subnets = aws_subnet.private.*.id
     # assign_public_ip = false
 
     assign_public_ip = true
-    subnets = aws_subnet.public.*.id
+    subnets          = aws_subnet.public.*.id
     security_groups  = [aws_security_group.ecs_service.id]
   }
 
