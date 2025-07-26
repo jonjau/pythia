@@ -92,29 +92,11 @@ resource "aws_ecs_cluster" "cluster" {
   }
 }
 
-# ECS Task Definition
-# resource "aws_ecs_task_definition" "app" {
-#   family                   = "simple-task"
-#   cpu                      = "256"
-#   memory                   = "512"
-#   network_mode             = "awsvpc"
-#   requires_compatibilities = ["FARGATE"]
-#   execution_role_arn       = aws_iam_role.task_exec_role.arn
+## A list of all AZs available in the region configured in the AWS credentials
+data "aws_availability_zones" "available" {}
 
-#   container_definitions = jsonencode([
-#     {
-#       name      = "web"
-#       image     = "123456789012.dkr.ecr.ap-southeast-2.amazonaws.com/my-app:latest" # <- Replace with your image
-#       portMappings = [{
-#         containerPort = 80
-#         protocol      = "tcp"
-#       }]
-#     }
-#   ])
-# }
-
-data "aws_vpc" "default" {
-  default = true
+resource "aws_vpc" "vpc" {
+  cidr_block = "10.0.0.0/24"
 
   tags = {
     "${var.tag_prefix}:Owner"       = "devops"
@@ -122,20 +104,87 @@ data "aws_vpc" "default" {
   }
 }
 
-data "aws_subnets" "default" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
+resource "aws_internet_gateway" "default" {
+  vpc_id = aws_vpc.vpc.id
+
+  tags = {
+    "${var.tag_prefix}:Owner"       = "devops"
+    "${var.tag_prefix}:Environment" = var.environment
+  }
+}
+
+resource "aws_route_table" "private" {
+  count  = var.az_count
+  vpc_id = aws_vpc.vpc.id
+
+  tags = {
+    "${var.tag_prefix}:Owner"       = "devops"
+    "${var.tag_prefix}:Environment" = var.environment
+  }
+}
+
+resource "aws_subnet" "public" {
+  count  = var.az_count
+  vpc_id = aws_vpc.vpc.id
+  // Get /28 subnet per AZ from the /24 VPC CIDR block
+  cidr_block        = cidrsubnet(aws_vpc.vpc.cidr_block, 4, count.index)
+  availability_zone = data.aws_availability_zones.available.names[count.index]
+
+  tags = {
+    "${var.tag_prefix}:Owner"       = "devops"
+    "${var.tag_prefix}:Environment" = var.environment
+  }
+}
+
+## Route Table with egress route to the internet
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.default.id
   }
 
   tags = {
     "${var.tag_prefix}:Owner"       = "devops"
     "${var.tag_prefix}:Environment" = var.environment
   }
+}
+
+## Associate Route Table with Public Subnets
+resource "aws_route_table_association" "public" {
+  count          = var.az_count
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
+}
+
+## Make our Route Table the main Route Table
+resource "aws_main_route_table_association" "public_main" {
+  vpc_id         = aws_vpc.vpc.id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_subnet" "private" {
+  count  = var.az_count
+  vpc_id = aws_vpc.vpc.id
+  // Get /28 subnet per AZ from the /24 VPC CIDR block, add var.az_count to the index to avoid overlap with public subnets
+  cidr_block        = cidrsubnet(aws_vpc.vpc.cidr_block, 4, var.az_count + count.index)
+  availability_zone = data.aws_availability_zones.available.names[count.index]
+
+  tags = {
+    "${var.tag_prefix}:Owner"       = "devops"
+    "${var.tag_prefix}:Environment" = var.environment
+  }
+}
+
+resource "aws_route_table_association" "private" {
+  count          = var.az_count
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private[count.index].id
 }
 
 resource "aws_ecs_task_definition" "service" {
-  family                   = "ecs-task-definition0"
+  family                   = "ecsTaskDefinition0"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   cpu                      = 256
@@ -149,11 +198,36 @@ resource "aws_ecs_task_definition" "service" {
       essential = true
       portMappings = [
         {
-          containerPort = 3000
+          containerPort = var.container_port
         }
       ]
     }
   ])
+
+  tags = {
+    "${var.tag_prefix}:Owner"       = "devops"
+    "${var.tag_prefix}:Environment" = var.environment
+  }
+}
+
+resource "aws_security_group" "ecs_service" {
+  name        = "securityGroup0"
+  description = "Security group for ECS task running on Fargate"
+  vpc_id      = aws_vpc.vpc.id
+
+  ingress {
+    from_port   = var.container_port
+    to_port     = var.container_port
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
   tags = {
     "${var.tag_prefix}:Owner"       = "devops"
@@ -168,7 +242,12 @@ resource "aws_ecs_service" "service" {
   task_definition = aws_ecs_task_definition.service.arn
 
   network_configuration {
-    subnets          = data.aws_subnets.default.ids
+    # subnets = aws_subnet.private.*.id
+    # assign_public_ip = false
+
+    assign_public_ip = true
+    subnets = aws_subnet.public.*.id
+    security_groups  = [aws_security_group.ecs_service.id]
   }
 
   tags = {

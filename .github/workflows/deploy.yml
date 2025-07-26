@@ -46,6 +46,8 @@ jobs:
           ecr_repository_name = "$ECR_REPO_NAME"
           environment = "dev"
           tag_prefix = "pythia"
+          az_count = 2
+          container_port = 3000
           EOF
           terraform apply -auto-approve
 
