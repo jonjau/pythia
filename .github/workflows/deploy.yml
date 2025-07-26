@@ -63,11 +63,11 @@ jobs:
           docker build -t $REGISTRY/$ECR_REPO_NAME:$IMAGE_TAG .
           docker push $REGISTRY/$ECR_REPO_NAME:$IMAGE_TAG
 
-      # - name: Output ECR image URI
-      #   id: ecr-image-uri
-      #   run: echo "ECR_IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${ECR_REPO_NAME}:${{ github.sha }}" >> $GITHUB_OUTPUT
+      - name: Output ECR image URI
+        id: ecr-image-uri
+        run: echo "ECR_IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${ECR_REPO_NAME}:${{ github.sha }}" >> $GITHUB_OUTPUT
 
-      # - name: Terraform apply to deploy (Phase 2)
-      #   env:
-      #     IMAGE_URI: "${{ env.ECR_REPO_URI }}@${{ steps.digest.outputs.digest }}"
-      #   run: terraform apply -auto-approve -var="image_uri=$IMAGE_URI"
+      - name: Terraform apply to deploy (Phase 2)
+        env:
+          IMAGE_URI: "${{ env.ECR_REPO_URI }}@${{ steps.digest.outputs.digest }}"
+        run: terraform apply -auto-approve -var="image_uri=$IMAGE_URI"
