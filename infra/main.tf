@@ -41,7 +41,7 @@ resource "aws_ecr_registry_scanning_configuration" "default" {
 }
 
 resource "aws_iam_role" "ecs_task_execution" {
-  name = "ecsTaskExecutionRole"
+  name = "ecs-task-execution-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -82,9 +82,8 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_attach" {
 #   })
 # }
 
-
 resource "aws_ecs_cluster" "cluster" {
-  name = "ecs-cluster0"
+  name = "ecs-cluster-0"
 
   tags = {
     "${var.tag_prefix}:Owner"       = "devops"
@@ -184,7 +183,7 @@ resource "aws_route_table_association" "private" {
 }
 
 resource "aws_ecs_task_definition" "service" {
-  family                   = "ecsTaskDefinition0"
+  family                   = "ecs-task-definition-0"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   cpu                      = 256
@@ -211,7 +210,7 @@ resource "aws_ecs_task_definition" "service" {
 }
 
 resource "aws_security_group" "ecs_service" {
-  name        = "securityGroup0"
+  name        = "security-group-0"
   description = "Security group for ECS task running on Fargate"
   vpc_id      = aws_vpc.vpc.id
 
@@ -240,6 +239,7 @@ resource "aws_ecs_service" "service" {
   cluster         = aws_ecs_cluster.cluster.id
   launch_type     = "FARGATE"
   task_definition = aws_ecs_task_definition.service.arn
+  desired_count = 1
 
   network_configuration {
     # subnets = aws_subnet.private.*.id
