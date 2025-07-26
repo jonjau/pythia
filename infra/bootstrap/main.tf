@@ -17,3 +17,8 @@ resource "aws_iam_role_policy_attachment" "role_policy_ecs" {
   role       = "GithubActionsTerraformRole"
   policy_arn = "arn:aws:iam::aws:policy/AmazonECS_FullAccess"
 }
+
+resource "aws_iam_role_policy_attachment" "role_policy_ec2" {
+  role       = "GithubActionsTerraformRole"
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
+}

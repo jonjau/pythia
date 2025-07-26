@@ -17,3 +17,15 @@ variable "environment" {
     error_message = "Environment must be dev, staging, or prod."
   }
 }
+
+variable "az_count" {
+  description = "Number of Availability Zones to use in the Region"
+  type        = number
+  default     = 2
+}
+
+variable "container_port" {
+  description = "Port on which the container listens"
+  type        = number
+  default     = 3000
+}
