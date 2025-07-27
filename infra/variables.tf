@@ -35,7 +35,7 @@ variable "image_uri" {
   type        = string
 }
 
-variable app_container_name {
+variable "app_container_name" {
   description = "Name of the application container"
   type        = string
   default     = "pythia-app"
