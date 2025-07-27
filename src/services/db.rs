@@ -62,7 +62,6 @@ pub struct DbService {
 impl DbService {
     pub async fn new(region: String, endpoint: String) -> Self {
         let config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .test_credentials()
             .region(aws_config::Region::new(region))
             .endpoint_url(endpoint)
             .load()
