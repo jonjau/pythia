@@ -90,6 +90,8 @@ resource "aws_iam_policy" "dynamodb_access" {
     Statement = [{
       Effect = "Allow"
       Action = [
+        "dynamodb:CreateTable",
+        "dynamodb:DescribeTable",
         "dynamodb:GetItem",
         "dynamodb:PutItem",
         "dynamodb:UpdateItem",
