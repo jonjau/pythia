@@ -242,17 +242,6 @@ resource "aws_ecs_task_definition" "service" {
         }
       ]
 
-      environment = [
-        {
-          name  = "AWS_REGION"
-          value = "us-west-2"
-        },
-        {
-          name  = "DYNAMODB_ENDPOINT"
-          value = "https://dynamodb.us-west-2.amazonaws.com"
-        }
-      ]
-
       logConfiguration = {
         logDriver = "awslogs",
         options = {

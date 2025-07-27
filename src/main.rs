@@ -40,14 +40,14 @@ pub struct AppState {
 async fn main() {
     env_logger::init();
 
-    let aws_region = env::var("AWS_REGION").unwrap_or_else(|_| "us-west-2".to_owned());
-    let db_endpoint =
-        env::var("DYNAMODB_ENDPOINT").unwrap_or_else(|_| "http://host.docker.internal:8000".to_owned());
+    // let aws_region = env::var("AWS_REGION").unwrap_or_else(|_| "us-west-2".to_owned());
+    // let db_endpoint =
+    //     env::var("DYNAMODB_ENDPOINT").unwrap_or_else(|_| "http://host.docker.internal:8000".to_owned());
 
     info!("Starting Pythia...");
 
     // Generates knowledge base from persistence layer (i.e. DB) at start-up.
-    let db = DbService::new(aws_region, db_endpoint).await;
+    let db = DbService::new().await;
     db.create_essential_tables_if_not_exist()
         .await
         .expect("Failed to create essential tables");
