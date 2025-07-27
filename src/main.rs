@@ -44,7 +44,7 @@ async fn main() {
     let db_endpoint =
         env::var("DYNAMODB_ENDPOINT").unwrap_or_else(|_| "http://host.docker.internal:8000".to_owned());
 
-    info!("Starting pythia...");
+    info!("Starting Pythia...");
 
     // Generates knowledge base from persistence layer (i.e. DB) at start-up.
     let db = DbService::new(aws_region, db_endpoint).await;
@@ -88,8 +88,16 @@ async fn main() {
         .expect(&format!("Failed to create TCPListener on {}.", addr));
     info!("Listening on {}...", addr);
     axum::serve(listener, r)
+        .with_graceful_shutdown(shutdown_signal())
         .await
         .expect(&format!("Failed to start axum server on {}.", addr));
+}
+
+async fn shutdown_signal() {
+    tokio::signal::ctrl_c()
+        .await
+        .expect("Failed to install Ctrl+C handler");
+    println!("Shutting down Pythia...");
 }
 
 #[derive(Template)]
