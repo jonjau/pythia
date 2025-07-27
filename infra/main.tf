@@ -148,6 +148,8 @@ resource "aws_route_table" "private" {
   count  = var.az_count
   vpc_id = aws_vpc.vpc.id
 
+  // fck-nat will manage routes for private subnets
+
   tags = {
     "${var.tag_prefix}:Owner"       = "devops"
     "${var.tag_prefix}:Environment" = var.environment
@@ -189,12 +191,6 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-## Make our Route Table the main Route Table
-resource "aws_main_route_table_association" "public_main" {
-  vpc_id         = aws_vpc.vpc.id
-  route_table_id = aws_route_table.public.id
-}
-
 resource "aws_subnet" "private" {
   count  = var.az_count
   vpc_id = aws_vpc.vpc.id
@@ -216,7 +212,7 @@ resource "aws_route_table_association" "private" {
 
 resource "aws_cloudwatch_log_group" "log_group" {
   name              = "/ecs/${var.app_container_name}"
-  retention_in_days = 5
+  retention_in_days = 14
 
   tags = {
     "${var.tag_prefix}:Owner"       = "devops"
@@ -261,8 +257,87 @@ resource "aws_ecs_task_definition" "service" {
   }
 }
 
+resource "aws_security_group" "alb" {
+  name        = "alb-sg-0"
+  description = "Allow HTTP access to ALB"
+  vpc_id      = aws_vpc.vpc.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    "${var.tag_prefix}:Owner"       = "devops"
+    "${var.tag_prefix}:Environment" = var.environment
+  }
+}
+
+resource "aws_lb" "main" {
+  name               = "ecs-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = aws_subnet.public[*].id
+
+  tags = {
+    "${var.tag_prefix}:Owner"       = "devops"
+    "${var.tag_prefix}:Environment" = var.environment
+  }
+}
+
+resource "aws_lb_target_group" "ecs" {
+  name        = "ecs-target-group"
+  port        = var.container_port
+  protocol    = "HTTP"
+  target_type = "ip" # required for Fargate
+  vpc_id      = aws_vpc.vpc.id
+
+  health_check {
+    path                = "/"
+    protocol            = "HTTP"
+    matcher             = "200"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+  }
+
+  tags = {
+    "${var.tag_prefix}:Owner"       = "devops"
+    "${var.tag_prefix}:Environment" = var.environment
+  }
+}
+
+// Listen for HTTP traffic on port 80.
+// When a request comes in, forward it to the ECS target group behind the load balancer.
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.ecs.arn
+  }
+
+  tags = {
+    "${var.tag_prefix}:Owner"       = "devops"
+    "${var.tag_prefix}:Environment" = var.environment
+  }
+}
+
 resource "aws_security_group" "ecs_service" {
-  name        = "security-group-0"
+  name        = "ecs-sg-0"
   description = "Security group for ECS task running on Fargate"
   vpc_id      = aws_vpc.vpc.id
 
@@ -270,7 +345,7 @@ resource "aws_security_group" "ecs_service" {
     from_port   = var.container_port
     to_port     = var.container_port
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [aws_vpc.vpc.cidr_block]
   }
 
   egress {
@@ -294,12 +369,15 @@ resource "aws_ecs_service" "service" {
   desired_count   = 1
 
   network_configuration {
-    # subnets = aws_subnet.private.*.id
-    # assign_public_ip = false
-
-    assign_public_ip = true
-    subnets          = aws_subnet.public.*.id
+    assign_public_ip = false
+    subnets          = aws_subnet.private[*].id
     security_groups  = [aws_security_group.ecs_service.id]
+  }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.ecs.arn
+    container_name   = var.app_container_name
+    container_port   = var.container_port
   }
 
   tags = {
@@ -307,35 +385,3 @@ resource "aws_ecs_service" "service" {
     "${var.tag_prefix}:Environment" = var.environment
   }
 }
-
-
-# resource "aws_ecs_service" "service" {
-#   name                               = "ecs-service-0"
-#   iam_role                           = aws_iam_role.ecs_service_role.arn
-#   cluster                            = aws_ecs_cluster.default.id
-#   task_definition                    = aws_ecs_task_definition.default.arn
-#   launch_type = "FARGATE"
-
-#   load_balancer {
-#     target_group_arn = aws_alb_target_group.service_target_group.arn
-#     container_name   = var.service_name
-#     container_port   = var.container_port
-#   }
-
-#   ## Spread tasks evenly accross all Availability Zones for High Availability
-#   ordered_placement_strategy {
-#     type  = "spread"
-#     field = "attribute:ecs.availability-zone"
-#   }
-
-#   ## Make use of all available space on the Container Instances
-#   ordered_placement_strategy {
-#     type  = "binpack"
-#     field = "memory"
-#   }
-
-#   ## Do not update desired count again to avoid a reset to this number on every deployment
-#   lifecycle {
-#     ignore_changes = [desired_count]
-#   }
-# }
