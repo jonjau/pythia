@@ -19,6 +19,9 @@ FROM debian:bullseye-slim
 
 WORKDIR /pythia
 
+# Install CA certificates for TLS validation
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+
 COPY --from=builder /pythia/static ./static
 COPY --from=builder /pythia/target/release/pythia .
 
