@@ -60,27 +60,57 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_attach" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+data "aws_iam_policy_document" "task_assume_role_policy" {
+  statement {
+    actions = ["sts:AssumeRole"]
 
-# resource "aws_iam_role_policy" "dynamodb_access" {
-#   name = "DynamoAccess"
-#   role = aws_iam_role.ecs_task_execution.id
+    principals {
+      type        = "Service"
+      identifiers = ["ecs-tasks.amazonaws.com"]
+    }
+  }
+}
 
-#   policy = jsonencode({
-#     Version = "2012-10-17"
-#     Statement = [{
-#       Effect = "Allow"
-#       Action = [
-#         "dynamodb:GetItem",
-#         "dynamodb:PutItem",
-#         "dynamodb:UpdateItem",
-#         "dynamodb:DeleteItem",
-#         "dynamodb:Scan",
-#         "dynamodb:Query"
-#       ]
-#       Resource = "*"
-#     }]
-#   })
-# }
+resource "aws_iam_role" "ecs_task_iam_role" {
+  name               = "ecs-task-iam-role-0"
+  description        = "Role for ECS tasks to access AWS services"
+  assume_role_policy = data.aws_iam_policy_document.task_assume_role_policy.json
+
+  tags = {
+    "${var.tag_prefix}:Owner"       = "devops"
+    "${var.tag_prefix}:Environment" = var.environment
+  }
+}
+
+resource "aws_iam_policy" "dynamodb_access" {
+  name        = "DynamoAccess"
+  description = "Policy to allow access to DynamoDB for ECS tasks"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:Scan",
+        "dynamodb:Query"
+      ]
+      Resource = "*"
+    }]
+  })
+
+  tags = {
+    "${var.tag_prefix}:Owner"       = "devops"
+    "${var.tag_prefix}:Environment" = var.environment
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_dynamodb_access" {
+  role       = aws_iam_role.ecs_task_iam_role.name
+  policy_arn = aws_iam_policy.dynamodb_access.arn
+}
 
 resource "aws_ecs_cluster" "cluster" {
   name = "ecs-cluster-0"
@@ -199,6 +229,7 @@ resource "aws_ecs_task_definition" "service" {
   cpu                      = 256
   memory                   = 512
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
+  task_role_arn            = aws_iam_role.ecs_task_iam_role.arn
   container_definitions = jsonencode([
     {
       name  = var.app_container_name
@@ -210,9 +241,21 @@ resource "aws_ecs_task_definition" "service" {
           containerPort = var.container_port
         }
       ]
-        logConfiguration = {
+
+      environment = [
+        {
+          name  = "AWS_REGION"
+          value = "us-west-2"
+        },
+        {
+          name  = "DYNAMODB_ENDPOINT"
+          value = "https://dynamodb.us-west-2.amazonaws.com"
+        }
+      ]
+
+      logConfiguration = {
         logDriver = "awslogs",
-        options   = {
+        options = {
           "awslogs-group"         = aws_cloudwatch_log_group.log_group.name,
           "awslogs-region"        = "us-west-2",
           "awslogs-stream-prefix" = var.app_container_name

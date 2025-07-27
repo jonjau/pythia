@@ -31,25 +31,25 @@ jobs:
           role-session-name: github-actions-pythia-${{ github.ref_name }}-${{ github.run_id }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      # - name: Setup Terraform
+      #   uses: hashicorp/setup-terraform@v3
 
-      - name: Terraform init and apply for infra (Phase 1)
-        run: |
-          cd infra
-          terraform fmt
-          terraform init \
-            -backend-config="bucket=${{ secrets.TERRAFORM_BACKEND_BUCKET }}" \
-            -backend-config="key=${{ secrets.TERRAFORM_BACKEND_KEY }}" \
-            -backend-config="region=${{ secrets.AWS_REGION }}"
-          cat > variables.auto.tfvars <<EOF
-          ecr_repository_name = "$ECR_REPO_NAME"
-          environment = "dev"
-          tag_prefix = "pythia"
-          az_count = 2
-          container_port = 3000
-          EOF
-          terraform apply -auto-approve
+      # - name: Terraform init and apply for infra (Phase 1)
+      #   run: |
+      #     cd infra
+      #     terraform fmt
+      #     terraform init \
+      #       -backend-config="bucket=${{ secrets.TERRAFORM_BACKEND_BUCKET }}" \
+      #       -backend-config="key=${{ secrets.TERRAFORM_BACKEND_KEY }}" \
+      #       -backend-config="region=${{ secrets.AWS_REGION }}"
+      #     cat > variables.auto.tfvars <<EOF
+      #     ecr_repository_name = "$ECR_REPO_NAME"
+      #     environment = "dev"
+      #     tag_prefix = "pythia"
+      #     az_count = 2
+      #     container_port = 3000
+      #     EOF
+      #     terraform apply -auto-approve
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -67,7 +67,7 @@ jobs:
         id: ecr-image-uri
         run: echo "ECR_IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${ECR_REPO_NAME}:${{ github.sha }}" >> $GITHUB_OUTPUT
 
-      - name: Terraform apply to deploy (Phase 2)
-        env:
-          IMAGE_URI: "${{ env.ECR_REPO_URI }}@${{ steps.digest.outputs.digest }}"
-        run: terraform apply -auto-approve -var="image_uri=$IMAGE_URI"
+      # - name: Terraform apply to deploy (Phase 2)
+      #   env:
+      #     IMAGE_URI: "${{ env.ECR_REPO_URI }}@${{ steps.digest.outputs.digest }}"
+      #   run: terraform apply -auto-approve -var="image_uri=$IMAGE_URI"
