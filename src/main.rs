@@ -1,5 +1,3 @@
-use std::env;
-
 use askama::Template;
 use axum::{extract::State, routing::get, Router};
 use tower_http::services::ServeDir;
@@ -40,17 +38,14 @@ pub struct AppState {
 async fn main() {
     env_logger::init();
 
-    // let aws_region = env::var("AWS_REGION").unwrap_or_else(|_| "us-west-2".to_owned());
-    // let db_endpoint =
-    //     env::var("DYNAMODB_ENDPOINT").unwrap_or_else(|_| "http://host.docker.internal:8000".to_owned());
-
     info!("Starting Pythia...");
 
     // Generates knowledge base from persistence layer (i.e. DB) at start-up.
-    let db = DbService::new().await;
-    db.create_essential_tables_if_not_exist()
+    // let db = DbService::new("admin".to_owned()).await;
+    let db = DbService::new_local().await;
+    db.create_table_if_not_exists("pythia", "pk", "sk")
         .await
-        .expect("Failed to create essential tables");
+        .expect("Failed to create essential table");
     db.update_knowledge_base()
         .await
         .expect("Failed to update knowledge base");
