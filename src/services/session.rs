@@ -14,7 +14,7 @@ impl AppState {
     pub async fn new(user_token: String) -> Self {
         // Generates knowledge base from persistence layer (i.e. DB) at start-up.
         // let db = DbService::new("admin".to_owned()).await;
-        let mut db = DbService::new_local(user_token).await;
+        let db = DbService::new_local(user_token).await;
         db.create_table_if_not_exists("pythia", "pk", "sk")
             .await
             .expect("Failed to create essential table");
