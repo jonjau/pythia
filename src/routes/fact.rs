@@ -9,7 +9,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use crate::{services::fact::FactTableData, AppState};
+use crate::{middleware::user_token::UserToken, services::fact::FactTableData, AppState};
 
 /// Returns the routes for getting and creating facts.
 pub fn fact_routes() -> Router<AppState> {
@@ -26,6 +26,7 @@ pub fn fact_routes() -> Router<AppState> {
 #[derive(Template)]
 #[template(path = "fact/facts.html")]
 struct GetFactsTemplate {
+    user_token: String,
     fact_type: String,
     fact_table_data: FactTableData,
 }
@@ -33,6 +34,7 @@ struct GetFactsTemplate {
 async fn get_facts(
     State(state): State<AppState>,
     Path(fact_type): Path<String>,
+    UserToken(user_token): UserToken,
 ) -> GetFactsTemplate {
     let fact_table_data = state
         .facts
@@ -41,6 +43,7 @@ async fn get_facts(
         .unwrap_or_default();
 
     GetFactsTemplate {
+        user_token,
         fact_type,
         fact_table_data,
     }

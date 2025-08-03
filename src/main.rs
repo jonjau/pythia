@@ -1,10 +1,11 @@
 use askama::Template;
-use axum::{extract::State, routing::get, Router};
+use axum::{extract::State, middleware::from_fn, routing::get, Router};
 use tower_http::services::ServeDir;
 
 use log::info;
 use routes::{fact::fact_routes, state_change::state_change_routes};
 
+mod middleware;
 mod models;
 mod routes;
 mod services;
@@ -15,6 +16,7 @@ use services::{
 };
 
 use crate::{
+    middleware::user_token::{set_user_token, UserToken},
     routes::{knowledge_base::knowledge_base_routes, record_type::record_type_routes},
     services::db::DbService,
 };
@@ -74,6 +76,9 @@ async fn main() {
         .merge(fact_routes())
         .merge(record_type_routes())
         .merge(knowledge_base_routes())
+        // .route("/sessions", post(create_session))
+        // .route("/me", get(me))
+        .layer(from_fn(set_user_token))
         .with_state(state);
 
     // Run the HTTP server
@@ -92,17 +97,21 @@ async fn shutdown_signal() {
     tokio::signal::ctrl_c()
         .await
         .expect("Failed to install Ctrl+C handler");
-    println!("Shutting down Pythia...");
+    info!("Shutting down Pythia...");
 }
 
 #[derive(Template)]
 #[template(path = "inquiries.html")]
 struct GetInquiriesTemplate {
+    user_token: String,
     record_types: Vec<String>,
 }
 
 /// Handler for GET requests to `/`.
-async fn get_inquiries(State(app_state): State<AppState>) -> GetInquiriesTemplate {
+async fn get_inquiries(
+    UserToken(user_token): UserToken,
+    State(app_state): State<AppState>,
+) -> GetInquiriesTemplate {
     let rts = app_state
         .lm
         .get_all_record_types()
@@ -110,6 +119,39 @@ async fn get_inquiries(State(app_state): State<AppState>) -> GetInquiriesTemplat
         .unwrap_or_default();
 
     GetInquiriesTemplate {
+        user_token,
         record_types: rts.iter().map(|rt| rt.name.clone()).collect(),
     }
 }
+
+// // #[axum::debug_handler]
+// async fn create_session(
+//     jar: CookieJar,
+// ) -> Result<(CookieJar, Redirect), StatusCode> {
+//     // if let Some(session_id) = authorize_and_create_session(auth.token()).await {
+//     //     Ok((
+//     //         // the updated jar must be returned for the changes
+//     //         // to be included in the response
+//     //         jar.add(Cookie::new("session_id", "123".to_string())),
+//     //         Redirect::to("/me"),
+//     //     ))
+//     // } else {
+//     //     Err(StatusCode::UNAUTHORIZED)
+//     // }
+
+//         Ok((
+//             // the updated jar must be returned for the changes
+//             // to be included in the response
+//             jar.add(Cookie::new("session_id", "123".to_string())),
+//             Redirect::to("/me"),
+//         ))
+// }
+
+// // #[axum::debug_handler]
+// async fn me(jar: CookieJar) -> Result<String, StatusCode> {
+//     if let Some(session_id) = jar.get("session_id") {
+//         Ok(session_id.to_string())
+//     } else {
+//         Err(StatusCode::UNAUTHORIZED)
+//     }
+// }

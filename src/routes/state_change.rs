@@ -9,7 +9,7 @@ use axum::{
     Router,
 };
 
-use crate::{services::state_change::ChangePath, AppState};
+use crate::{middleware::user_token::UserToken, services::state_change::ChangePath, AppState};
 
 /// Returns the routes for calculating state change paths.
 pub fn state_change_routes() -> Router<AppState> {
@@ -24,6 +24,7 @@ pub fn state_change_routes() -> Router<AppState> {
 #[derive(Template)]
 #[template(path = "state-change/state-changes.html")]
 struct StateChangesPageInput {
+    user_token: String,
     fact_type: String,
     start_state_values: Vec<(String, String)>,
     end_state_values: Vec<(String, String)>,
@@ -56,6 +57,7 @@ async fn get_state_changes(
     headers: HeaderMap,
     Path(state_rt): Path<String>,
     Query(q): Query<HashMap<String, String>>,
+    UserToken(user_token): UserToken,
 ) -> StateChangesPage {
     let get_values_for_key_with_prefix = |prefix: &str| {
         q.iter()
@@ -80,6 +82,7 @@ async fn get_state_changes(
                 .await
             {
                 Ok(values) => StateChangesPageInput {
+                    user_token,
                     fact_type: state_rt,
                     start_state_values: values.start_state_values,
                     end_state_values: values.end_state_values,
@@ -88,6 +91,7 @@ async fn get_state_changes(
                         .unwrap_or(0),
                 },
                 Err(_) => StateChangesPageInput {
+                    user_token,
                     fact_type: "".to_string(),
                     start_state_values: vec![],
                     end_state_values: vec![],
