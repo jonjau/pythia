@@ -1,6 +1,6 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
-use tokio::sync::RwLock;
+use quick_cache::sync::Cache;
 
 use crate::services::{
     db::DbService, fact::FactService, logic_machine::LogicMachineService,
@@ -55,14 +55,14 @@ pub enum SessionServiceError {
 
 #[derive(Clone)]
 pub struct SessionService {
-    session_state_cache: Arc<RwLock<HashMap<String, AppState>>>,
+    session_state_cache: Arc<Cache<String, AppState>>,
     db: DbService,
 }
 
 impl SessionService {
     pub fn new(db: DbService) -> Self {
         SessionService {
-            session_state_cache: Arc::new(RwLock::new(HashMap::new())),
+            session_state_cache: Arc::new(Cache::new(1000)),
             db,
         }
     }
@@ -84,8 +84,6 @@ impl SessionService {
                         ))
                     })?;
                 self.session_state_cache
-                    .write()
-                    .await
                     .insert(user_token.clone(), app_state);
 
                 Ok(())
@@ -110,12 +108,7 @@ impl SessionService {
             })?;
 
         if exists {
-            Ok(self
-                .session_state_cache
-                .read()
-                .await
-                .get(user_token)
-                .cloned())
+            Ok(self.session_state_cache.get(user_token))
         } else {
             Ok(None)
         }
