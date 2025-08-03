@@ -9,7 +9,9 @@ use axum::{
     Router,
 };
 
-use crate::{middleware::session::UserToken, services::state_change::ChangePath, AppState};
+use crate::{
+    middleware::session::UserToken, services::session::AppState, services::state_change::ChangePath,
+};
 
 /// Returns the routes for calculating state change paths.
 pub fn state_change_routes() -> Router {

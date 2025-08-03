@@ -2,7 +2,10 @@ use std::collections::HashMap;
 
 use askama::Template;
 use axum::{extract::State, response::Redirect, routing::get, Form, Router};
-use axum_extra::extract::{cookie::{Cookie, SameSite}, CookieJar};
+use axum_extra::extract::{
+    cookie::{Cookie, SameSite},
+    CookieJar,
+};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use uuid::Uuid;
 
@@ -10,11 +13,10 @@ use crate::GlobalAppState;
 
 /// Returns the routes for starting sessions.
 pub fn session_routes() -> Router<GlobalAppState> {
-    Router::new()
-        .route(
-            "/sessions",
-            get(show_start_session_page).post(start_session),
-        )
+    Router::new().route(
+        "/sessions",
+        get(show_start_session_page).post(start_session),
+    )
 }
 
 #[derive(Template)]
@@ -22,7 +24,6 @@ pub fn session_routes() -> Router<GlobalAppState> {
 struct StartSessionTemplate {
     user_token: String,
 }
-
 
 async fn show_start_session_page() -> StartSessionTemplate {
     StartSessionTemplate {
@@ -48,7 +49,7 @@ async fn start_session(
         })
         .unwrap_or_else(|| URL_SAFE_NO_PAD.encode(Uuid::new_v4().as_bytes()));
 
-    state.sessions.start_session(token.clone()).await;
+    let _ = state.sessions.start_session(token.clone()).await;
 
     let cookie = Cookie::build((TOKEN_COOKIE_NAME, token))
         .path("/")

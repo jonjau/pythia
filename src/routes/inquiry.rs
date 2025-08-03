@@ -1,7 +1,7 @@
 use askama::Template;
 use axum::{routing::get, Router};
 
-use crate::{middleware::session::UserToken, AppState};
+use crate::{middleware::session::UserToken, services::session::AppState};
 
 /// Returns the routes for starting inquiries.
 pub fn inquiry_routes() -> Router {

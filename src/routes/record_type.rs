@@ -1,4 +1,4 @@
-use crate::{models::record_type::RecordTypeData, AppState};
+use crate::{models::record_type::RecordTypeData, services::session::AppState};
 use axum::{extract::Path, routing::get, Json, Router};
 use log::info;
 use serde_json::{json, Value};

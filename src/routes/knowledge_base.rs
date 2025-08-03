@@ -1,7 +1,7 @@
 use axum::{routing::post, Json, Router};
 use serde_json::{json, Value};
 
-use crate::AppState;
+use crate::services::session::AppState;
 
 /// Returns the routes for reloading and exporting the knowledge base, i.e. the set of Prolog rules and facts stored in the database, that the Logic Machine loads.
 pub fn knowledge_base_routes() -> Router {

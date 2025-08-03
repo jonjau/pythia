@@ -73,7 +73,10 @@ impl DbService {
             .await;
 
         let dynamodb_local_config = aws_sdk_dynamodb::config::Builder::from(&config).build();
-        DbService { user, client: Client::from_conf(dynamodb_local_config) }
+        DbService {
+            user,
+            client: Client::from_conf(dynamodb_local_config),
+        }
     }
 
     pub async fn new_local(user: String) -> Self {
@@ -85,7 +88,14 @@ impl DbService {
             .await;
 
         let dynamodb_local_config = aws_sdk_dynamodb::config::Builder::from(&config).build();
-        DbService { user, client: Client::from_conf(dynamodb_local_config) }
+        DbService {
+            user,
+            client: Client::from_conf(dynamodb_local_config),
+        }
+    }
+
+    pub fn set_user(&mut self, user: String) {
+        self.user = user;
     }
 
     pub async fn create_table_if_not_exists(
@@ -151,6 +161,32 @@ impl DbService {
                 Err(e.into())
             }
         }
+    }
+
+    pub async fn add_user_token(&self, user: String) -> Result<(), DbServiceError> {
+        let _ = self
+            .client
+            .put_item()
+            .table_name(TABLE_PYTHIA)
+            .item("pk", AttributeValue::S(format!("user#{}", user)))
+            .item("sk", AttributeValue::S("token".to_owned()))
+            .send()
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn user_token_exists(&self, user: String) -> Result<bool, DbServiceError> {
+        let resp = self
+            .client
+            .get_item()
+            .table_name(TABLE_PYTHIA)
+            .key("pk", AttributeValue::S(format!("user#{}", user)))
+            .key("sk", AttributeValue::S("token".to_owned()))
+            .send()
+            .await?;
+
+        Ok(resp.item.is_some())
     }
 
     fn map_item_to_record_type(item: &HashMap<String, AttributeValue>) -> RecordTypeData {
