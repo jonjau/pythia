@@ -1,14 +1,10 @@
 use crate::{models::record_type::RecordTypeData, AppState};
-use axum::{
-    extract::{Path, State},
-    routing::get,
-    Json, Router,
-};
+use axum::{extract::Path, routing::get, Json, Router};
 use log::info;
 use serde_json::{json, Value};
 
 /// Returns the routes for getting, creating and deleting record types
-pub fn record_type_routes() -> Router<AppState> {
+pub fn record_type_routes() -> Router {
     Router::new()
         .route(
             "/api/record-types",
@@ -20,7 +16,7 @@ pub fn record_type_routes() -> Router<AppState> {
         )
 }
 
-async fn get_record_types(State(state): State<AppState>) -> Result<Json<Value>, Json<Value>> {
+async fn get_record_types(state: AppState) -> Result<Json<Value>, Json<Value>> {
     match state.db.get_all_record_types().await {
         Ok(record_types) => Ok(Json(json!({"record_types": record_types}))),
         Err(e) => {
@@ -33,7 +29,7 @@ async fn get_record_types(State(state): State<AppState>) -> Result<Json<Value>, 
 }
 
 async fn get_record_type(
-    State(state): State<AppState>,
+    state: AppState,
     Path(name): Path<String>,
 ) -> Result<Json<Value>, Json<Value>> {
     match state.db.get_record_type(&name).await {
@@ -48,7 +44,7 @@ async fn get_record_type(
 }
 
 async fn create_record_type(
-    State(state): State<AppState>,
+    state: AppState,
     Json(record_type): Json<RecordTypeData>,
 ) -> Result<Json<Value>, Json<Value>> {
     match state.db.put_record_type(&record_type).await {
@@ -68,7 +64,7 @@ async fn create_record_type(
 }
 
 async fn delete_record_type(
-    State(state): State<AppState>,
+    state: AppState,
     Path(name): Path<String>,
 ) -> Result<Json<Value>, Json<Value>> {
     match state.db.delete_record_type(&name).await {

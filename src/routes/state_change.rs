@@ -3,16 +3,16 @@ use std::collections::HashMap;
 use askama::Template;
 use askama_axum::IntoResponse;
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, Query},
     http::HeaderMap,
     routing::{get, post},
     Router,
 };
 
-use crate::{middleware::user_token::UserToken, services::state_change::ChangePath, AppState};
+use crate::{middleware::session::UserToken, services::state_change::ChangePath, AppState};
 
 /// Returns the routes for calculating state change paths.
-pub fn state_change_routes() -> Router<AppState> {
+pub fn state_change_routes() -> Router {
     Router::new()
         .route("/:state_record_type/state-changes", get(get_state_changes))
         .route(
@@ -53,7 +53,7 @@ impl IntoResponse for StateChangesPage {
 }
 
 async fn get_state_changes(
-    State(app_state): State<AppState>,
+    app_state: AppState,
     headers: HeaderMap,
     Path(state_rt): Path<String>,
     Query(q): Query<HashMap<String, String>>,

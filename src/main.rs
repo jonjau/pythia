@@ -1,5 +1,14 @@
+use std::collections::HashMap;
+
 use askama::Template;
-use axum::{extract::State, middleware::from_fn, routing::get, Router};
+use axum::{
+    extract::State, middleware::from_fn_with_state, response::Redirect, routing::get, Form, Router,
+};
+use axum_extra::extract::{
+    cookie::{Cookie, SameSite},
+    CookieJar,
+};
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use tower_http::services::ServeDir;
 
 use log::info;
@@ -14,12 +23,18 @@ mod utils;
 use services::{
     fact::FactService, logic_machine::LogicMachineService, state_change::StateChangeService,
 };
+use uuid::Uuid;
 
 use crate::{
-    middleware::user_token::{set_user_token, UserToken},
+    middleware::session::{require_session, UserToken},
     routes::{knowledge_base::knowledge_base_routes, record_type::record_type_routes},
-    services::db::DbService,
+    services::{db::DbService, session::SessionService},
 };
+
+#[derive(Clone)]
+pub struct GlobalAppState {
+    sessions: SessionService,
+}
 
 /// Shared application state used by all handlers and services.
 ///
@@ -42,44 +57,32 @@ async fn main() {
 
     info!("Starting Pythia...");
 
-    // Generates knowledge base from persistence layer (i.e. DB) at start-up.
-    // let db = DbService::new("admin".to_owned()).await;
-    let db = DbService::new_local().await;
-    db.create_table_if_not_exists("pythia", "pk", "sk")
-        .await
-        .expect("Failed to create essential table");
-    db.update_knowledge_base()
-        .await
-        .expect("Failed to update knowledge base");
-
-    // Load knowledge base in Prolog
-    let lm = LogicMachineService::new(db.clone())
-        .await
-        .expect("Failed to start LogicMachine service");
-
-    // Initialise Pythia application state and services
-    let state = AppState {
-        db: db.clone(),
-        lm: lm.clone(),
-        facts: FactService::new(lm.clone(), db.clone()),
-        state_changes: StateChangeService::new(lm.clone()),
+    let global_state = GlobalAppState {
+        sessions: SessionService::new(),
     };
 
-    // Build the Axum router, mount static files, routes, and handlers
-    let r = Router::new()
-        .nest_service(
-            "/static",
-            axum::routing::get_service(ServeDir::new("static")),
+    let routes = Router::new()
+        .route(
+            "/sessions",
+            get(show_start_session_page).post(start_session),
         )
+        .with_state(global_state.clone());
+
+    let routes_requiring_session = Router::new()
         .route("/", get(get_inquiries))
         .merge(state_change_routes())
         .merge(fact_routes())
         .merge(record_type_routes())
         .merge(knowledge_base_routes())
-        // .route("/sessions", post(create_session))
-        // .route("/me", get(me))
-        .layer(from_fn(set_user_token))
-        .with_state(state);
+        .layer(from_fn_with_state(global_state.clone(), require_session));
+
+    let r = Router::new()
+        .nest_service(
+            "/static",
+            axum::routing::get_service(ServeDir::new("static")),
+        )
+        .merge(routes)
+        .nest("/", routes_requiring_session);
 
     // Run the HTTP server
     let addr = "0.0.0.0:3000";
@@ -101,6 +104,48 @@ async fn shutdown_signal() {
 }
 
 #[derive(Template)]
+#[template(path = "start-session.html")]
+struct StartSessionTemplate {
+    user_token: String,
+}
+
+async fn show_start_session_page() -> StartSessionTemplate {
+    StartSessionTemplate {
+        user_token: "".to_string(),
+    }
+}
+
+async fn start_session(
+    State(state): State<GlobalAppState>,
+    cookies: CookieJar,
+    Form(form): Form<HashMap<String, String>>,
+) -> (CookieJar, Redirect) {
+    const TOKEN_COOKIE_NAME: &str = "user_token";
+    const COOKIE_MAX_AGE_DAYS: i64 = 5;
+
+    let token = form
+        .get("user_token")
+        .and_then(|token| {
+            URL_SAFE_NO_PAD
+                .decode(token)
+                .ok()
+                .and_then(|bytes| Uuid::from_slice(&bytes).ok().map(|_| token.clone()))
+        })
+        .unwrap_or_else(|| URL_SAFE_NO_PAD.encode(Uuid::new_v4().as_bytes()));
+
+    state.sessions.start_session(token.clone()).await;
+
+    let cookie = Cookie::build((TOKEN_COOKIE_NAME, token))
+        .path("/")
+        .http_only(true)
+        // .secure(true)
+        .same_site(SameSite::Lax)
+        .max_age(time::Duration::days(COOKIE_MAX_AGE_DAYS));
+
+    (cookies.add(cookie), Redirect::to("/"))
+}
+
+#[derive(Template)]
 #[template(path = "inquiries.html")]
 struct GetInquiriesTemplate {
     user_token: String,
@@ -110,7 +155,7 @@ struct GetInquiriesTemplate {
 /// Handler for GET requests to `/`.
 async fn get_inquiries(
     UserToken(user_token): UserToken,
-    State(app_state): State<AppState>,
+    app_state: AppState,
 ) -> GetInquiriesTemplate {
     let rts = app_state
         .lm
@@ -123,35 +168,3 @@ async fn get_inquiries(
         record_types: rts.iter().map(|rt| rt.name.clone()).collect(),
     }
 }
-
-// // #[axum::debug_handler]
-// async fn create_session(
-//     jar: CookieJar,
-// ) -> Result<(CookieJar, Redirect), StatusCode> {
-//     // if let Some(session_id) = authorize_and_create_session(auth.token()).await {
-//     //     Ok((
-//     //         // the updated jar must be returned for the changes
-//     //         // to be included in the response
-//     //         jar.add(Cookie::new("session_id", "123".to_string())),
-//     //         Redirect::to("/me"),
-//     //     ))
-//     // } else {
-//     //     Err(StatusCode::UNAUTHORIZED)
-//     // }
-
-//         Ok((
-//             // the updated jar must be returned for the changes
-//             // to be included in the response
-//             jar.add(Cookie::new("session_id", "123".to_string())),
-//             Redirect::to("/me"),
-//         ))
-// }
-
-// // #[axum::debug_handler]
-// async fn me(jar: CookieJar) -> Result<String, StatusCode> {
-//     if let Some(session_id) = jar.get("session_id") {
-//         Ok(session_id.to_string())
-//     } else {
-//         Err(StatusCode::UNAUTHORIZED)
-//     }
-// }
