@@ -32,3 +32,4 @@ aws-config = {version = "1.8.2", features = ["behavior-version-latest"] }
 aws-sdk-dynamodb = "1.83.0"
 axum-extra = { version = "0.9", features = ["cookie", "typed-header"] }
 time = "0.3.41"
+base64 = "0.22.1"

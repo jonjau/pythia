@@ -2877,6 +2877,7 @@ dependencies = [
  "axum",
  "axum-extra",
  "axum-macros",
+ "base64 0.22.1",
  "env_logger",
  "log",
  "nom 8.0.0",
