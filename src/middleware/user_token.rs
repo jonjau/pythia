@@ -7,6 +7,7 @@ use axum::{
     response::IntoResponse,
 };
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use uuid::Uuid;
 
 const TOKEN_COOKIE_NAME: &str = "user_token";
@@ -17,10 +18,18 @@ pub async fn set_user_token(
     mut request: Request<Body>,
     next: Next,
 ) -> impl IntoResponse {
+
+    // Generate a new user token if it doesn't exist in the cookie jar or it is in an invalid format
+    // Token format is UUIDv4 encoded as base64, URL-safe, no padding
     let user_token = jar
         .get(TOKEN_COOKIE_NAME)
-        .map(|cookie| cookie.value().to_string())
-        .unwrap_or_else(|| Uuid::new_v4().to_string());
+        .and_then(|cookie| {
+            URL_SAFE_NO_PAD
+                .decode(cookie.value())
+                .ok()
+                .and_then(|bytes| Uuid::from_slice(&bytes).ok())
+                .map(|uuid| uuid.to_string())
+        }).unwrap_or_else(|| URL_SAFE_NO_PAD.encode(Uuid::new_v4().as_bytes()));
 
     request.extensions_mut().insert(user_token.clone());
 
