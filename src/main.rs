@@ -10,10 +10,6 @@ mod routes;
 mod services;
 mod utils;
 
-use services::{
-    fact::FactService, logic_machine::LogicMachineService, state_change::StateChangeService,
-};
-
 use crate::{
     middleware::session::require_session,
     routes::{
@@ -28,20 +24,6 @@ pub struct GlobalAppState {
     sessions: SessionService,
 }
 
-/// Shared application state used by all handlers and services.
-///
-/// This includes:
-/// - `LogicMachineService`: The logic engine running Prolog programs.
-/// - `FactService`: Handles operations related to facts.
-/// - `StateChangeService`: Handles state change operations.
-#[derive(Clone)]
-pub struct AppState {
-    db: DbService,
-    lm: LogicMachineService,
-    facts: FactService,
-    state_changes: StateChangeService,
-}
-
 /// Main entry point of the Pythia application.
 #[tokio::main]
 async fn main() {
@@ -49,8 +31,14 @@ async fn main() {
 
     info!("Starting Pythia...");
 
+    // let db = DbService::new("admin".to_owned()).await;
+    let db = DbService::new_local("_".to_owned()).await;
+    db.create_table_if_not_exists("pythia", "pk", "sk")
+        .await
+        .expect("Failed to create essential table");
+
     let global_state = GlobalAppState {
-        sessions: SessionService::new(),
+        sessions: SessionService::new(db),
     };
 
     let routes_sessionless = session_routes().with_state(global_state.clone());

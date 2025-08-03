@@ -9,7 +9,10 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use crate::{middleware::session::UserToken, services::fact::FactTableData, AppState};
+use crate::{
+    middleware::session::UserToken,
+    services::{fact::FactTableData, session::AppState},
+};
 
 /// Returns the routes for getting and creating facts.
 pub fn fact_routes() -> Router {

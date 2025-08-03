@@ -7,7 +7,7 @@ use axum::{
     response::{IntoResponse, Redirect},
 };
 
-use crate::{AppState, GlobalAppState};
+use crate::{services::session::AppState, GlobalAppState};
 
 const TOKEN_COOKIE_NAME: &str = "user_token";
 
@@ -32,7 +32,7 @@ pub async fn require_session(
     match token {
         Some(t) => {
             let state = global.sessions.get_session_state(&t).await;
-            if let Some(state) = state {
+            if let Ok(Some(state)) = state {
                 req.extensions_mut().insert(t);
                 req.extensions_mut().insert(state);
                 next.run(req).await
