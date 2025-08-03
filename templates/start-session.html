@@ -1,0 +1,7 @@
+{% extends "layout.html" %}
+{% block content %}
+<form action="/sessions" method="post">
+    <input type="text" name="user_token" class="border rounded-sm p-2 leading-tight focus:outline-amber-700 focus:outline-4" />
+    <button type="submit" class="button bg-green-800 hover:bg-green-700">Start/resume session</button>
+</form>
+{% endblock %}

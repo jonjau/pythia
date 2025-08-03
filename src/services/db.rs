@@ -60,26 +60,23 @@ pub enum DbServiceError {
 
 #[derive(Clone)]
 pub struct DbService {
-    user_id: String,
+    user: String,
     client: Client,
 }
 
 const TABLE_PYTHIA: &str = "pythia";
 
 impl DbService {
-    pub async fn new(user_id: String) -> Self {
+    pub async fn new(user: String) -> Self {
         let config = aws_config::defaults(aws_config::BehaviorVersion::latest())
             .load()
             .await;
 
         let dynamodb_local_config = aws_sdk_dynamodb::config::Builder::from(&config).build();
-
-        let client = Client::from_conf(dynamodb_local_config);
-
-        DbService { user_id, client }
+        DbService { user, client: Client::from_conf(dynamodb_local_config) }
     }
 
-    pub async fn new_local() -> Self {
+    pub async fn new_local(user: String) -> Self {
         let config = aws_config::defaults(aws_config::BehaviorVersion::latest())
             .test_credentials()
             .region(aws_config::Region::new("us-west-2"))
@@ -88,13 +85,7 @@ impl DbService {
             .await;
 
         let dynamodb_local_config = aws_sdk_dynamodb::config::Builder::from(&config).build();
-
-        let client = Client::from_conf(dynamodb_local_config);
-
-        DbService {
-            user_id: "local-user".to_owned(),
-            client,
-        }
+        DbService { user, client: Client::from_conf(dynamodb_local_config) }
     }
 
     pub async fn create_table_if_not_exists(
@@ -202,8 +193,8 @@ impl DbService {
         }
     }
 
-    fn get_user_id(&self) -> String {
-        format!("user#{}", self.user_id)
+    fn get_user(&self) -> String {
+        format!("user#{}", self.user)
     }
 
     pub async fn get_all_record_types(&self) -> Result<Vec<RecordTypeData>, DbServiceError> {
@@ -212,7 +203,7 @@ impl DbService {
             .query()
             .table_name(TABLE_PYTHIA)
             .key_condition_expression("pk = :pk AND begins_with(sk, :sk_prefix)")
-            .expression_attribute_values(":pk", AttributeValue::S(self.get_user_id()))
+            .expression_attribute_values(":pk", AttributeValue::S(self.get_user()))
             .expression_attribute_values(":sk_prefix", AttributeValue::S("type#".to_owned()))
             .send()
             .await?;
@@ -229,7 +220,7 @@ impl DbService {
             .client
             .get_item()
             .table_name(TABLE_PYTHIA)
-            .key("pk", AttributeValue::S(self.get_user_id()))
+            .key("pk", AttributeValue::S(self.get_user()))
             .key("sk", AttributeValue::S(format!("type#{}", name)))
             .send()
             .await?;
@@ -242,7 +233,7 @@ impl DbService {
     }
 
     pub async fn put_record_type(&self, rt: &RecordTypeData) -> Result<(), DbServiceError> {
-        let pk = AttributeValue::S(self.get_user_id());
+        let pk = AttributeValue::S(self.get_user());
         let sk = AttributeValue::S(format!("type#{}", rt.name));
         let name = AttributeValue::S(rt.name.clone());
         let id_fields = AttributeValue::L(
@@ -284,7 +275,7 @@ impl DbService {
             .client
             .delete_item()
             .table_name(TABLE_PYTHIA)
-            .key("pk", AttributeValue::S(self.get_user_id()))
+            .key("pk", AttributeValue::S(self.get_user()))
             .key("sk", AttributeValue::S(format!("type#{}", name)))
             .condition_expression("attribute_exists(pk) AND attribute_exists(sk)")
             .send()
@@ -302,7 +293,7 @@ impl DbService {
             .client
             .put_item()
             .table_name(TABLE_PYTHIA)
-            .item("pk", AttributeValue::S(self.get_user_id()))
+            .item("pk", AttributeValue::S(self.get_user()))
             .item(
                 "sk",
                 AttributeValue::S(format!("record#{}#{}", fact.type_.name, uuid)),
@@ -330,7 +321,7 @@ impl DbService {
             .query()
             .table_name(TABLE_PYTHIA)
             .key_condition_expression("pk = :pk AND begins_with(sk, :sk_prefix)")
-            .expression_attribute_values(":pk", AttributeValue::S(self.get_user_id()))
+            .expression_attribute_values(":pk", AttributeValue::S(self.get_user()))
             .expression_attribute_values(
                 ":sk_prefix",
                 AttributeValue::S(format!("record#{}#", rt.name)),
@@ -395,7 +386,7 @@ impl DbService {
             .client
             .delete_item()
             .table_name(TABLE_PYTHIA)
-            .key("pk", AttributeValue::S(self.get_user_id()))
+            .key("pk", AttributeValue::S(self.get_user()))
             .key(
                 "sk",
                 AttributeValue::S(format!("record#{}#{}", rt.name, fact_id)),
@@ -414,7 +405,7 @@ impl DbService {
             .client
             .put_item()
             .table_name(TABLE_PYTHIA)
-            .item("pk", AttributeValue::S(self.get_user_id()))
+            .item("pk", AttributeValue::S(self.get_user()))
             .item("sk", AttributeValue::S(format!("kb#{}", kbi.file_path)))
             .item("contents", AttributeValue::S(kbi.contents));
 
@@ -450,7 +441,7 @@ impl DbService {
             .client
             .get_item()
             .table_name(TABLE_PYTHIA)
-            .key("pk", AttributeValue::S(self.get_user_id()))
+            .key("pk", AttributeValue::S(self.get_user()))
             .key(
                 "sk",
                 AttributeValue::S(format!("kb#{}", file_path.to_owned())),
