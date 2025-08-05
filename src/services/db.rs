@@ -319,6 +319,33 @@ impl DbService {
 
         info!("Deleted record type {}", name);
 
+        let facts = self
+            .client
+            .query()
+            .table_name(TABLE_PYTHIA)
+            .key_condition_expression("pk = :pk AND begins_with(sk, :sk_prefix)")
+            .expression_attribute_values(":pk", AttributeValue::S(self.get_user()))
+            .expression_attribute_values(
+                ":sk_prefix",
+                AttributeValue::S(format!("record#{}#", name)),
+            )
+            .send()
+            .await?;
+
+        for item in facts.items() {
+            if let Some(fact_id) = item.get("_id").and_then(|v| v.as_s().ok()) {
+                let _ = self
+                    .client
+                    .delete_item()
+                    .table_name(TABLE_PYTHIA)
+                    .key("pk", AttributeValue::S(self.get_user()))
+                    .key("sk", AttributeValue::S(format!("record#{}#{}", name, fact_id)))
+                    .send()
+                    .await?;
+                info!("Deleted fact with ID {} for record type {}", fact_id, name);
+            }
+        }
+
         Ok(())
     }
 

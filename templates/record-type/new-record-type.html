@@ -3,7 +3,7 @@
     Add a new Record Type
   </h3>
   <p class="m-0">
-    Please enter the field names as separate lines in the text areas below.
+    Please enter the field names as comma-separated values in the text areas below.
     Whitespace is ignored, so you can use spaces or tabs to align the fields visually.
   </p>
 
@@ -33,9 +33,9 @@
   </div>
 
   <div class="flex mt-4">
-    <button hx-delete="/record-type/new" hx-target="#add-record-type-form" hx-swap="outerHTML"
+    <button hx-delete="/record-types/new" hx-target="#add-record-type-form" hx-swap="outerHTML"
       class="button m-2 bg-red-800 hover:bg-red-700">Cancel</button>
-    <button hx-post="/record-type/new" hx-include="#add-record-type-form" hx-target="#fact-table" hx-swap="outerHTML"
+    <button hx-post="/record-types" hx-include="#add-record-type-form" hx-target="#record-type-table" hx-swap="outerHTML"
       class="button m-2 bg-green-800 hover:bg-green-700">Submit</button>
   </div>
 </form>

@@ -60,7 +60,8 @@
         </table>
       </td>
       <td class="bg-stone-800 border-b border-stone-700 align-top">
-        <button class="button m-2 bg-red-800 hover:bg-red-700 m-2">Delete</button>
+        <button class="button m-2 bg-red-800 hover:bg-red-700 m-2" hx-delete="/record-types/{{ rt.name }}"
+          hx-target="#record-type-table">Delete</button>
       </td>
     </tr>
     {% endfor %}
