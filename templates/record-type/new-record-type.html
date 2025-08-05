@@ -1,0 +1,41 @@
+<form id="add-record-type-form" autocomplete="on" class="border border-stone-700 rounded-sm p-6 w-lg">
+  <h3 class="text-xl mb-4 font-bold">
+    Add a new Record Type
+  </h3>
+  <p class="m-0">
+    Please enter the field names as separate lines in the text areas below.
+    Whitespace is ignored, so you can use spaces or tabs to align the fields visually.
+  </p>
+
+  <div class="mt-4 flex flex-col space-y-4">
+    <div class="flex flex-col">
+      <label for="name" class="font-bold">Record Type name</label>
+      <input id="name" name="name" class="border border-stone-700 rounded-sm px-3 py-2 mt-2" />
+    </div>
+
+    <div class="flex flex-col">
+      <label for="id_fields" class="font-bold">ID field names</label>
+      <textarea id="id_fields" name="id_fields" rows="3" placeholder="e.g. Username, Email"
+        class="border border-stone-700 rounded-sm px-3 py-2 mt-2"></textarea>
+    </div>
+
+    <div class="flex flex-col">
+      <label for="data_fields" class="font-bold">Data field names</label>
+      <textarea id="data_fields" name="data_fields" rows="3" placeholder="e.g. Amount, Product"
+        class="border border-stone-700 rounded-sm px-3 py-2 mt-2"></textarea>
+    </div>
+
+    <div class="flex flex-col">
+      <label for="metadata_fields" class="font-bold">Metadata field names</label>
+      <textarea id="metadata_fields" name="metadata_fields" rows="3" placeholder="e.g. Context, Time"
+        class="border border-stone-700 rounded-sm px-3 py-2 mt-2"></textarea>
+    </div>
+  </div>
+
+  <div class="flex mt-4">
+    <button hx-delete="/record-type/new" hx-target="#add-record-type-form" hx-swap="outerHTML"
+      class="button m-2 bg-red-800 hover:bg-red-700">Cancel</button>
+    <button hx-post="/record-type/new" hx-include="#add-record-type-form" hx-target="#fact-table" hx-swap="outerHTML"
+      class="button m-2 bg-green-800 hover:bg-green-700">Submit</button>
+  </div>
+</form>
