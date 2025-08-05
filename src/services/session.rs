@@ -3,8 +3,7 @@ use std::sync::Arc;
 use quick_cache::sync::Cache;
 
 use crate::services::{
-    db::DbService, fact::FactService, logic_machine::LogicMachineService,
-    state_change::StateChangeService,
+    db::DbService, fact::FactService, logic_machine::LogicMachineService, record_type::RecordTypeService, state_change::StateChangeService
 };
 
 /// Shared application state used by all handlers and services.
@@ -17,6 +16,7 @@ use crate::services::{
 pub struct AppState {
     pub db: DbService,
     pub lm: LogicMachineService,
+    pub record_types: RecordTypeService,
     pub facts: FactService,
     pub state_changes: StateChangeService,
 }
@@ -37,6 +37,7 @@ impl AppState {
         AppState {
             db: db.clone(),
             lm: lm.clone(),
+            record_types: RecordTypeService::new(db.clone()),
             facts: FactService::new(lm.clone(), db.clone()),
             state_changes: StateChangeService::new(lm.clone()),
         }
