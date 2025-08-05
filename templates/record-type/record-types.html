@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+{% block content %}
+<nav class="flex">
+  <a href="/" class="link w-fit">
+    <div class="flex justify-between items-center">
+      <svg class="mr-2 w-5 h-5 text-amber-100" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 5l-7 7 7 7" />
+      </svg>
+      <span>Back to Home</span>
+    </div>
+  </a>
+</nav>
+
+<div class="mt-8">
+  <h1 class="text-4xl font-bold mb-4">Record Types</h1>
+
+  {% include "record-type-table.html" %}
+
+  <div class="mt-8">
+    {% include "add-new-record-type-button.html" %}
+  </div>
+
+</div>
+
+{% endblock %}
