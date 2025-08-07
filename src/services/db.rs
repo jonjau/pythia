@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use aws_sdk_dynamodb::{
+    operation::query::QueryError,
     types::{
         AttributeDefinition, AttributeValue, BillingMode, KeySchemaElement, KeyType,
         ScalarAttributeType,
@@ -35,6 +36,9 @@ pub enum DbServiceError {
     #[error("DynamoDB ScanError: {0}")]
     AwsDynamoDbScanError(#[from] aws_sdk_dynamodb::error::SdkError<ScanError>),
 
+    #[error("DynamoDB QueryError: {0}")]
+    AwsDynamoDbQueryError(#[from] aws_sdk_dynamodb::error::SdkError<QueryError>),
+
     #[error("DynamoDB GetItemError: {0}")]
     AwsDynamoDbGetItemError(#[from] aws_sdk_dynamodb::error::SdkError<GetItemError>),
 
@@ -56,61 +60,87 @@ pub enum DbServiceError {
 
 #[derive(Clone)]
 pub struct DbService {
+    user: String,
     client: Client,
 }
 
+const TABLE_PYTHIA: &str = "pythia";
+
 impl DbService {
-    pub async fn new() -> Self {
+    pub async fn new(user: String) -> Self {
         let config = aws_config::defaults(aws_config::BehaviorVersion::latest())
             .load()
             .await;
 
         let dynamodb_local_config = aws_sdk_dynamodb::config::Builder::from(&config).build();
-
-        let client = Client::from_conf(dynamodb_local_config);
-
-        DbService { client }
+        DbService {
+            user,
+            client: Client::from_conf(dynamodb_local_config),
+        }
     }
 
-    pub async fn create_essential_tables_if_not_exist(&self) -> Result<(), DbServiceError> {
-        self.create_table_if_not_exists("types", "name").await?;
-        self.create_table_if_not_exists("knowledge_base", "file_path")
-            .await?;
-        Ok(())
+    pub async fn new_local(user: String) -> Self {
+        let config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+            .test_credentials()
+            .region(aws_config::Region::new("us-west-2"))
+            .endpoint_url("http://host.docker.internal:8000")
+            .load()
+            .await;
+
+        let dynamodb_local_config = aws_sdk_dynamodb::config::Builder::from(&config).build();
+        DbService {
+            user,
+            client: Client::from_conf(dynamodb_local_config),
+        }
     }
 
-    async fn create_table_if_not_exists(
+    pub fn set_user(&mut self, user: String) {
+        self.user = user;
+    }
+
+    pub async fn create_table_if_not_exists(
         &self,
         table: &str,
-        key: &str,
+        pk_name: &str,
+        sk_name: &str,
     ) -> Result<(), DbServiceError> {
         if self.table_exists(table).await? {
             return Ok(());
         }
 
-        let ad = AttributeDefinition::builder()
-            .attribute_name(key)
+        let pk_def = AttributeDefinition::builder()
+            .attribute_name(pk_name)
+            .attribute_type(ScalarAttributeType::S)
+            .build()?;
+        let sk_def = AttributeDefinition::builder()
+            .attribute_name(sk_name)
             .attribute_type(ScalarAttributeType::S)
             .build()?;
 
-        let ks = KeySchemaElement::builder()
-            .attribute_name(key)
+        let pk_schema = KeySchemaElement::builder()
+            .attribute_name(pk_name)
             .key_type(KeyType::Hash)
+            .build()?;
+        let sk_schema = KeySchemaElement::builder()
+            .attribute_name(sk_name)
+            .key_type(KeyType::Range)
             .build()?;
 
         let response = self
             .client
             .create_table()
             .table_name(table)
-            .key_schema(ks)
-            .attribute_definitions(ad)
+            .key_schema(pk_schema)
+            .key_schema(sk_schema)
+            .attribute_definitions(pk_def)
+            .attribute_definitions(sk_def)
             .billing_mode(BillingMode::PayPerRequest)
             .send()
             .await;
 
         match response {
             Ok(_) => {
-                info!("Added table {} with key {}", table, key);
+                info!("Added table {} with key {}", table, pk_name);
                 Ok(())
             }
             Err(e) => Err(e.into()),
@@ -133,7 +163,32 @@ impl DbService {
         }
     }
 
-    /// Maps DynamoDB attributes to a RecordTypeJson instance.
+    pub async fn add_user_token(&self, user: String) -> Result<(), DbServiceError> {
+        let _ = self
+            .client
+            .put_item()
+            .table_name(TABLE_PYTHIA)
+            .item("pk", AttributeValue::S(format!("user#{}", user)))
+            .item("sk", AttributeValue::S("token".to_owned()))
+            .send()
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn user_token_exists(&self, user: String) -> Result<bool, DbServiceError> {
+        let resp = self
+            .client
+            .get_item()
+            .table_name(TABLE_PYTHIA)
+            .key("pk", AttributeValue::S(format!("user#{}", user)))
+            .key("sk", AttributeValue::S("token".to_owned()))
+            .send()
+            .await?;
+
+        Ok(resp.item.is_some())
+    }
+
     fn map_item_to_record_type(item: &HashMap<String, AttributeValue>) -> RecordTypeData {
         RecordTypeData {
             name: item
@@ -174,8 +229,20 @@ impl DbService {
         }
     }
 
+    fn get_user(&self) -> String {
+        format!("user#{}", self.user)
+    }
+
     pub async fn get_all_record_types(&self) -> Result<Vec<RecordTypeData>, DbServiceError> {
-        let resp = self.client.scan().table_name("types").send().await?;
+        let resp = self
+            .client
+            .query()
+            .table_name(TABLE_PYTHIA)
+            .key_condition_expression("pk = :pk AND begins_with(sk, :sk_prefix)")
+            .expression_attribute_values(":pk", AttributeValue::S(self.get_user()))
+            .expression_attribute_values(":sk_prefix", AttributeValue::S("type#".to_owned()))
+            .send()
+            .await?;
         let record_types = resp
             .items()
             .into_iter()
@@ -185,13 +252,14 @@ impl DbService {
     }
 
     pub async fn get_record_type(&self, name: &str) -> Result<RecordTypeData, DbServiceError> {
-        let request = self
+        let resp = self
             .client
             .get_item()
-            .table_name("types")
-            .key("name", AttributeValue::S(name.to_owned()));
-
-        let resp = request.send().await?;
+            .table_name(TABLE_PYTHIA)
+            .key("pk", AttributeValue::S(self.get_user()))
+            .key("sk", AttributeValue::S(format!("type#{}", name)))
+            .send()
+            .await?;
 
         if let Some(item) = resp.item() {
             Ok(Self::map_item_to_record_type(item))
@@ -201,6 +269,8 @@ impl DbService {
     }
 
     pub async fn put_record_type(&self, rt: &RecordTypeData) -> Result<(), DbServiceError> {
+        let pk = AttributeValue::S(self.get_user());
+        let sk = AttributeValue::S(format!("type#{}", rt.name));
         let name = AttributeValue::S(rt.name.clone());
         let id_fields = AttributeValue::L(
             rt.id_fields
@@ -223,7 +293,9 @@ impl DbService {
         let request = self
             .client
             .put_item()
-            .table_name("types")
+            .table_name(TABLE_PYTHIA)
+            .item("pk", pk)
+            .item("sk", sk)
             .item("name", name)
             .item("id_fields", id_fields)
             .item("data_fields", data_fields)
@@ -231,20 +303,48 @@ impl DbService {
 
         let _ = request.send().await?;
 
-        self.create_table_if_not_exists(&rt.name, "id").await?;
-
         Ok(())
     }
 
     pub async fn delete_record_type(&self, name: &str) -> Result<(), DbServiceError> {
-        let request = self
+        let _ = self
             .client
             .delete_item()
-            .table_name("types")
-            .key("name", AttributeValue::S(name.to_string()));
+            .table_name(TABLE_PYTHIA)
+            .key("pk", AttributeValue::S(self.get_user()))
+            .key("sk", AttributeValue::S(format!("type#{}", name)))
+            .condition_expression("attribute_exists(pk) AND attribute_exists(sk)")
+            .send()
+            .await?;
 
-        let _ = request.send().await?;
         info!("Deleted record type {}", name);
+
+        let facts = self
+            .client
+            .query()
+            .table_name(TABLE_PYTHIA)
+            .key_condition_expression("pk = :pk AND begins_with(sk, :sk_prefix)")
+            .expression_attribute_values(":pk", AttributeValue::S(self.get_user()))
+            .expression_attribute_values(
+                ":sk_prefix",
+                AttributeValue::S(format!("record#{}#", name)),
+            )
+            .send()
+            .await?;
+
+        for item in facts.items() {
+            if let Some(fact_id) = item.get("_id").and_then(|v| v.as_s().ok()) {
+                let _ = self
+                    .client
+                    .delete_item()
+                    .table_name(TABLE_PYTHIA)
+                    .key("pk", AttributeValue::S(self.get_user()))
+                    .key("sk", AttributeValue::S(format!("record#{}#{}", name, fact_id)))
+                    .send()
+                    .await?;
+                info!("Deleted fact with ID {} for record type {}", fact_id, name);
+            }
+        }
 
         Ok(())
     }
@@ -255,8 +355,13 @@ impl DbService {
         let mut request = self
             .client
             .put_item()
-            .table_name(fact.type_.name.clone())
-            .item("id", AttributeValue::S(uuid.to_string()));
+            .table_name(TABLE_PYTHIA)
+            .item("pk", AttributeValue::S(self.get_user()))
+            .item(
+                "sk",
+                AttributeValue::S(format!("record#{}#{}", fact.type_.name, uuid)),
+            )
+            .item("_id", AttributeValue::S(uuid.to_string()));
 
         info!("Putting fact for '{}', key: {}", fact.type_.name, uuid);
 
@@ -276,18 +381,23 @@ impl DbService {
     ) -> Result<Vec<FactData>, DbServiceError> {
         let resp = self
             .client
-            .scan()
-            .table_name(rt.name.clone())
+            .query()
+            .table_name(TABLE_PYTHIA)
+            .key_condition_expression("pk = :pk AND begins_with(sk, :sk_prefix)")
+            .expression_attribute_values(":pk", AttributeValue::S(self.get_user()))
+            .expression_attribute_values(
+                ":sk_prefix",
+                AttributeValue::S(format!("record#{}#", rt.name)),
+            )
             .send()
             .await?;
 
-        let items = resp.items();
-
-        let facts = items
+        let facts = resp
+            .items()
             .into_iter()
             .map(|item| FactData {
                 id: item
-                    .get("id")
+                    .get("_id")
                     .and_then(|v| v.as_s().ok())
                     .map(String::from)
                     .unwrap_or_default(),
@@ -330,14 +440,23 @@ impl DbService {
     }
 
     /// Deletes a fact by its ID for a specific record type.
-    pub async fn delete_fact(&self, rt: &RecordTypeData, fact_id: &str) -> Result<(), DbServiceError> {
-        let request = self
+    pub async fn delete_fact(
+        &self,
+        rt: &RecordTypeData,
+        fact_id: &str,
+    ) -> Result<(), DbServiceError> {
+        let _ = self
             .client
             .delete_item()
-            .table_name(rt.name.to_owned())
-            .key("id", AttributeValue::S(fact_id.to_owned()));
+            .table_name(TABLE_PYTHIA)
+            .key("pk", AttributeValue::S(self.get_user()))
+            .key(
+                "sk",
+                AttributeValue::S(format!("record#{}#{}", rt.name, fact_id)),
+            )
+            .send()
+            .await?;
 
-        request.send().await?;
         Ok(())
     }
 
@@ -348,8 +467,9 @@ impl DbService {
         let request = self
             .client
             .put_item()
-            .table_name("knowledge_base")
-            .item("file_path", AttributeValue::S(kbi.file_path))
+            .table_name(TABLE_PYTHIA)
+            .item("pk", AttributeValue::S(self.get_user()))
+            .item("sk", AttributeValue::S(format!("kb#{}", kbi.file_path)))
             .item("contents", AttributeValue::S(kbi.contents));
 
         request.send().await?;
@@ -380,13 +500,17 @@ impl DbService {
         &self,
         file_path: &str,
     ) -> Result<KnowledgeBaseItem, DbServiceError> {
-        let request = self
+        let resp = self
             .client
             .get_item()
-            .table_name("knowledge_base")
-            .key("file_path", AttributeValue::S(file_path.to_owned()));
-
-        let resp = request.send().await?;
+            .table_name(TABLE_PYTHIA)
+            .key("pk", AttributeValue::S(self.get_user()))
+            .key(
+                "sk",
+                AttributeValue::S(format!("kb#{}", file_path.to_owned())),
+            )
+            .send()
+            .await?;
 
         if let Some(item) = resp.item() {
             let contents = item

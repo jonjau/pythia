@@ -11,11 +11,14 @@
 </head>
 
 <body class="bg-stone-900 text-amber-100 font-monospace h-screen flex flex-col">
-  <header class="px-10 py-4 bg-stone-800">
+  <header class="flex justify-between items-center px-10 py-4 bg-stone-800">
     <a href="/"
       class="text-2xl font-bold border-b-4 border-transparent hover:border-dotted hover:border-b-amber-700 hover:text-amber-400 focus:border-solid focus:border-b-amber-700">
       Pythia
     </a>
+    <div>
+      User: {{ user_token }}
+    </div>
   </header>
   <main class="mx-10 my-5 flex-1 h-100 flex flex-col" id="main-content">
     {% block content %} {% endblock %}

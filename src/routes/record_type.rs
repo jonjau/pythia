@@ -1,88 +1,107 @@
-use crate::{models::record_type::RecordTypeData, AppState};
+use askama::Template;
 use axum::{
-    extract::{Path, State},
-    routing::get,
-    Json, Router,
+    routing::{delete, get},
+    Form, Router,
 };
-use log::info;
-use serde_json::{json, Value};
+
+use crate::{
+    middleware::session::UserToken,
+    models::record_type::RecordTypeData,
+    services::{record_type::CreateRecordTypeFormData, session::AppState},
+};
 
 /// Returns the routes for getting, creating and deleting record types
-pub fn record_type_routes() -> Router<AppState> {
+pub fn record_type_routes() -> Router {
     Router::new()
-        .route(
-            "/api/record-types",
-            get(get_record_types).post(create_record_type),
+        .nest(
+            "/api",
+            crate::routes::api::record_type::record_type_routes(),
         )
         .route(
-            "/api/record-types/:name",
-            get(get_record_type).delete(delete_record_type),
+            "/record-types",
+            get(get_record_types_page).post(create_record_type),
         )
+        .route(
+            "/record-types/new",
+            get(get_new_record_type_form).delete(get_add_record_type_button),
+        )
+        .route("/record-types/:rt_name", delete(delete_record_type))
 }
 
-async fn get_record_types(State(state): State<AppState>) -> Result<Json<Value>, Json<Value>> {
-    match state.db.get_all_record_types().await {
-        Ok(record_types) => Ok(Json(json!({"record_types": record_types}))),
-        Err(e) => {
-            info!("Failed to get record types: {}", e);
-            Err(Json(
-                json!({"error": format!("Failed to get record types: {}", e)}),
-            ))
-        }
+#[derive(Template)]
+#[template(path = "record-type/record-types.html")]
+struct RecordTypesPageTemplate {
+    user_token: String,
+    record_types: Vec<RecordTypeData>,
+}
+
+async fn get_record_types_page(
+    UserToken(user_token): UserToken,
+    state: AppState,
+) -> RecordTypesPageTemplate {
+    let record_types = state
+        .record_types
+        .get_all_record_types()
+        .await
+        .unwrap_or_default();
+
+    RecordTypesPageTemplate {
+        user_token,
+        record_types,
     }
 }
 
-async fn get_record_type(
-    State(state): State<AppState>,
-    Path(name): Path<String>,
-) -> Result<Json<Value>, Json<Value>> {
-    match state.db.get_record_type(&name).await {
-        Ok(record_type) => Ok(Json(json!({"record_type": record_type}))),
-        Err(e) => {
-            info!("Failed to get record type: {}", e);
-            Err(Json(
-                json!({"error": format!("Failed to get record type '{}': {}", name, e)}),
-            ))
-        }
-    }
+#[derive(Template)]
+#[template(path = "record-type/new-record-type.html")]
+struct NewRecordTypeFormTemplate {}
+
+async fn get_new_record_type_form() -> NewRecordTypeFormTemplate {
+    NewRecordTypeFormTemplate {}
+}
+
+#[derive(Template)]
+#[template(path = "record-type/add-new-record-type-button.html")]
+struct AddNewRecordTypeButtonTemplate {}
+
+async fn get_add_record_type_button() -> AddNewRecordTypeButtonTemplate {
+    AddNewRecordTypeButtonTemplate {}
+}
+
+#[derive(Template)]
+#[template(path = "record-type/record-type-table.html")]
+struct RecordTypeTableTemplate {
+    record_types: Vec<RecordTypeData>,
 }
 
 async fn create_record_type(
-    State(state): State<AppState>,
-    Json(record_type): Json<RecordTypeData>,
-) -> Result<Json<Value>, Json<Value>> {
-    match state.db.put_record_type(&record_type).await {
-        Ok(_) => {
-            info!("Created record type: {}", record_type.name);
-            Ok(Json(
-                json!({"message": format!("Record type '{}' created successfully", record_type.name)}),
-            ))
-        }
-        Err(e) => {
-            info!("Failed to create record type: {}", e);
-            Err(Json(
-                json!({"error": format!("Failed to create record type '{}': {}", record_type.name, e)}),
-            ))
-        }
-    }
+    state: AppState,
+    Form(f): Form<CreateRecordTypeFormData>,
+) -> RecordTypeTableTemplate {
+    state
+        .record_types
+        .add_record_type(f)
+        .await
+        .expect("Failed to create record type");
+
+    let record_types: Vec<RecordTypeData> =
+        state.db.get_all_record_types().await.unwrap_or_default();
+
+    // TODO JCJ: Handle errors properly
+
+    RecordTypeTableTemplate { record_types }
 }
 
 async fn delete_record_type(
-    State(state): State<AppState>,
-    Path(name): Path<String>,
-) -> Result<Json<Value>, Json<Value>> {
-    match state.db.delete_record_type(&name).await {
-        Ok(_) => {
-            info!("Deleted record type: {}", name);
-            Ok(Json(
-                json!({"message": format!("Record type '{}' deleted successfully", name)}),
-            ))
-        }
-        Err(e) => {
-            info!("Failed to delete record type: {}", e);
-            Err(Json(
-                json!({"error": format!("Failed to delete record type '{}': {}", name, e)}),
-            ))
-        }
-    }
+    state: AppState,
+    axum::extract::Path(rt_name): axum::extract::Path<String>,
+) -> RecordTypeTableTemplate {
+    state
+        .record_types
+        .delete_record_type(&rt_name)
+        .await
+        .expect("Failed to delete record type");
+
+    let record_types = state.db.get_all_record_types().await.unwrap_or_default();
+
+    RecordTypeTableTemplate { record_types }
 }

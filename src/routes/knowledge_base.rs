@@ -1,16 +1,16 @@
-use axum::{extract::State, routing::post, Json, Router};
+use axum::{routing::post, Json, Router};
 use serde_json::{json, Value};
 
-use crate::AppState;
+use crate::services::session::AppState;
 
 /// Returns the routes for reloading and exporting the knowledge base, i.e. the set of Prolog rules and facts stored in the database, that the Logic Machine loads.
-pub fn knowledge_base_routes() -> Router<AppState> {
+pub fn knowledge_base_routes() -> Router {
     Router::new()
         .route("/api/knowledge-base/reload", post(reload_knowledge_base))
         .route("/api/knowledge-base/export", post(export_knowledge_base))
 }
 
-async fn reload_knowledge_base(State(state): State<AppState>) -> Result<Json<Value>, Json<Value>> {
+async fn reload_knowledge_base(state: AppState) -> Result<Json<Value>, Json<Value>> {
     state.db.update_knowledge_base().await.map_err(|e| {
         Json(json!({"error": format!("Failed to update Prolog knowledge base: {}", e)}))
     })?;
@@ -26,7 +26,7 @@ async fn reload_knowledge_base(State(state): State<AppState>) -> Result<Json<Val
     ))
 }
 
-async fn export_knowledge_base(State(state): State<AppState>) -> Result<Json<Value>, Json<Value>> {
+async fn export_knowledge_base(state: AppState) -> Result<Json<Value>, Json<Value>> {
     state
         .db
         .export_knowledge_base()

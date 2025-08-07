@@ -2,17 +2,20 @@ use std::collections::HashMap;
 
 use askama::Template;
 use axum::{
-    extract::{Path, State},
+    extract::Path,
     routing::{delete, get, post},
     Form, Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use crate::{services::fact::FactTableData, AppState};
+use crate::{
+    middleware::session::UserToken,
+    services::{fact::FactTableData, session::AppState},
+};
 
 /// Returns the routes for getting and creating facts.
-pub fn fact_routes() -> Router<AppState> {
+pub fn fact_routes() -> Router {
     Router::new()
         .route("/:fact_type/facts", get(get_facts).post(create_fact))
         .route("/api/:fact_type/facts", post(create_fact_json))
@@ -26,13 +29,15 @@ pub fn fact_routes() -> Router<AppState> {
 #[derive(Template)]
 #[template(path = "fact/facts.html")]
 struct GetFactsTemplate {
+    user_token: String,
     fact_type: String,
     fact_table_data: FactTableData,
 }
 
 async fn get_facts(
-    State(state): State<AppState>,
+    state: AppState,
     Path(fact_type): Path<String>,
+    UserToken(user_token): UserToken,
 ) -> GetFactsTemplate {
     let fact_table_data = state
         .facts
@@ -41,6 +46,7 @@ async fn get_facts(
         .unwrap_or_default();
 
     GetFactsTemplate {
+        user_token,
         fact_type,
         fact_table_data,
     }
@@ -53,10 +59,7 @@ struct GetNewFactFormTemplate {
     fields: Vec<String>,
 }
 
-async fn get_new_fact_form(
-    State(state): State<AppState>,
-    Path(rt_name): Path<String>,
-) -> GetNewFactFormTemplate {
+async fn get_new_fact_form(state: AppState, Path(rt_name): Path<String>) -> GetNewFactFormTemplate {
     match state.lm.get_record_type(rt_name).await {
         Ok(rt) => GetNewFactFormTemplate {
             fact_type: rt.clone().display_name.clone(),
@@ -87,7 +90,7 @@ struct FactsTableTemplate {
 }
 
 async fn create_fact(
-    State(state): State<AppState>,
+    state: AppState,
     Path(rt_name): Path<String>,
     Form(f): Form<HashMap<String, String>>,
 ) -> FactsTableTemplate {
@@ -114,7 +117,7 @@ struct CreateFacts {
 }
 
 async fn create_fact_json(
-    State(state): State<AppState>,
+    state: AppState,
     Path(rt_name): Path<String>,
     Json(payload): Json<CreateFacts>,
 ) -> Json<Value> {
@@ -160,7 +163,7 @@ async fn create_fact_json(
 }
 
 async fn delete_fact(
-    State(state): State<AppState>,
+    state: AppState,
     Path((rt_name, fact_id)): Path<(String, String)>,
 ) -> FactsTableTemplate {
     FactsTableTemplate {
