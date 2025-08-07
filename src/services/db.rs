@@ -9,6 +9,8 @@ use aws_sdk_dynamodb::{
     Client, Error,
 };
 use log::info;
+use std::time::Duration;
+use tokio::time::sleep;
 
 use crate::{
     models::{fact::FactData, record_type::RecordTypeData},
@@ -65,6 +67,7 @@ pub struct DbService {
 }
 
 const TABLE_PYTHIA: &str = "pythia";
+const MAX_DB_RETRIES: u32 = 10;
 
 impl DbService {
     pub async fn new(user: String) -> Self {
@@ -73,10 +76,10 @@ impl DbService {
             .await;
 
         let dynamodb_local_config = aws_sdk_dynamodb::config::Builder::from(&config).build();
-        DbService {
-            user,
-            client: Client::from_conf(dynamodb_local_config),
-        }
+        let client = Client::from_conf(dynamodb_local_config);
+        Self::wait_for_dynamodb(&client).await;
+
+        DbService { user, client }
     }
 
     pub async fn new_local(user: String) -> Self {
@@ -88,10 +91,33 @@ impl DbService {
             .await;
 
         let dynamodb_local_config = aws_sdk_dynamodb::config::Builder::from(&config).build();
-        DbService {
-            user,
-            client: Client::from_conf(dynamodb_local_config),
+
+        let client = Client::from_conf(dynamodb_local_config);
+        Self::wait_for_dynamodb(&client).await;
+
+        DbService { user, client }
+    }
+
+    pub async fn wait_for_dynamodb(client: &Client) {
+        for attempt in 1..=MAX_DB_RETRIES {
+            let result = client.list_tables().send().await;
+
+            match result {
+                Ok(_) => {
+                    info!("DynamoDB is ready after {} attempt(s)", attempt);
+                    return;
+                }
+                Err(e) => {
+                    info!("DynamoDB not ready yet (attempt {}): {}", attempt, e);
+                    sleep(Duration::from_secs(1)).await;
+                }
+            }
         }
+
+        panic!(
+            "Gave up waiting for DynamoDB after {} attempts",
+            MAX_DB_RETRIES
+        );
     }
 
     pub fn set_user(&mut self, user: String) {
@@ -339,7 +365,10 @@ impl DbService {
                     .delete_item()
                     .table_name(TABLE_PYTHIA)
                     .key("pk", AttributeValue::S(self.get_user()))
-                    .key("sk", AttributeValue::S(format!("record#{}#{}", name, fact_id)))
+                    .key(
+                        "sk",
+                        AttributeValue::S(format!("record#{}#{}", name, fact_id)),
+                    )
                     .send()
                     .await?;
                 info!("Deleted fact with ID {} for record type {}", fact_id, name);
