@@ -2,11 +2,11 @@ name: Deploy
 
 on:
   push:
-    branches:
-      - deploy-to-fargate
-    # tags:
-    #   - v*
-    paths: ["infra/**"]
+    # branches:
+    #   - deploy-to-fargate
+    tags:
+      - v*
+    # paths: ["infra/**"]
 
 permissions:
   id-token: write  # Required for configure-aws-credentials to request JWT from GitHub OIDC
