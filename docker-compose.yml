@@ -19,3 +19,5 @@ services:
       - "3000:3000"
     depends_on:
       - dynamodb-local
+    environment:
+      - RUST_LOG=info
