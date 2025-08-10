@@ -6,6 +6,7 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Redirect},
 };
+use axum_extra::extract::CookieJar;
 
 use crate::{services::session::AppState, GlobalAppState};
 
@@ -13,34 +14,22 @@ const TOKEN_COOKIE_NAME: &str = "user_token";
 
 pub async fn require_session(
     State(global): State<GlobalAppState>,
+    cookies: CookieJar,
     mut req: Request<Body>,
     next: Next,
 ) -> impl IntoResponse {
-    let token_prefix = format!("{}=", TOKEN_COOKIE_NAME);
-
-    let token = req
-        .headers()
-        .get("cookie")
-        .and_then(|h| h.to_str().ok())
-        .and_then(|s| {
-            s.split(';').find_map(|kv| {
-                let kv = kv.trim();
-                kv.strip_prefix(&token_prefix).map(|v| v.to_string())
-            })
-        });
-
-    match token {
-        Some(t) => {
-            let state = global.sessions.get_session_state(&t).await;
-            if let Ok(Some(state)) = state {
-                req.extensions_mut().insert(t);
+    if let Some(cookie) = cookies.get(TOKEN_COOKIE_NAME) {
+        let token = cookie.value();
+        match global.sessions.get_session_state(token).await {
+            Ok(Some(state)) => {
+                req.extensions_mut().insert(token.to_string());
                 req.extensions_mut().insert(state);
                 next.run(req).await
-            } else {
-                Redirect::to("/sessions").into_response()
             }
+            _ => Redirect::to("/sessions").into_response(),
         }
-        None => Redirect::to("/sessions").into_response(),
+    } else {
+        Redirect::to("/sessions").into_response()
     }
 }
 

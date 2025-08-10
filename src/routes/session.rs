@@ -102,5 +102,6 @@ fn create_cookie(token: String) -> Cookie<'static> {
         // .secure(true)
         .same_site(SameSite::Lax)
         .max_age(time::Duration::days(COOKIE_MAX_AGE_DAYS))
+        .expires(time::OffsetDateTime::now_utc() + time::Duration::days(COOKIE_MAX_AGE_DAYS))
         .build()
 }
