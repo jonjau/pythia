@@ -66,36 +66,41 @@ pub struct DbService {
     client: Client,
 }
 
+const USER_PYTHIA: &str = "_";
 const TABLE_PYTHIA: &str = "pythia";
 const MAX_DB_RETRIES: u32 = 10;
 
 impl DbService {
-    pub async fn new(user: String) -> Self {
+    pub async fn new() -> Self {
         let config = aws_config::defaults(aws_config::BehaviorVersion::latest())
             .load()
             .await;
 
-        let dynamodb_local_config = aws_sdk_dynamodb::config::Builder::from(&config).build();
-        let client = Client::from_conf(dynamodb_local_config);
-        Self::wait_for_dynamodb(&client).await;
-
-        DbService { user, client }
+        DbService {
+            user: USER_PYTHIA.to_owned(),
+            client: Self::setup_client(config).await,
+        }
     }
 
-    pub async fn new_local(user: String) -> Self {
+    pub async fn new_local() -> Self {
         let config = aws_config::defaults(aws_config::BehaviorVersion::latest())
             .test_credentials()
             .region(aws_config::Region::new("us-west-2"))
-            .endpoint_url("http://host.docker.internal:8000")
             .load()
             .await;
 
-        let dynamodb_local_config = aws_sdk_dynamodb::config::Builder::from(&config).build();
+        DbService {
+            user: USER_PYTHIA.to_owned(),
+            client: Self::setup_client(config).await,
+        }
+    }
 
+    async fn setup_client(config: aws_config::SdkConfig) -> Client {
+        let dynamodb_local_config = aws_sdk_dynamodb::config::Builder::from(&config).build();
         let client = Client::from_conf(dynamodb_local_config);
         Self::wait_for_dynamodb(&client).await;
 
-        DbService { user, client }
+        client
     }
 
     pub async fn wait_for_dynamodb(client: &Client) {
