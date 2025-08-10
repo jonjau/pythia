@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use axum::{middleware::from_fn_with_state, Router};
 use tower_http::services::ServeDir;
 
@@ -24,6 +26,24 @@ pub struct GlobalAppState {
     sessions: SessionService,
 }
 
+#[derive(Debug)]
+enum PythiaRunMode {
+    Local,
+    Remote,
+}
+
+impl FromStr for PythiaRunMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "local" => Ok(PythiaRunMode::Local),
+            "remote" => Ok(PythiaRunMode::Remote),
+            _ => Err(format!("Invalid mode: {}", s)),
+        }
+    }
+}
+
 /// Main entry point of the Pythia application.
 #[tokio::main]
 async fn main() {
@@ -31,8 +51,16 @@ async fn main() {
 
     info!("Starting Pythia...");
 
-    // let db = DbService::new("admin".to_owned()).await;
-    let db = DbService::new_local("_".to_owned()).await;
+    let mode = std::env::var("PYTHIA_RUN_MODE")
+        .ok()
+        .and_then(|s| PythiaRunMode::from_str(&s).ok())
+        .unwrap_or(PythiaRunMode::Local);
+
+    let db = match mode {
+        PythiaRunMode::Local => DbService::new_local().await,
+        PythiaRunMode::Remote => DbService::new().await        
+    };
+
     db.create_table_if_not_exists("pythia", "pk", "sk")
         .await
         .expect("Failed to create essential table");
