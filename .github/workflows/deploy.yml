@@ -38,7 +38,7 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/infra/ecr/
           terraform fmt
-          terraform init \
+          terraform init -reconfigure \
             -backend-config="bucket=${{ secrets.TERRAFORM_BACKEND_BUCKET }}" \
             -backend-config="key=${{ secrets.TERRAFORM_ECR_BACKEND_KEY }}" \
             -backend-config="region=${{ secrets.AWS_REGION }}"
@@ -73,7 +73,7 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/infra/
           terraform fmt
-          terraform init \
+          terraform init -reconfigure \
             -backend-config="bucket=${{ secrets.TERRAFORM_BACKEND_BUCKET }}" \
             -backend-config="key=${{ secrets.TERRAFORM_BACKEND_KEY }}" \
             -backend-config="region=${{ secrets.AWS_REGION }}"
