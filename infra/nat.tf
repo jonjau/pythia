@@ -12,8 +12,5 @@ module "fck_nat" {
     "private-${i}" => aws_route_table.private[i].id
   }
 
-  tags = {
-    "${var.tag_prefix}:Owner"       = "devops"
-    "${var.tag_prefix}:Environment" = var.environment
-  }
+  tags = var.tags
 }

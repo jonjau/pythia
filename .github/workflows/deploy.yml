@@ -36,7 +36,7 @@ jobs:
 
       - name: Terraform init and apply for ECR repository
         run: |
-          cd infra/ecr
+          cd $GITHUB_WORKSPACE/infra/ecr/
           terraform fmt
           terraform init \
             -backend-config="bucket=${{ secrets.TERRAFORM_BACKEND_BUCKET }}" \
@@ -51,23 +51,40 @@ jobs:
           EOF
           terraform apply -auto-approve
 
-      # - name: Login to Amazon ECR
-      #   id: login-ecr
-      #   uses: aws-actions/amazon-ecr-login@v2
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
-      # - name: Build, tag, and push docker image to Amazon ECR
-      #   env:
-      #     REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-      #     IMAGE_TAG: ${{ github.sha }}
-      #   run: |
-      #     docker build -t $REGISTRY/$ECR_REPO_NAME:$IMAGE_TAG .
-      #     docker push $REGISTRY/$ECR_REPO_NAME:$IMAGE_TAG
+      - name: Build and push Docker image to Amazon ECR
+        id: build-and-push
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPO_NAME: ${{ env.ECR_REPO_NAME }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          IMAGE_URI="$REGISTRY/$ECR_REPO_NAME:$IMAGE_TAG"
+          docker build -t $IMAGE_URI .
+          docker push $IMAGE_URI
+          echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
 
-      # - name: Output ECR image URI
-      #   id: ecr-image-uri
-      #   run: echo "ECR_IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${ECR_REPO_NAME}:${{ github.sha }}" >> $GITHUB_OUTPUT
-
-      # - name: Terraform apply to deploy (Phase 2)
-      #   env:
-      #     IMAGE_URI: "${{ env.ECR_REPO_URI }}@${{ steps.digest.outputs.digest }}"
-      #   run: terraform apply -auto-approve -var="image_uri=$IMAGE_URI"
+      - name: Terraform init and apply to ECS Fargate deployment
+        env:
+          IMAGE_URI: ${{ steps.build-and-push.outputs.image_uri }}
+        run: |
+          cd $GITHUB_WORKSPACE/infra/
+          terraform fmt
+          terraform init \
+            -backend-config="bucket=${{ secrets.TERRAFORM_BACKEND_BUCKET }}" \
+            -backend-config="key=${{ secrets.TERRAFORM_BACKEND_KEY }}" \
+            -backend-config="region=${{ secrets.AWS_REGION }}"
+          cat > variables.auto.tfvars <<EOF
+          az_count            = 2
+          container_port      = 3000
+          image_uri           = "$IMAGE_URI"
+          app_container_name  = "pythia-app"
+          tags = {
+            "pythia:Owner"       = "devops"
+            "pythia:Environment" = "dev"
+          }
+          EOF
+          terraform apply -auto-approve

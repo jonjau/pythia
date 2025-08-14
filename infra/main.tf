@@ -1,47 +1,5 @@
-resource "aws_ecr_repository" "repository" {
-  name                 = var.ecr_repository_name
-  image_tag_mutability = "IMMUTABLE"
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  encryption_configuration {
-    encryption_type = "KMS"
-  }
-
-  tags = {
-    "${var.tag_prefix}:Owner"       = "devops"
-    "${var.tag_prefix}:Environment" = var.environment
-  }
-}
-
-resource "aws_ecr_lifecycle_policy" "name" {
-  repository = aws_ecr_repository.repository.name
-  policy = jsonencode({
-    "rules" : [
-      {
-        "rulePriority" : 1,
-        "description" : "Keep last 3 latest images",
-        "selection" : {
-          "tagStatus" : "tagged",
-          "tagPrefixList" : ["latest"],
-          "countType" : "imageCountMoreThan",
-          "countNumber" : 3
-        },
-        "action" : {
-          "type" : "expire"
-        }
-      },
-    ]
-  })
-}
-
-resource "aws_ecr_registry_scanning_configuration" "default" {
-  scan_type = "BASIC"
-}
-
 resource "aws_iam_role" "ecs_task_execution" {
-  name = "ecs-task-execution-role"
+  name = "ecs-task-execution-role-0"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -76,10 +34,7 @@ resource "aws_iam_role" "ecs_task_iam_role" {
   description        = "Role for ECS tasks to access AWS services"
   assume_role_policy = data.aws_iam_policy_document.task_assume_role_policy.json
 
-  tags = {
-    "${var.tag_prefix}:Owner"       = "devops"
-    "${var.tag_prefix}:Environment" = var.environment
-  }
+  tags = var.tags
 }
 
 resource "aws_iam_policy" "dynamodb_access" {
@@ -103,10 +58,7 @@ resource "aws_iam_policy" "dynamodb_access" {
     }]
   })
 
-  tags = {
-    "${var.tag_prefix}:Owner"       = "devops"
-    "${var.tag_prefix}:Environment" = var.environment
-  }
+  tags = var.tags
 }
 
 resource "aws_iam_role_policy_attachment" "ecs_task_dynamodb_access" {
@@ -117,31 +69,22 @@ resource "aws_iam_role_policy_attachment" "ecs_task_dynamodb_access" {
 resource "aws_ecs_cluster" "cluster" {
   name = "ecs-cluster-0"
 
-  tags = {
-    "${var.tag_prefix}:Owner"       = "devops"
-    "${var.tag_prefix}:Environment" = var.environment
-  }
+  tags = var.tags
 }
 
-## A list of all AZs available in the region configured in the AWS credentials
+// A list of all AZs available in the region configured in the AWS credentials
 data "aws_availability_zones" "available" {}
 
 resource "aws_vpc" "vpc" {
   cidr_block = "10.0.0.0/24"
 
-  tags = {
-    "${var.tag_prefix}:Owner"       = "devops"
-    "${var.tag_prefix}:Environment" = var.environment
-  }
+  tags = var.tags
 }
 
 resource "aws_internet_gateway" "default" {
   vpc_id = aws_vpc.vpc.id
 
-  tags = {
-    "${var.tag_prefix}:Owner"       = "devops"
-    "${var.tag_prefix}:Environment" = var.environment
-  }
+  tags = var.tags
 }
 
 resource "aws_route_table" "private" {
@@ -150,10 +93,7 @@ resource "aws_route_table" "private" {
 
   // fck-nat will manage routes for private subnets
 
-  tags = {
-    "${var.tag_prefix}:Owner"       = "devops"
-    "${var.tag_prefix}:Environment" = var.environment
-  }
+  tags = var.tags
 }
 
 resource "aws_subnet" "public" {
@@ -163,13 +103,10 @@ resource "aws_subnet" "public" {
   cidr_block        = cidrsubnet(aws_vpc.vpc.cidr_block, 4, count.index)
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
-  tags = {
-    "${var.tag_prefix}:Owner"       = "devops"
-    "${var.tag_prefix}:Environment" = var.environment
-  }
+  tags = var.tags
 }
 
-## Route Table with egress route to the internet
+// Route Table with egress route to the internet
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.vpc.id
 
@@ -178,13 +115,10 @@ resource "aws_route_table" "public" {
     gateway_id = aws_internet_gateway.default.id
   }
 
-  tags = {
-    "${var.tag_prefix}:Owner"       = "devops"
-    "${var.tag_prefix}:Environment" = var.environment
-  }
+  tags = var.tags
 }
 
-## Associate Route Table with Public Subnets
+// Associate Route Table with Public Subnets
 resource "aws_route_table_association" "public" {
   count          = var.az_count
   subnet_id      = aws_subnet.public[count.index].id
@@ -198,10 +132,7 @@ resource "aws_subnet" "private" {
   cidr_block        = cidrsubnet(aws_vpc.vpc.cidr_block, 4, var.az_count + count.index)
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
-  tags = {
-    "${var.tag_prefix}:Owner"       = "devops"
-    "${var.tag_prefix}:Environment" = var.environment
-  }
+  tags = var.tags
 }
 
 resource "aws_route_table_association" "private" {
@@ -214,10 +145,7 @@ resource "aws_cloudwatch_log_group" "log_group" {
   name              = "/ecs/${var.app_container_name}"
   retention_in_days = 14
 
-  tags = {
-    "${var.tag_prefix}:Owner"       = "devops"
-    "${var.tag_prefix}:Environment" = var.environment
-  }
+  tags = var.tags
 }
 
 resource "aws_ecs_task_definition" "service" {
@@ -251,10 +179,7 @@ resource "aws_ecs_task_definition" "service" {
     }
   ])
 
-  tags = {
-    "${var.tag_prefix}:Owner"       = "devops"
-    "${var.tag_prefix}:Environment" = var.environment
-  }
+  tags = var.tags
 }
 
 resource "aws_security_group" "alb" {
@@ -276,10 +201,7 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
-    "${var.tag_prefix}:Owner"       = "devops"
-    "${var.tag_prefix}:Environment" = var.environment
-  }
+  tags = var.tags
 }
 
 resource "aws_lb" "main" {
@@ -289,14 +211,11 @@ resource "aws_lb" "main" {
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
 
-  tags = {
-    "${var.tag_prefix}:Owner"       = "devops"
-    "${var.tag_prefix}:Environment" = var.environment
-  }
+  tags = var.tags
 }
 
 resource "aws_lb_target_group" "ecs" {
-  name        = "ecs-target-group"
+  name        = "ecs-target-group-0"
   port        = var.container_port
   protocol    = "HTTP"
   target_type = "ip" # required for Fargate
@@ -312,10 +231,7 @@ resource "aws_lb_target_group" "ecs" {
     unhealthy_threshold = 2
   }
 
-  tags = {
-    "${var.tag_prefix}:Owner"       = "devops"
-    "${var.tag_prefix}:Environment" = var.environment
-  }
+  tags = var.tags
 }
 
 // Listen for HTTP traffic on port 80.
@@ -330,10 +246,7 @@ resource "aws_lb_listener" "http" {
     target_group_arn = aws_lb_target_group.ecs.arn
   }
 
-  tags = {
-    "${var.tag_prefix}:Owner"       = "devops"
-    "${var.tag_prefix}:Environment" = var.environment
-  }
+  tags = var.tags
 }
 
 resource "aws_security_group" "ecs_service" {
@@ -355,10 +268,7 @@ resource "aws_security_group" "ecs_service" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
-    "${var.tag_prefix}:Owner"       = "devops"
-    "${var.tag_prefix}:Environment" = var.environment
-  }
+  tags = var.tags
 }
 
 resource "aws_ecs_service" "service" {
@@ -380,8 +290,5 @@ resource "aws_ecs_service" "service" {
     container_port   = var.container_port
   }
 
-  tags = {
-    "${var.tag_prefix}:Owner"       = "devops"
-    "${var.tag_prefix}:Environment" = var.environment
-  }
+  tags = var.tags
 }
