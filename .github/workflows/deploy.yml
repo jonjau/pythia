@@ -17,7 +17,7 @@ env:
 
 jobs:
   deploy:
-    name: Deploy to ECR
+    name: Deploy to ECS Fargate
     runs-on: ubuntu-latest
 
     steps:
