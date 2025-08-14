@@ -168,6 +168,11 @@ resource "aws_ecs_task_definition" "service" {
         }
       ]
 
+      environment = [
+        { name = "RUST_LOG", value = "info" },
+        { name = "PYTHIA_RUN_MODE", value = "remote" }
+      ]
+
       logConfiguration = {
         logDriver = "awslogs",
         options = {
