@@ -81,6 +81,13 @@ resource "aws_vpc" "vpc" {
   tags = var.tags
 }
 
+resource "aws_vpc_endpoint" "dynamodb" {
+  vpc_id            = aws_vpc.vpc.id
+  service_name      = "com.amazonaws.${var.aws_region}.dynamodb"
+  vpc_endpoint_type = "Gateway"
+  route_table_ids   = aws_route_table.private[*].id
+}
+
 resource "aws_internet_gateway" "default" {
   vpc_id = aws_vpc.vpc.id
 
@@ -170,14 +177,15 @@ resource "aws_ecs_task_definition" "service" {
 
       environment = [
         { name = "RUST_LOG", value = "info" },
-        { name = "PYTHIA_RUN_MODE", value = "remote" }
+        { name = "PYTHIA_RUN_MODE", value = "remote" },
+        { name = "AWS_REGION", value = "us-west-2" }
       ]
 
       logConfiguration = {
         logDriver = "awslogs",
         options = {
           "awslogs-group"         = aws_cloudwatch_log_group.log_group.name,
-          "awslogs-region"        = "us-west-2",
+          "awslogs-region"        = var.aws_region,
           "awslogs-stream-prefix" = var.app_container_name
         }
       }
@@ -275,6 +283,7 @@ resource "aws_security_group" "ecs_service" {
 
   tags = var.tags
 }
+
 
 resource "aws_ecs_service" "service" {
   name            = "ecs-service-0"

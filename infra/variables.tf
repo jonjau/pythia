@@ -1,3 +1,8 @@
+variable "aws_region" {
+  description = "Which AWS Region to deploy resources to"
+  type        = string
+}
+
 variable "az_count" {
   description = "Number of Availability Zones to use in the Region"
   type        = number

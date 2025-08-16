@@ -71,14 +71,16 @@ jobs:
       - name: Terraform init and apply to ECS Fargate deployment
         env:
           IMAGE_URI: ${{ steps.build-and-push.outputs.image_uri }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
         run: |
           cd $GITHUB_WORKSPACE/infra/
           terraform fmt
           terraform init -reconfigure \
             -backend-config="bucket=${{ secrets.TERRAFORM_BACKEND_BUCKET }}" \
             -backend-config="key=${{ secrets.TERRAFORM_BACKEND_KEY }}" \
-            -backend-config="region=${{ secrets.AWS_REGION }}"
+            -backend-config="region=$AWS_REGION"
           cat > variables.auto.tfvars <<EOF
+          aws_region          = "$AWS_REGION"
           az_count            = 2
           container_port      = 3000
           image_uri           = "$IMAGE_URI"
