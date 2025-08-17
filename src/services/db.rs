@@ -96,8 +96,8 @@ impl DbService {
     }
 
     async fn setup_client(config: aws_config::SdkConfig) -> Client {
-        let dynamodb_local_config = aws_sdk_dynamodb::config::Builder::from(&config).build();
-        let client = Client::from_conf(dynamodb_local_config);
+        let dynamodb_config = aws_sdk_dynamodb::config::Builder::from(&config).build();
+        let client = Client::from_conf(dynamodb_config);
         Self::wait_for_dynamodb(&client).await;
 
         client
@@ -113,7 +113,7 @@ impl DbService {
                     return;
                 }
                 Err(e) => {
-                    info!("DynamoDB not ready yet (attempt {}): {}", attempt, e);
+                    info!("DynamoDB not ready yet (attempt {}): {:?}", attempt, e);
                     sleep(Duration::from_secs(1)).await;
                 }
             }

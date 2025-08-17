@@ -56,6 +56,8 @@ async fn main() {
         .and_then(|s| PythiaRunMode::from_str(&s).ok())
         .unwrap_or(PythiaRunMode::Local);
 
+    info!("PYTHIA_RUN_MODE: {:?}", mode);
+
     let db = match mode {
         PythiaRunMode::Local => DbService::new_local().await,
         PythiaRunMode::Remote => DbService::new().await        
