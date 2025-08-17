@@ -2,11 +2,9 @@ name: Deploy
 
 on:
   push:
-    branches:
-      - deploy-to-fargate
     tags:
       - v*
-    # paths: ["infra/**"]
+
   workflow_dispatch:
 
 permissions:
