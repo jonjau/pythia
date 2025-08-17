@@ -27,3 +27,22 @@ resource "aws_iam_role_policy_attachment" "role_policy_cloudwatch" {
   role       = "GithubActionsTerraformRole"
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
 }
+
+resource "aws_iam_role_policy" "role_policy_kms_retiregrant" {
+  name = "AllowKMSRetireGrant"
+  role = "GithubActionsTerraformRole"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:RetireGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
