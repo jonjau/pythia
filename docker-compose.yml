@@ -19,3 +19,7 @@ services:
       - "3000:3000"
     depends_on:
       - dynamodb-local
+    environment:
+      - RUST_LOG=info
+      - AWS_ENDPOINT_URL=http://dynamodb-local:8000
+      - PYTHIA_RUN_MODE=local

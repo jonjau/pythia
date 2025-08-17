@@ -4,7 +4,8 @@ on:
   push:
     tags:
       - v*
-    paths: ["infra/**"]
+
+  workflow_dispatch:
 
 permissions:
   id-token: write  # Required for configure-aws-credentials to request JWT from GitHub OIDC
@@ -15,7 +16,7 @@ env:
 
 jobs:
   deploy:
-    name: Deploy to ECR
+    name: Deploy to ECS Fargate
     runs-on: ubuntu-latest
 
     steps:
@@ -32,18 +33,20 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      - name: Terraform init and apply
+      - name: Terraform init and apply for ECR repository
         run: |
-          cd infra
+          cd $GITHUB_WORKSPACE/infra/ecr/
           terraform fmt
-          terraform init \
+          terraform init -reconfigure \
             -backend-config="bucket=${{ secrets.TERRAFORM_BACKEND_BUCKET }}" \
-            -backend-config="key=${{ secrets.TERRAFORM_BACKEND_KEY }}" \
+            -backend-config="key=${{ secrets.TERRAFORM_ECR_BACKEND_KEY }}" \
             -backend-config="region=${{ secrets.AWS_REGION }}"
           cat > variables.auto.tfvars <<EOF
-          ecr_repository_name = "$ECR_REPO_NAME"
-          environment = "dev"
-          tag_prefix = "pythia"
+          repository_name = "$ECR_REPO_NAME"
+          tags = {
+            "pythia:Owner"       = "devops"
+            "pythia:Environment" = "dev"
+          }
           EOF
           terraform apply -auto-approve
 
@@ -51,10 +54,38 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build, tag, and push docker image to Amazon ECR
+      - name: Build and push Docker image to Amazon ECR
+        id: build-and-push
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPO_NAME: ${{ env.ECR_REPO_NAME }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t $REGISTRY/$ECR_REPO_NAME:$IMAGE_TAG .
-          docker push $REGISTRY/$ECR_REPO_NAME:$IMAGE_TAG
+          IMAGE_URI="$REGISTRY/$ECR_REPO_NAME:$IMAGE_TAG"
+          docker build -t $IMAGE_URI .
+          docker push $IMAGE_URI
+          echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
+
+      - name: Terraform init and apply to ECS Fargate deployment
+        env:
+          IMAGE_URI: ${{ steps.build-and-push.outputs.image_uri }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          cd $GITHUB_WORKSPACE/infra/
+          terraform fmt
+          terraform init -reconfigure \
+            -backend-config="bucket=${{ secrets.TERRAFORM_BACKEND_BUCKET }}" \
+            -backend-config="key=${{ secrets.TERRAFORM_BACKEND_KEY }}" \
+            -backend-config="region=$AWS_REGION"
+          cat > variables.auto.tfvars <<EOF
+          aws_region          = "$AWS_REGION"
+          az_count            = 2
+          container_port      = 3000
+          image_uri           = "$IMAGE_URI"
+          app_container_name  = "pythia-app"
+          tags = {
+            "pythia:Owner"       = "devops"
+            "pythia:Environment" = "dev"
+          }
+          EOF
+          terraform apply -auto-approve
