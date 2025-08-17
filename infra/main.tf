@@ -285,7 +285,6 @@ resource "aws_security_group" "ecs_service" {
   tags = var.tags
 }
 
-
 resource "aws_ecs_service" "service" {
   name            = "ecs-service-0"
   cluster         = aws_ecs_cluster.cluster.id

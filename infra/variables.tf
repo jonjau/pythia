@@ -31,3 +31,12 @@ variable "tags" {
   description = "Tags to apply to resources"
   default     = {}
 }
+
+variable "cloudflare_api_token" {
+  type      = string
+  sensitive = true
+}
+
+variable "cloudflare_zone_id" {
+  type = string
+}
