@@ -7,12 +7,9 @@ permissions:
   id-token: write
   contents: read
 
-env:
-  ECR_REPO_NAME: ecr0
-
 jobs:
   Teardown:
-    name: Teardown deployment and infrastructure
+    name: Teardown ECS Fargate deployment
     runs-on: ubuntu-latest
 
     steps:
@@ -30,6 +27,8 @@ jobs:
         uses: hashicorp/setup-terraform@v3
 
       - name: Terraform init and apply to destroy ECS Fargate deployment
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION }}
         run: |
           cd $GITHUB_WORKSPACE/infra/
           terraform fmt
@@ -37,6 +36,14 @@ jobs:
             -backend-config="bucket=${{ secrets.TERRAFORM_BACKEND_BUCKET }}" \
             -backend-config="key=${{ secrets.TERRAFORM_BACKEND_KEY }}" \
             -backend-config="region=${{ secrets.AWS_REGION }}"
+          cat > variables.auto.tfvars <<EOF
+          aws_region          = "$AWS_REGION"
+          az_count            = 1
+          container_port      = 1
+          image_uri           = "_"
+          app_container_name  = "_"
+          tags = {}
+          EOF
           terraform apply -destroy -auto-approve
 
       - name: Terraform init and apply to destroy ECR repository
@@ -47,5 +54,9 @@ jobs:
             -backend-config="bucket=${{ secrets.TERRAFORM_BACKEND_BUCKET }}" \
             -backend-config="key=${{ secrets.TERRAFORM_ECR_BACKEND_KEY }}" \
             -backend-config="region=${{ secrets.AWS_REGION }}"
+          cat > variables.auto.tfvars <<EOF
+          repository_name = "_"
+          tags = {}
+          EOF
           terraform apply -destroy -auto-approve
 
