@@ -45,6 +45,7 @@ resource "aws_iam_policy" "dynamodb_access" {
     Statement = [{
       Effect = "Allow"
       Action = [
+        "dynamodb:ListTables",
         "dynamodb:CreateTable",
         "dynamodb:DescribeTable",
         "dynamodb:GetItem",
@@ -176,7 +177,7 @@ resource "aws_ecs_task_definition" "service" {
       ]
 
       environment = [
-        { name = "RUST_LOG", value = "debug" },
+        { name = "RUST_LOG", value = "info" },
         { name = "PYTHIA_RUN_MODE", value = "remote" },
         { name = "AWS_REGION", value = "us-west-2" }
       ]
