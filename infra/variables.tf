@@ -26,8 +26,21 @@ variable "app_container_name" {
   default     = "pythia-app"
 }
 
+variable "app_domain_name" {
+  type = string
+}
+
 variable "tags" {
   type        = map(string)
   description = "Tags to apply to resources"
   default     = {}
+}
+
+variable "cloudflare_api_token" {
+  type      = string
+  sensitive = true
+}
+
+variable "cloudflare_zone_id" {
+  type = string
 }

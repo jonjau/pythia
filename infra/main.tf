@@ -198,14 +198,25 @@ resource "aws_ecs_task_definition" "service" {
 
 resource "aws_security_group" "alb" {
   name        = "alb-sg-0"
-  description = "Allow HTTP access to ALB"
+  description = "Allow HTTP/HTTPS access to ALB"
   vpc_id      = aws_vpc.vpc.id
 
   ingress {
+    description = "Allow HTTP"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    description = "Allow HTTPS"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
   }
 
   egress {
@@ -248,16 +259,52 @@ resource "aws_lb_target_group" "ecs" {
   tags = var.tags
 }
 
-// Listen for HTTP traffic on port 80.
-// When a request comes in, forward it to the ECS target group behind the load balancer.
+resource "aws_acm_certificate" "app_cert" {
+  domain_name       = var.app_domain_name
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = var.tags
+}
+
+resource "aws_acm_certificate_validation" "app_cert_validation" {
+  certificate_arn = aws_acm_certificate.app_cert.arn
+  validation_record_fqdns = [
+    for dvo in aws_acm_certificate.app_cert.domain_validation_options : dvo.resource_record_name
+  ]
+}
+
+resource "aws_lb_listener" "https" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = 443
+  protocol          = "HTTPS"
+
+  ssl_policy      = "ELBSecurityPolicy-2016-08"
+  certificate_arn = aws_acm_certificate_validation.app_cert_validation.certificate_arn
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.ecs.arn
+  }
+
+  tags = var.tags
+}
+
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = 80
   protocol          = "HTTP"
 
   default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.ecs.arn
+    type = "redirect"
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
   }
 
   tags = var.tags
@@ -284,7 +331,6 @@ resource "aws_security_group" "ecs_service" {
 
   tags = var.tags
 }
-
 
 resource "aws_ecs_service" "service" {
   name            = "ecs-service-0"
