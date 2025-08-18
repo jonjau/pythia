@@ -43,6 +43,7 @@ jobs:
           container_port      = 1
           image_uri           = "_"
           app_container_name  = "_"
+          app_domain_name     = "_"
           cloudflare_api_token = "$CLOUDFLARE_API_TOKEN"
           cloudflare_zone_id   = "e5934fef29bb756740a3e348ad2d879e"
           tags = {}

@@ -84,6 +84,7 @@ jobs:
           container_port      = 3000
           image_uri           = "$IMAGE_URI"
           app_container_name  = "pythia-app"
+          app_domain_name     = "pythia.jonjauhari.com"
           tags = {
             "pythia:Owner"       = "devops"
             "pythia:Environment" = "dev"
