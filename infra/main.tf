@@ -198,14 +198,25 @@ resource "aws_ecs_task_definition" "service" {
 
 resource "aws_security_group" "alb" {
   name        = "alb-sg-0"
-  description = "Allow HTTP access to ALB"
+  description = "Allow HTTP/HTTPS access to ALB"
   vpc_id      = aws_vpc.vpc.id
 
   ingress {
+    description = "Allow HTTP"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    description = "Allow HTTPS"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
   }
 
   egress {
@@ -262,7 +273,7 @@ resource "aws_acm_certificate" "app_cert" {
 resource "aws_acm_certificate_validation" "app_cert_validation" {
   certificate_arn = aws_acm_certificate.app_cert.arn
   validation_record_fqdns = [
-    for r in cloudflare_dns_record.cert_validation : r.fqdn
+    for dvo in aws_acm_certificate.app_cert.domain_validation_options : dvo.resource_record_name
   ]
 }
 
