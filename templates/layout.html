@@ -12,19 +12,48 @@
 </head>
 
 <body class="bg-stone-900 text-amber-100 font-monospace h-screen flex flex-col">
-  <header class="flex justify-between items-center px-10 py-4 bg-stone-800">
-    <a href="/"
-      class="text-2xl font-bold border-b-4 border-transparent hover:border-dotted hover:border-b-amber-700 hover:text-amber-400 focus:border-solid focus:border-b-amber-700">
-      <span class="text-amber-700 text-3xl font-serif">
-        δ
-      </span>
-      Pythia
-    </a>
-    <div>
-      User: {{ user_token }}
+  <header class="bg-stone-800">
+    <div class="flex justify-between items-center max-w-6xl mx-auto px-4 py-4 ">
+      <nav class="flex space-x-8">
+        <a href="/"
+          class="px-3 text-2xl font-bold border-b-4 border-transparent hover:border-dotted hover:border-b-amber-700 hover:text-amber-400 focus:border-solid focus:border-b-amber-700">
+          <span class="text-amber-700 text-3xl font-serif">
+            δ
+          </span>
+          Pythia
+        </a>
+          <a href="/" class="px-3 border-b-4 border-transparent hover:border-dotted hover:border-b-amber-700 hover:text-amber-400
+            focus:border-solid focus:border-b-amber-700 flex items-end {% if page == "inquiries"
+            %}border-b-amber-700{% endif %}">
+          Inquiries
+        </a>
+          <a href="/record-types" class="px-3 border-b-4 border-transparent hover:border-dotted hover:border-b-amber-700 hover:text-amber-400
+            focus:border-solid focus:border-b-amber-700 flex items-end {% if page == "record-types"
+            %}border-b-amber-700{% endif %}">
+          Record types
+        </a>
+      </nav>
+      <div class="flex flex-col items-end space-x-4">
+        <span class="text-sm text-amber-300 mb-3">
+          User:
+          <span class="font-mono">{{ user_token }}</span>
+        </span>
+        <nav class="flex space-x-10">
+          <a href="/how-to-use" class="border-b-4 border-transparent hover:border-dotted hover:border-b-amber-700 hover:text-amber-400
+            focus:border-solid focus:border-b-amber-700 flex items-end {% if page == "how-to-use"
+            %}border-b-amber-700{% endif %}">
+            How to use
+          </a>
+          <a href="/sessions" class="px-3 border-b-4 border-transparent hover:border-dotted hover:border-b-amber-700 hover:text-amber-400
+            focus:border-solid focus:border-b-amber-700 flex items-end {% if page == "sessions"
+            %}border-b-amber-700{% endif %}">
+            Manage session
+          </a>
+        </nav>
+      </div>
     </div>
   </header>
-  <main class="mx-10 my-5 flex-1 h-100 flex flex-col" id="main-content">
+  <main class="mx-10 my-5 flex-1 h-100 flex flex-col max-w-6xl mx-auto px-4" id="main-content">
     {% block content %} {% endblock %}
   </main>
 </body>

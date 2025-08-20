@@ -31,6 +31,7 @@ pub fn record_type_routes() -> Router {
 #[derive(Template)]
 #[template(path = "record-type/record-types.html")]
 struct RecordTypesPageTemplate {
+    page: String,
     user_token: String,
     record_types: Vec<RecordTypeData>,
 }
@@ -46,6 +47,7 @@ async fn get_record_types_page(
         .unwrap_or_default();
 
     RecordTypesPageTemplate {
+        page: "record-types".to_owned(),
         user_token,
         record_types,
     }
