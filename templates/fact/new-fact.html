@@ -16,8 +16,8 @@
   </table>
   <div class="flex mt-4">
     <button hx-delete="/{{ fact_type }}/facts/new" hx-target="#add-fact-form" hx-swap="outerHTML"
-      class="button bg-red-800 hover:bg-red-700">Cancel</button>
+      class="m-2 button bg-red-800 hover:bg-red-700">Cancel</button>
     <button hx-post="/{{ fact_type }}/facts" hx-include="#add-fact-form" hx-target="#fact-table" hx-swap="outerHTML"
-      class="button bg-green-800 hover:bg-green-700">Submit</button>
+      class="m-2 button bg-green-800 hover:bg-green-700">Submit</button>
   </div>
 </form>
