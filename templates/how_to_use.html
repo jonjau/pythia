@@ -1,0 +1,143 @@
+{% extends "layout.html" %} {% block content %}
+
+<div class="max-w-3xl mx-auto">
+    <h2 class="text-4xl font-bold mb-7 pt-3">What is this?</h2>
+
+    <p class="m-0 mb-5">
+        <span class="font-bold text-amber-200">Pythia</span> is an open-source '<span class="italic">state change
+            explorer</span>'. It's a tool to track how
+        <span class="font-bold">records</span> change over time, based on recorded <span class="font-bold">facts</span>
+        for those <span class="font-bold">record types</span>.
+    </p>
+
+    <p class="m-0 mb-5">
+        The source code is available on <a href="https://github.com/jonjau/pythia" target="_blank"
+            rel="noopener noreferrer" class="link">GitHub</a>.
+    </p>
+
+    <p class="m-0 mb-5">
+        <span class="font-bold text-amber-200">Pythia</span>'s intended use case is to aid in reverse-engineering the
+        rules that produced the facts which are recorded.
+    </p>
+
+    <p class="m-0 mb-5">
+        For example, if we record to <span class="font-bold text-amber-200">Pythia</span> the state of a database table
+        over the course of running unit tests, we would be able to visualise how records change in the context of each
+        unit test, and <span class="italic">ideally</span> make
+        generalisations about what each unit test does.
+    </p>
+
+    <p class="m-0 mb-5">
+        But, as with the prophecies of <a href="https://en.wikipedia.org/wiki/Pythia" target="_blank"
+            rel="noopener noreferrer" class="link">the high priestess of
+            Apollo in Delphi</a> that this application is named after, the
+        query results may be ambiguous, unhelpful or misleading — since test data is probably messy. <span
+            class="font-bold text-amber-200">Pythia</span> is more of
+        an exercise in seeing how <a href="https://en.wikipedia.org/wiki/Prolog" target="_blank"
+            rel="noopener noreferrer" class="link">Prolog</a> can be used in
+        a user-facing web application as a substitute for SQL.
+    </p>
+
+    <h2 class="text-4xl font-bold mb-7 pt-3">How do I use it?</h2>
+
+    <p class="m-0 mb-5">
+    <ol class="list-decimal list-outside space-y-2">
+        <li>Get a user token, via <a href="/sessions" class="link">'Manage session'</a> which will set a <span
+                class="font-mono text-amber-200">user_token</span>
+                    as a cookie. <br> This token is displayed at the top right of the page.</li>
+        <li>Define record types via <a href="/record-types" class="link">'Record types'</a>, or POST to the API route: <br> <span
+                class="font-mono text-amber-200">/api/record-types</span> (the
+                    <span class="font-mono text-amber-200">user_token</span> cookie must be set)</li>
+        <li>Add facts for record types under <a href="/inquiries" class="link">'Inquiries'</a>, or POST to the API route: <br> <span
+                class="font-mono text-amber-200">/api/{record_type}/facts</span>.</li>
+        <li>Calculate state change paths under <a href="/inquiries" class="link">'Inquiries'</a> based on the recorded
+            facts.</li>
+        <li>Narrow it down with filters, and make conclusions about the data.</li>
+    </ol>
+    </p>
+
+    <h2 class="text-4xl font-bold mb-7 pt-3">Terminology</h2>
+
+    <p class="m-0 mb-3">
+        To clarify the terms used:
+    </p>
+
+    <ul class="list-disc list-inside space-y-4 mb-24">
+        <li><span class="font-bold italic">Record type</span>:
+            <div class="ml-3">
+                A kind of record, described by a name and list of fields
+                of 3 types: ID, data and metadata. Analogous to a database table which has a name and a set of columns.
+            </div>
+        </li>
+        <li><span class="font-bold italic">ID fields</span>:
+            <div class="ml-3">
+                Fields that identify a particular record. If two facts have
+                the same values for the ID fields, then both are describing the same record.
+            </div>
+        </li>
+        <li><span class="font-bold italic">Data fields</span>:
+            <div class="ml-3">
+                Fields that do not identify a particular record. These
+                fields are the ones considered when determining state changes between records.
+            </div>
+        </li>
+        <li><span class="font-bold italic">Metadata fields</span>:
+            <div class="ml-3">
+                Fields that do not identify a record, nor are
+                considered meaningful in state changes. Metadata fields are used to describe how and when the fact for
+                the record was recorded.
+            </div>
+        </li>
+        <li><span class="font-bold italic">Record</span>:
+            <div class="ml-3">
+                An instance of a record type, in the form of a set of values
+                corresponding to each field expected for this type. Analogous to a row in a database table describing a
+                domain object.</div>
+        </li>
+        <li><span class="font-bold italic">Fact</span>:
+            <div class="ml-3">
+                A snapshot of a record at a point in time in a certain context.
+            </div>
+        </li>
+        <li><span class="font-bold italic">State</span>:
+            <div class="ml-3">
+                A snapshot of a set of records at a point in time in a certain
+                context. Though currently <span class="font-bold text-amber-200">Pythia</span> only supports
+                single-record states.
+            </div>
+        </li>
+        <li><span class="font-bold italic">State change step</span>:
+            <div class="ml-3">
+                A transition between one state and another state at
+                the next point in time. Can be described by a list of changed field values.
+            </div>
+        </li>
+        <li><span class="font-bold italic">State change path</span>:
+            <div class="ml-3">
+                A transition between one state and another state at
+                some later point in time. Can be described by a list of state change steps.
+            </div>
+        </li>
+        <li><span class="font-bold italic">Inquiry</span>:
+            <div class="ml-3">
+                The act of fetching facts and state changes for a given state
+                or record type.
+            </div>
+        </li>
+        <li><span class="font-bold italic">Session</span>:
+            <div class="ml-3">
+                An anonymous and temporary context in which Pythia is being
+                used. Facts data is local to each session.
+            </div>
+        </li>
+        <li><span class="font-bold italic">User token</span>:
+            <div class="ml-3">
+                A string acting as an identifier for a session. It is 22 characters long.
+            </div>
+        </li>
+    </ul>
+
+
+</div>
+
+{% endblock %}
