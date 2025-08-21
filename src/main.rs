@@ -15,7 +15,7 @@ mod utils;
 use crate::{
     middleware::session::require_session,
     routes::{
-        inquiry::inquiry_routes, knowledge_base::knowledge_base_routes,
+        help::help_routes, inquiry::inquiry_routes, knowledge_base::knowledge_base_routes,
         record_type::record_type_routes, session::session_routes,
     },
     services::{db::DbService, session::SessionService},
@@ -60,7 +60,7 @@ async fn main() {
 
     let db = match mode {
         PythiaRunMode::Local => DbService::new_local().await,
-        PythiaRunMode::Remote => DbService::new().await        
+        PythiaRunMode::Remote => DbService::new().await,
     };
 
     db.create_table_if_not_exists("pythia", "pk", "sk")
@@ -86,6 +86,7 @@ async fn main() {
             axum::routing::get_service(ServeDir::new("static")),
         )
         .merge(routes_sessionless)
+        .merge(help_routes())
         .nest("/", routes);
 
     // Run the HTTP server
