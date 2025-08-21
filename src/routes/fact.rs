@@ -29,6 +29,7 @@ pub fn fact_routes() -> Router {
 #[derive(Template)]
 #[template(path = "fact/facts.html")]
 struct GetFactsTemplate {
+    page: String, 
     user_token: String,
     fact_type: String,
     fact_table_data: FactTableData,
@@ -46,6 +47,7 @@ async fn get_facts(
         .unwrap_or_default();
 
     GetFactsTemplate {
+        page: "inquiries".to_owned(),
         user_token,
         fact_type,
         fact_table_data,

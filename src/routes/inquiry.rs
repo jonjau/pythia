@@ -11,6 +11,7 @@ pub fn inquiry_routes() -> Router {
 #[derive(Template)]
 #[template(path = "inquiries.html")]
 struct GetInquiriesTemplate {
+    page: String,
     user_token: String,
     record_types: Vec<String>,
 }
@@ -27,6 +28,7 @@ async fn get_inquiries(
         .unwrap_or_default();
 
     GetInquiriesTemplate {
+        page: "inquiries".to_owned(),
         user_token,
         record_types: rts.iter().map(|rt| rt.name.clone()).collect(),
     }

@@ -1,10 +1,11 @@
 {% extends "layout.html" %} {% block content %}
 
-<a href="/record-types" class="link">Manage record types</a>
-
 {% if record_types.is_empty() %}
 <p>
-  No Record Types for which to inquire. Please upload a JSON file with Record Type definitions first.
+  There are no record types for which to inquire.
+</p>
+<p>
+  Please add record types first, by going to <a href="/record-types" class="link">'Record types'</a>.
 </p>
 {% else %}
 <p>
@@ -26,4 +27,5 @@
   {% endfor %}
 </ul>
 {% endif %}
+
 {% endblock %}

@@ -1,4 +1,4 @@
-<table id="fact-table" class="table">
+<table id="fact-table" class="table min-w-3xl">
   <thead class="bg-stone-800">
     <tr>
       <th class="p-3 border-b border-stone-700" />
@@ -9,19 +9,35 @@
     </tr>
   </thead>
   <tbody>
+    {% if fact_table_data.rows.is_empty() %}
+    <tr>
+      <td class="bg-stone-800 p-3 border-b border-stone-700" />
+      <td class="p-3 border-b border-stone-700" colspan="{{fact_table_data.columns.len()}}">There are no facts to show.
+      </td>
+      <td class="bg-stone-800 p-3 border-b border-stone-700" />
+    </tr>
+    {% else %}
     {% for row in fact_table_data.rows %}
     <tr>
       <td class="bg-stone-800 p-3 border-b border-stone-700">
         {{ loop.index }}
       </td>
       {% for value in row.values %}
-      <td class="p-3 border-b border-stone-700">{{ value }}</td>
+      <td class="p-3 border-b border-stone-700">
+        <span x-data="{ copied: false }"
+          @click="navigator.clipboard.writeText('{{ value }}'); copied = true; setTimeout(() => copied = false, 1500)"
+          class="cursor-pointer font-mono text-amber-200 hover:text-amber-400">
+          <span x-show="!copied">{{ value }}</span>
+          <span x-show="copied" class="text-teal-400">Copied!</span>
+        </span>
+      </td>
       {% endfor %}
       <td class="bg-stone-800 border-b border-stone-700">
         <button hx-delete="/{{fact_type}}/facts/{{row.id}}" hx-target="#fact-table"
-          class="button bg-red-800 hover:bg-red-700">Delete</button>
+          class="m-2 button bg-red-800 hover:bg-red-700">Delete</button>
       </td>
     </tr>
     {% endfor %}
+    {% endif %}
   </tbody>
 </table>

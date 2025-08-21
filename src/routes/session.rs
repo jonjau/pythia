@@ -30,6 +30,7 @@ pub fn session_routes() -> Router<GlobalAppState> {
 #[derive(Template)]
 #[template(path = "start-session.html")]
 struct StartSessionTemplate {
+    page: String,
     user_token: String,
     error: bool,
 }
@@ -41,6 +42,7 @@ struct Params {
 
 async fn show_start_session_page(Query(p): Query<Params>) -> StartSessionTemplate {
     StartSessionTemplate {
+        page: "sessions".to_owned(),
         user_token: "".to_string(),
         error: p.error.unwrap_or_default(),
     }
@@ -57,6 +59,7 @@ async fn start_session(
         .start_session(token.clone())
         .await
         .map_err(|_| StartSessionTemplate {
+            page: "sessions".to_owned(),
             user_token: "".to_owned(),
             error: true,
         })?;

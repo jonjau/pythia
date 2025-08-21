@@ -1,4 +1,4 @@
-<table id="record-type-table" class="table">
+<table id="record-type-table" class="table min-w-3xl">
   <thead class="bg-stone-800">
     <tr>
       <th class="p-3 border-b border-stone-700" />
@@ -8,6 +8,16 @@
     </tr>
   </thead>
   <tbody>
+    {% if record_types.is_empty() %}
+    <tr>
+      <td class="bg-stone-800 p-3 border-b border-stone-700 align-top" />
+      <td class="p-3 border-b border-stone-700 align-top font-italic" colspan="2">
+        There are no record types to show.
+      </td>
+      <td class="bg-stone-800 p-3 border-b border-stone-700 align-top" />
+      </td>
+    </tr>
+    {% else %}
     {% for rt in record_types %}
     <tr>
       <td class="bg-stone-800 p-3 border-b border-stone-700 align-top">
@@ -65,5 +75,6 @@
       </td>
     </tr>
     {% endfor %}
+    {% endif %}
   </tbody>
 </table>

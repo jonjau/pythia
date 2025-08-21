@@ -3,6 +3,7 @@
 
 @theme {
     --font-monospace: "Iosevka Web", monospace, sans-serif;
+    --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", serif
 }
 
 @layer base {
