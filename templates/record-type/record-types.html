@@ -14,6 +14,21 @@
 <div class="mt-8">
   <h1 class="text-4xl font-bold mb-4">Record Types</h1>
 
+  <p class="m-0 mb-4">
+    There are two metadata fields required and used by <span class="font-bold text-amber-200">Pythia</span>
+    for state change calculation:
+
+  <ul class="list-disc list-inside space-y-4 mb-24">
+    <li><span class="font-bold">Context</span>:
+      Describes the context in which the fact was recorded. For example 'TestCase1'.
+    </li>
+    <li><span class="font-bold">SeqNum</span>:
+      The ordinal number of the fact recorded. For example, the first fact has SeqNum = 0 and
+      the second SeqNum = 1, and so forth.
+    </li>
+    </p>
+  </ul>
+
   {% include "record-type-table.html" %}
 
   <div class="mt-8">
