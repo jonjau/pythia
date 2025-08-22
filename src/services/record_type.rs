@@ -1,3 +1,5 @@
+use std::vec;
+
 use serde::Deserialize;
 
 use crate::{
@@ -21,7 +23,6 @@ pub struct CreateRecordTypeFormData {
     name: String,
     id_fields: String,
     data_fields: String,
-    metadata_fields: String,
 }
 
 impl RecordTypeService {
@@ -54,10 +55,7 @@ impl RecordTypeService {
                 .split(',')
                 .map(Self::uppercase_first_ascii_letter)
                 .collect(),
-            metadata_fields: strip_whitespace(f.metadata_fields)
-                .split(',')
-                .map(Self::uppercase_first_ascii_letter)
-                .collect(),
+            metadata_fields: vec!["Context".to_owned(), "SeqNum".to_owned()],
         };
 
         self.db.put_record_type(&record_type).await?;
