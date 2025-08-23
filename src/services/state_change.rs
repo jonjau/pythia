@@ -209,11 +209,11 @@ impl StateChangeService {
     /// * `state_rt_name` - Name of the record type that the states are for.
     /// * `named_values0` - Field-values mappings for the initial state.
     /// * `named_values1` - Field-value mappings for the end state.
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// `StateValues` containing a vector of field-value pairs (with default values if absent in the input maps),
-    /// in the order as described in the `RecordType`. 
+    /// in the order as described in the `RecordType`.
     ///
     /// # Errors
     ///

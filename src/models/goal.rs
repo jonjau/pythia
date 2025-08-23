@@ -4,7 +4,7 @@ use super::record_type::{RecordType, RecordTypeBuilder};
 
 /// Represents a compound term which may not have all its values grounded.
 /// It is meant to be run as a query to the logic machine.
-/// 
+///
 /// A `Goal` is typed using a [`RecordType`] and contain a list of associated values.
 /// Values that are not grounded are to be left as a Term::Variable.
 /// Typically corresponds to a logic query like: `'Person'(X, 30)`.

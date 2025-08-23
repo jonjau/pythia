@@ -154,7 +154,7 @@ impl RecordType {
     }
 
     /// Returns the most general (uninstantiated) goal possible for this record type.
-    /// 
+    ///
     /// Relies on local variables, i.e. Goal terms with names scoped to the Goal
     pub fn to_most_general_goal(self: Arc<Self>) -> Goal {
         let id_number = self.term_id_ctx.next_id();

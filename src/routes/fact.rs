@@ -29,7 +29,7 @@ pub fn fact_routes() -> Router {
 #[derive(Template)]
 #[template(path = "fact/facts.html")]
 struct GetFactsTemplate {
-    page: String, 
+    page: String,
     user_token: String,
     fact_type: String,
     fact_table_data: FactTableData,

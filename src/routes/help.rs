@@ -16,6 +16,6 @@ struct HowToUseTemplate {
 async fn get_how_to_use_page() -> HowToUseTemplate {
     HowToUseTemplate {
         page: "how-to-use".to_owned(),
-        user_token: "".to_owned()
+        user_token: "".to_owned(),
     }
 }
