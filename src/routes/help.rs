@@ -7,7 +7,7 @@ pub fn help_routes() -> Router {
 }
 
 #[derive(Template)]
-#[template(path = "how_to_use.html")]
+#[template(path = "how-to-use.html")]
 struct HowToUseTemplate {
     page: String,
     user_token: String,
