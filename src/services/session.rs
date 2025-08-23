@@ -3,7 +3,8 @@ use std::sync::Arc;
 use quick_cache::sync::Cache;
 
 use crate::services::{
-    db::DbService, fact::FactService, logic_machine::LogicMachineService, record_type::RecordTypeService, state_change::StateChangeService
+    db::DbService, fact::FactService, logic_machine::LogicMachineService,
+    record_type::RecordTypeService, state_change::StateChangeService,
 };
 
 /// Shared application state used by all handlers and services.

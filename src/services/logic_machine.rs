@@ -101,12 +101,9 @@ impl LogicMachineService {
         &self,
     ) -> Result<Vec<Arc<RecordType>>, LogicMachineServiceError> {
         self.reload().await?;
-        Ok(self
-            .lm_actor
-            .send_query(GetAllRecordTypesQuery)
-            .await?)
+        Ok(self.lm_actor.send_query(GetAllRecordTypesQuery).await?)
     }
-    
+
     /// Gets facts matching a goal for a specific target record type.
     pub async fn get_facts(
         &self,

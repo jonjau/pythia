@@ -1,19 +1,28 @@
-use scryer_prolog::machine::Machine;
 use scryer_prolog::machine::parsed_results::QueryResult;
+use scryer_prolog::machine::Machine;
 
 #[test]
 fn prolog_module_works() {
     let mut machine = Machine::new_lib();
 
-    machine.load_module_string("facts", String::from(r#"
+    machine.load_module_string(
+        "facts",
+        String::from(
+            r#"
         edge("a", "p1", "b").
         edge("a", "p2", "b").
-    "#));
+    "#,
+        ),
+    );
 
-    machine.load_module_string("more-facts", String::from(r#"
+    machine.load_module_string(
+        "more-facts",
+        String::from(
+            r#"
         edgae("a", "p3", "b").
-    "#));
-
+    "#,
+        ),
+    );
 
     // let output: QueryResult = machine.run_query(String::from(r#"triple("y", X)."#));
 
@@ -57,13 +66,12 @@ fn prolog_module_works2() {
             dimlink(Context, Id, DRef, IRef, BegPeriod, EndPeriod, EditTime, RecStatus, SeqNum).
     "#));
 
-    let output = machine.run_query(String::from(r#"record(Context, EditTime, SeqNum, RecStatus, Id, [IRef, DRef, BegPeriod, EndPeriod])."#));
+    let output = machine.run_query(String::from(
+        r#"record(Context, EditTime, SeqNum, RecStatus, Id, [IRef, DRef, BegPeriod, EndPeriod])."#,
+    ));
 
     println!("output: {:?}", output);
 }
 
 #[test]
-fn add_fact_to_logic_machine() {
-
-
-}
+fn add_fact_to_logic_machine() {}

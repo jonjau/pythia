@@ -271,7 +271,6 @@ impl FactData {
             .cloned()
             .collect::<Vec<_>>();
 
-
         all_fields
             .into_iter()
             .zip(self.values.clone().into_iter())

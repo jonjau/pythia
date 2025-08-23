@@ -83,7 +83,11 @@ impl FactService {
             .iter()
             .map(|f| FactTableRow {
                 id: f.id.clone(),
-                values: f.values.iter().map(|v| v.trim_matches('\"').to_string()).collect(),
+                values: f
+                    .values
+                    .iter()
+                    .map(|v| v.trim_matches('\"').to_string())
+                    .collect(),
             })
             .collect::<Vec<_>>();
 
@@ -164,7 +168,7 @@ impl FactService {
     ) -> Result<FactTableData, FactServiceError> {
         let rt = self.db.get_record_type(rt_name).await?;
         self.db.delete_fact(&rt, fact_id).await?;
-        
+
         self.get_facts(rt.name).await
     }
 }

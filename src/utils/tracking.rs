@@ -30,8 +30,8 @@ pub struct IdContext {
 impl IdContext {
     pub fn new() -> Self {
         Self {
-            tracker: Arc::new(GlobalTracker { 
-                counter: AtomicUsize::new(0) 
+            tracker: Arc::new(GlobalTracker {
+                counter: AtomicUsize::new(0),
             }),
         }
     }
