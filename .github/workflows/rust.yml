@@ -13,10 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        version:
-          - stable
-          - beta
-          - nightly
         target:
           - i686-unknown-linux-gnu
           - i686-unknown-linux-musl
@@ -28,7 +24,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ matrix.version }}
+          toolchain: stable
           components: rustfmt
       - name: cache
         uses: Swatinem/rust-cache@v2
@@ -42,9 +38,6 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        version:
-          - stable
-          - nightly
         target:
           - x86_64-pc-windows-gnu
           - x86_64-pc-windows-msvc
@@ -53,7 +46,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ matrix.version }}
+          toolchain: stable
       - name: cache
         uses: Swatinem/rust-cache@v2
       - name: test
@@ -62,9 +55,6 @@ jobs:
     runs-on: macos-latest
     strategy:
       matrix:
-        version:
-          - stable
-          - nightly
         target:
           - x86_64-apple-darwin	
       fail-fast: false
@@ -72,7 +62,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ matrix.version }}
+          toolchain: stable
       - name: cache
         uses: Swatinem/rust-cache@v2
       - name: test
