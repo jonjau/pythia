@@ -3,7 +3,7 @@ use axum::{routing::get, Router};
 
 /// Returns the routes for the 'how to use' page.
 pub fn help_routes() -> Router {
-    Router::new().route("/how-to-use", get(get_inquiries))
+    Router::new().route("/how-to-use", get(get_how_to_use_page))
 }
 
 #[derive(Template)]
@@ -13,7 +13,7 @@ struct HowToUseTemplate {
     user_token: String,
 }
 
-async fn get_inquiries() -> HowToUseTemplate {
+async fn get_how_to_use_page() -> HowToUseTemplate {
     HowToUseTemplate {
         page: "how-to-use".to_owned(),
         user_token: "".to_owned()
