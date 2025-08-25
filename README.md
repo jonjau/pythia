@@ -3,15 +3,24 @@
 [![Build](https://github.com/jonjau/pythia/actions/workflows/rust.yml/badge.svg)](https://github.com/jonjau/pythia/actions/workflows/rust.yml)
 [![License:MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Pythia is a novel 'state change explorer' tool built with Rust and Prolog.
+<div align="center">
 
-Run unit tests with database changes tracked in Pythia to see how database records change in the context of each test case.
+  <img src="doc/pythia-icon.png" alt="logo" width="200" height="auto" />
+  <h1>Pythia</h1>
+  
+  <p>
+    A novel 'state change explorer' tool built with Rust and [Scryer Prolog](https://www.scryer.pl/).
+  </p>
+</div>
 
-(need a picture and a logo)
+Run unit tests with database changes tracked in Pythia to help answer questions like:
+- How many unique database records of a certain table does Test T1 change?
+- Which tests cover the mutation of field F from 'ordered', 'processing', then 'completed'?
+- Is state S is reachable from state S' in the context of Test T1 or Test T2?
+- How many database modifications would it take, to take a database record from state S to state S'?
+- If we were to run the functionality covered by Test T1 followed by that of Test T2 on the same database record, what would be the resulting state?
 
-Run locally with `docker` or `podman`, or try out the public demo at [pythia.jonjauhari.com](https://pythia.jonjauhari.com).
-
-(if it is running)
+Run keeping data local with `docker` or `podman`, or try out the public demo at [pythia.jonjauhari.com](https://pythia.jonjauhari.com) (I don't always keep it running).
 
 ## Features
 
@@ -22,7 +31,17 @@ Run locally with `docker` or `podman`, or try out the public demo at [pythia.jon
 
 ## Usage
 
-## Installation
+Example pictures and text
 
-## Example
+## How to run
+
+### Prerequisites
+
+- Terraform
+- AWS CLI
+- Docker / Podman
+
+## License
+
+Pythia is currently licensed under the terms of both the MIT license and the Apache License (Version 2.0). See [`LICENSE-MIT`](/LICENSE-MIT) and [`LICENSE-APACHE`](/LICENSE-APACHE) for more details.
 
