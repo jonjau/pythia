@@ -16,7 +16,7 @@
     </p>
 
     <p class="m-0 mb-5">
-        <span class="font-bold text-amber-200">Pythia</span>'s intended use case is to aid in reverse-engineering the
+        <span class="font-bold text-amber-200">Pythia</span>'s intended use case is to aid in inferring the
         rules that produced the facts which are recorded.
     </p>
 
@@ -43,14 +43,14 @@
     <p class="m-0 mb-5">
     <ol class="list-decimal list-outside space-y-2">
         <li>Get a user token, via <a href="/sessions" class="link">'Manage session'</a> which will set a <span
-                class="font-mono text-amber-200">user_token</span>
+                class="text-amber-200">user_token</span>
             as a cookie. <br> This token is displayed at the top right of the page.</li>
         <li>Define record types via <a href="/record-types" class="link">'Record types'</a>, or POST to the API route:
-            <br> <span class="font-mono text-amber-200">/api/record-types</span> (the
-            <span class="font-mono text-amber-200">user_token</span> cookie must be set)
+            <br> <span class="text-amber-200">/api/record-types</span> (the
+            <span class="text-amber-200">user_token</span> cookie must be set)
         </li>
         <li>Add facts for record types under <a href="/inquiries" class="link">'Inquiries'</a>, or POST to the API
-            route: <br> <span class="font-mono text-amber-200">/api/{record_type}/facts</span>.</li>
+            route: <br> <span class="text-amber-200">/api/{record_type}/facts</span>.</li>
         <li>Calculate state change paths under <a href="/inquiries" class="link">'Inquiries'</a> based on the recorded
             facts.</li>
         <li>Narrow it down with filters, and make conclusions about the data.</li>
