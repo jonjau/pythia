@@ -58,7 +58,8 @@ resource "aws_iam_role_policy" "role_policy_acm_requestcertificate" {
         Effect = "Allow"
         Action = [
           "acm:RequestCertificate",
-          "acm:AddTagsToCertificate"
+          "acm:AddTagsToCertificate",
+          "acm:DescribeCertificate"
         ]
         Resource = "*"
       }
