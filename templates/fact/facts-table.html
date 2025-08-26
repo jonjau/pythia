@@ -26,7 +26,7 @@
       <td class="p-3 border-b border-stone-700">
         <span x-data="{ copied: false }"
           @click="navigator.clipboard.writeText('{{ value }}'); copied = true; setTimeout(() => copied = false, 1500)"
-          class="cursor-pointer font-mono text-amber-200 hover:text-amber-400">
+          class="cursor-pointer text-amber-200 hover:text-amber-400">
           <span x-show="!copied">{{ value }}</span>
           <span x-show="copied" class="text-teal-400">Copied!</span>
         </span>

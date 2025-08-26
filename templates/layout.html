@@ -38,7 +38,7 @@
           {% endif %}
           <span x-data="{ copied: false }"
             @click="navigator.clipboard.writeText('{{ user_token }}'); copied = true; setTimeout(() => copied = false, 1500)"
-            class="cursor-pointer font-mono text-amber-200 hover:text-amber-400">
+            class="cursor-pointer font-monospace text-amber-200 hover:text-amber-400">
             <span x-show="!copied">{{ user_token }}</span>
             <span x-show="copied" class="text-teal-400">Copied to clipboard!</span>
           </span>
