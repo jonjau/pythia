@@ -47,7 +47,7 @@ resource "aws_iam_role_policy" "role_policy_kms_retiregrant" {
   })
 }
 
-resource "aws_iam_role_policy" "role_policy_acm_requestcertificate" {
+resource "aws_iam_role_policy" "role_policy_acm" {
   name = "AllowACMRequestCertificate"
   role = "GithubActionsTerraformRole"
 
