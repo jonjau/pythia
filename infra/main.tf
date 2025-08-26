@@ -352,4 +352,8 @@ resource "aws_ecs_service" "service" {
   }
 
   tags = var.tags
+
+  depends_on = [
+    aws_lb_listener.https  # ensures target group is bound to ALB before ECS tries to use it
+  ]
 }

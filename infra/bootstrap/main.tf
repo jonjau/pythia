@@ -46,3 +46,21 @@ resource "aws_iam_role_policy" "role_policy_kms_retiregrant" {
     ]
   })
 }
+
+resource "aws_iam_role_policy" "role_policy_acm_requestcertificate" {
+  name = "AllowACMRequestCertificate"
+  role = "GithubActionsTerraformRole"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "acm:RequestCertificate"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
