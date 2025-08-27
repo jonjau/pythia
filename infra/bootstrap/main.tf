@@ -60,7 +60,8 @@ resource "aws_iam_role_policy" "role_policy_acm" {
           "acm:RequestCertificate",
           "acm:AddTagsToCertificate",
           "acm:DescribeCertificate",
-          "acm:ListTagsForCertificate"
+          "acm:ListTagsForCertificate",
+          "acm:DeleteCertificate"
         ]
         Resource = "*"
       }
