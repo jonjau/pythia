@@ -101,6 +101,22 @@ There's a few things we can loosely infer:
 - It takes 2 steps to get from `Status` of 'ordered' to 'delivered'.
 - We could probably cancel 'Ord2' before it goes to the 'delivered' `Status`. 
 
+## API usage
+
+A roughly-written example JUnit extension can be found in [doc/example/StateChangeLogger.java](doc/example/StateChangeLogger.java).
+
+It won't run, but might give a better idea of the use case above.
+
+So to track database changes and log them to Pythia for a test suite:
+
+```java
+    @ExtendWith(StateChangeLogger.class)
+    @Test
+    void myTest() {
+        //... do something with database here
+    }
+```
+
 ## License
 
 Pythia is currently licensed under the terms of both the MIT license and the Apache License (Version 2.0). See [`LICENSE-MIT`](/LICENSE-MIT) and [`LICENSE-APACHE`](/LICENSE-APACHE) for more details.
