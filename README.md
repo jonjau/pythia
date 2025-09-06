@@ -117,6 +117,66 @@ So to track database changes and log them to Pythia for a test suite:
     }
 ```
 
+### Example payloads
+
+To set the `user_token` cookie on the client, `POST` to `/sessions/resume` with a `user_token` form field set to an existing `user_token`.
+
+Then, to add a record type:
+
+```json
+    {
+        "name": "order",
+        "id_fields": ["OrId"],
+        "data_fields": [
+            "Amount",
+            "Status",
+            "Message",
+            "DispatchDate",
+            "DeliveryDate"
+        ],
+        "metadata_fields": ["Context", "SeqNum"]
+    }
+```
+
+and to add facts for that record type:
+
+```json
+{
+    "facts": [
+        {
+            "OrId": "Ord1",
+            "Amount": "100000",
+            "Status": "ordered",
+            "Message": "",
+            "DispatchDate": "",
+            "DeliveryDate": "",
+            "Context": "Test_FailOrder",
+            "SeqNum": "0"
+        },
+        {
+            "OrId": "Ord1",
+            "Amount": "0",
+            "Status": "error",
+            "Message": "no stock",
+            "DispatchDate": "",
+            "DeliveryDate": "",
+            "Context": "Test_FailOrder",
+            "SeqNum": "1"
+        },
+        {
+            "OrId": "Ord2",
+            "Amount": "100",
+            "Status": "delivered",
+            "Message": "",
+            "DispatchDate": "2025-02-02",
+            "DeliveryDate": "2023-02-04",
+            "Context": "Test_FailOrder",
+            "SeqNum": "2"
+        }
+    ]
+}
+```
+
 ## License
 
 Pythia is currently licensed under the terms of both the MIT license and the Apache License (Version 2.0). See [`LICENSE-MIT`](/LICENSE-MIT) and [`LICENSE-APACHE`](/LICENSE-APACHE) for more details.
