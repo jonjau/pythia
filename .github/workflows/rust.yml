@@ -48,19 +48,3 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - name: test
         run: cargo test
-  mac:
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        target:
-          - x86_64-apple-darwin	
-      fail-fast: false
-    steps:
-      - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: stable
-      - name: cache
-        uses: Swatinem/rust-cache@v2
-      - name: test
-        run: cargo test
