@@ -2887,7 +2887,7 @@ dependencies = [
 
 [[package]]
 name = "pythia"
-version = "0.1.0-dev.3"
+version = "0.2.0"
 dependencies = [
  "askama",
  "askama_axum",

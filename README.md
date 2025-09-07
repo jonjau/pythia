@@ -119,9 +119,9 @@ So to track database changes and log them to Pythia for a test suite:
 
 ### Example payloads
 
-To set the `user_token` cookie on the client, `POST` to `/sessions/resume` with a `user_token` form field set to an existing `user_token`.
+To set the `user_token` cookie on the client, POST to `/sessions/resume` with a `user_token` form field set to an existing `user_token`.
 
-Then, to add a record type:
+Then, to add a record type, POST to `/api/record-types`:
 
 ```json
     {
@@ -138,7 +138,7 @@ Then, to add a record type:
     }
 ```
 
-and to add facts for that record type:
+and to add facts for that record type, POST to `/api/order/facts`:
 
 ```json
 {
